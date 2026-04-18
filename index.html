@@ -7,6 +7,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root{
     --brand:#1E88E5; --brand-dark:#1a2847; --bg:#f4f6fa;
@@ -112,6 +113,24 @@
   /* Scroll suave con borde redondeado en contenedores de tabla */
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .table-wrap table{min-width:600px;}
+
+  /* ─── Escáner de cámara (html5-qrcode) ─── */
+  #qrReader{width:100%;border-radius:12px;overflow:hidden;background:#000;}
+  #qrReader video{width:100% !important;height:auto !important;display:block;border-radius:12px;}
+  #qrReader__dashboard{background:#fff;padding:8px;}
+  #qrReader__dashboard_section_csr button{
+    background:var(--brand);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;
+  }
+  #qrReader__header_message{display:none;}
+  .scan-btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:4px;
+    background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;border:none;
+    border-radius:8px;padding:9px 14px;font-weight:600;font-size:14px;cursor:pointer;
+    transition:transform .15s, box-shadow .15s, filter .15s;
+    box-shadow:0 2px 6px rgba(14,165,233,.3);
+  }
+  .scan-btn:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 10px rgba(14,165,233,.4);}
+  .scan-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 
   /* ─── MOBILE (≤ 760px) ─── */
   @media (max-width:760px){
@@ -392,11 +411,12 @@
           <!-- Buscador + catálogo -->
           <div class="lg:col-span-2 bg-white rounded-xl p-4 border border-slate-200">
             <div class="flex gap-2 mb-3 flex-wrap">
-              <input id="scanInput" class="input flex-1" placeholder="📷 Escanear código de barra o buscar producto…" autofocus>
+              <input id="scanInput" class="input flex-1" placeholder="Escanear código o buscar producto…" autofocus>
               <input id="scanQty" class="input w-20" type="number" min="1" value="1" title="Cantidad al pistolear">
+              <button class="scan-btn" onclick="scanVentaCamara()" title="Escanear con la cámara del móvil">📷 Cámara</button>
               <button class="btn btn-primary" onclick="handleScan()">Agregar</button>
             </div>
-            <div id="scanHint" class="text-xs text-slate-400 mb-3">Ingresa el código y presiona Enter o apunta con la pistola lectora.</div>
+            <div id="scanHint" class="text-xs text-slate-400 mb-3">Ingresa el código y presiona Enter, apunta con la pistola lectora o toca 📷 para usar la cámara del móvil.</div>
             <div id="catalogo" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
           </div>
           <!-- Carro -->
@@ -771,11 +791,12 @@ function openNuevoProducto(){
       <form id="formProd" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="md:col-span-2">
           <label class="label">Código de barra / SKU *</label>
-          <div class="flex gap-2">
-            <input id="codBarraInput" name="codigo_barra" class="input flex-1" autofocus required placeholder="Apunta con la pistola o genera uno">
+          <div class="flex gap-2 flex-wrap">
+            <input id="codBarraInput" name="codigo_barra" class="input flex-1" style="min-width:160px" autofocus required placeholder="Pistola, cámara o genera uno">
+            <button type="button" class="scan-btn" onclick="scanNuevoProductoCamara()" title="Escanear con la cámara del móvil">📷 Cámara</button>
             <button type="button" class="btn btn-ghost" style="white-space:nowrap" onclick="_generarCodigoBarra()" title="Genera un código único (prefijo 27022026)">🎲 Generar</button>
           </div>
-          <div class="text-xs text-slate-500 mt-1">Obligatorio. Puedes escanearlo con la pistola o generar uno interno.</div>
+          <div class="text-xs text-slate-500 mt-1">Obligatorio. Puedes usar la pistola, la cámara 📷 del móvil, o generar uno interno.</div>
         </div>
         <div class="md:col-span-2"><label class="label">Nombre *</label><input name="nombre" class="input" required></div>
         <div><label class="label">Categoría</label><input name="categoria" class="input" list="catList">
@@ -825,6 +846,34 @@ function _generarCodigoBarra(){
   const input = document.getElementById('codBarraInput');
   if(input){ input.value = candidato; input.focus(); }
   toast('Código generado: '+candidato,'ok');
+}
+
+/* Escanea con la cámara y vuelca el resultado al input de Nuevo Producto.
+   Al cerrar el scanner re-abre el modal de Nuevo Producto con los datos
+   del formulario preservados (usa FormData antes de cerrar). */
+function scanNuevoProductoCamara(){
+  // Preservar los datos del formulario antes de cerrar el modal
+  const f = document.getElementById('formProd');
+  const snapshot = f ? Object.fromEntries(new FormData(f).entries()) : {};
+  closeModal();
+  openScannerCamara((code) => {
+    // Volver a abrir el modal de Nuevo Producto y rellenar con snapshot + código
+    openNuevoProducto();
+    setTimeout(()=>{
+      const f2 = document.getElementById('formProd');
+      if(!f2) return;
+      Object.keys(snapshot).forEach(k=>{
+        const el = f2.elements[k];
+        if(el && el.value !== undefined) el.value = snapshot[k];
+      });
+      const cb = document.getElementById('codBarraInput');
+      if(cb){ cb.value = code; cb.focus(); }
+      // Validar duplicado en vivo
+      const dup = S.productos.find(p => String(p.codigo_barra) === String(code));
+      if(dup) toast('⚠️ Ese código ya existe: '+dup.nombre,'err');
+      else toast('Código escaneado: '+code,'ok');
+    }, 30);
+  }, { title: '📷 Escanear código para el nuevo producto', hint: 'Enfoca el código del envase. Se rellenará el campo automáticamente.' });
 }
 
 function _calcMargen(origin){
@@ -1117,19 +1166,49 @@ function openMerma(){
   openModal(`
     <div class="p-6">
       <h3 class="text-lg font-bold mb-3" style="color:var(--err)">Merma de productos</h3>
-      <input id="mermaSearch" class="input mb-3" placeholder="Buscar producto…" oninput="_listMerma()">
+      <div class="flex gap-2 mb-3 flex-wrap">
+        <input id="mermaSearch" class="input flex-1" placeholder="Buscar por nombre o código…" oninput="_listMerma()">
+        <button type="button" class="scan-btn" onclick="scanMermaCamara()" title="Escanear con la cámara del móvil">📷 Cámara</button>
+      </div>
       <div id="mermaList" class="max-h-80 overflow-auto"></div>
     </div>`);
   _listMerma();
 }
 function _listMerma(){
-  const q = ($('#mermaSearch').value||'').toLowerCase();
-  const prods = S.productos.filter(p=>p.nombre.toLowerCase().includes(q)).slice(0,30);
+  const q = ($('#mermaSearch').value||'').toLowerCase().trim();
+  const prods = S.productos.filter(p=>{
+    if(!q) return true;
+    return (''+p.nombre).toLowerCase().includes(q) || String(p.codigo_barra||'').toLowerCase().includes(q);
+  }).slice(0,30);
   $('#mermaList').innerHTML = prods.map(p=>`
     <div class="flex items-center justify-between p-2 border-b border-slate-100">
-      <div><div class="font-semibold">${p.nombre}</div><div class="text-xs text-slate-500">Stock: ${p.stock_actual}</div></div>
+      <div>
+        <div class="font-semibold">${p.nombre}</div>
+        <div class="text-xs text-slate-500">${p.codigo_barra?('<span class="font-mono">'+p.codigo_barra+'</span> · '):''}Stock: ${p.stock_actual}</div>
+      </div>
       <button class="btn btn-danger" onclick="closeModal();openMermarProducto(${p.id})">Mermar</button>
     </div>`).join('') || '<div class="text-slate-400 text-center py-4">Sin resultados</div>';
+}
+
+/* Escanea con cámara y salta directo al formulario de merma del producto detectado.
+   Si no encuentra el código, vuelve al listado filtrando por ese valor. */
+function scanMermaCamara(){
+  closeModal();
+  openScannerCamara((code) => {
+    const p = S.productos.find(x => String(x.codigo_barra) === String(code));
+    if(p){
+      openMermarProducto(p.id);
+      toast('Producto: '+p.nombre,'ok');
+    } else {
+      // Reabrir la ventana de búsqueda con el código ingresado
+      openMerma();
+      setTimeout(()=>{
+        const s = document.getElementById('mermaSearch');
+        if(s){ s.value = code; _listMerma(); }
+      }, 30);
+      toast('Código '+code+' no encontrado en inventario','err');
+    }
+  }, { title: '📷 Escanear para merma', hint: 'Enfoca el código del producto a mermar. Se abrirá el formulario automáticamente.' });
 }
 
 async function openMovimientos(){
@@ -1387,6 +1466,104 @@ document.addEventListener('input', e=>{ if(e.target?.id==='scanInput') renderCat
 document.addEventListener('keydown', e=>{
   if(e.target?.id==='scanInput' && e.key==='Enter'){ e.preventDefault(); handleScan(); }
 });
+
+/* ─── ESCÁNER DE CÁMARA (móvil) ──────────────────────────────────
+   Usa html5-qrcode para leer EAN-13, CODE-128, UPC-A, QR, etc.
+   openScannerCamara(onDetect) abre un modal con la vista de la cámara
+   trasera del dispositivo; al detectar un código limpio, llama onDetect(code)
+   y cierra el modal asegurando que la cámara quede apagada. */
+let __qrInstance = null;
+
+async function openScannerCamara(onDetect, opts = {}){
+  if(typeof Html5Qrcode === 'undefined'){
+    return toast('Escáner no disponible (biblioteca no cargó). Revisa tu conexión.','err');
+  }
+  const title = opts.title || 'Escanear código de barra';
+  const hint  = opts.hint  || 'Apunta la cámara al código. Se detecta automáticamente.';
+  openModal(`
+    <div class="p-4">
+      <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">${title}</h3>
+      <p class="text-xs text-slate-500 mb-3">${hint}</p>
+      <div id="qrReader"></div>
+      <div id="qrStatus" class="text-center text-xs text-slate-500 mt-2">Iniciando cámara…</div>
+      <div class="flex gap-2 justify-end mt-3">
+        <button type="button" class="btn btn-ghost" onclick="closeScannerCamara()">Cerrar</button>
+      </div>
+    </div>`);
+  // Limpieza si el modal se cierra por otro medio (clic fuera, ESC, etc.)
+  const bg = document.querySelector('.modal-bg');
+  if(bg){ bg.addEventListener('click', e => { if(e.target===bg) closeScannerCamara(); }); }
+
+  try{
+    __qrInstance = new Html5Qrcode('qrReader', { verbose:false });
+    const config = {
+      fps: 10,
+      qrbox: (vw, vh) => {
+        const min = Math.min(vw, vh);
+        const w = Math.min(280, Math.floor(min * 0.85));
+        const h = Math.floor(w * 0.55); // rectangular: mejor para códigos de barra lineales
+        return { width: w, height: h };
+      },
+      aspectRatio: 1.333,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    };
+    const onSuccess = (decodedText) => {
+      // Evitar llamadas múltiples: desactivar handler inmediatamente
+      if(!__qrInstance) return;
+      const code = String(decodedText||'').trim();
+      closeScannerCamara().finally(()=>{
+        try{ onDetect(code); }catch(e){ console.error(e); toast(e.message,'err'); }
+      });
+    };
+    const onScanErr = () => {}; // frames sin código: silencio
+
+    // Intentar cámara trasera primero; fallback a cualquier cámara
+    try{
+      await __qrInstance.start({ facingMode: { exact: 'environment' } }, config, onSuccess, onScanErr);
+    }catch(e1){
+      try{
+        await __qrInstance.start({ facingMode: 'environment' }, config, onSuccess, onScanErr);
+      }catch(e2){
+        // último recurso: pedir lista y usar la primera
+        const cams = await Html5Qrcode.getCameras();
+        if(!cams || !cams.length) throw new Error('No se encontraron cámaras disponibles');
+        await __qrInstance.start(cams[0].id, config, onSuccess, onScanErr);
+      }
+    }
+    const st = document.getElementById('qrStatus');
+    if(st) st.textContent = 'Enfoca el código dentro del recuadro';
+  }catch(err){
+    const msg = (err && err.message) ? err.message : String(err);
+    const st = document.getElementById('qrStatus');
+    if(st) st.innerHTML = '<span class="text-red-500">⚠️ '+msg+'</span>';
+    toast('No se pudo iniciar la cámara: '+msg, 'err');
+  }
+}
+
+async function closeScannerCamara(){
+  try{
+    if(__qrInstance){
+      try{ await __qrInstance.stop(); }catch(_){}
+      try{ __qrInstance.clear(); }catch(_){}
+      __qrInstance = null;
+    }
+  }finally{
+    closeModal();
+  }
+}
+
+/* Punto de entrada desde el botón 📷 del módulo Venta. */
+function scanVentaCamara(){
+  openScannerCamara((code) => {
+    const input = document.getElementById('scanInput');
+    if(input){
+      input.value = code;
+      // Dispara el flujo existente: busca por código y agrega al carro
+      // (o abre alta rápida si no existe).
+      handleScan();
+    }
+  }, { title: '📷 Escanear para venta', hint: 'Enfoca el código. Al detectarlo se agrega al carro automáticamente.' });
+}
 
 function handleScan(){
   const v = $('#scanInput').value.trim(); if(!v) return;
