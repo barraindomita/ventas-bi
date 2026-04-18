@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Barra Indómita — POS</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -109,12 +109,93 @@
   .act-merma {background:linear-gradient(135deg,#ef4444,#b91c1c);}
   .act-editpack{background:linear-gradient(135deg,#8b5cf6,#6d28d9);}
   .act-hist  {background:linear-gradient(135deg,#f59e0b,#b45309);}
+  /* Scroll suave con borde redondeado en contenedores de tabla */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .table-wrap table{min-width:600px;}
+
+  /* ─── MOBILE (≤ 760px) ─── */
   @media (max-width:760px){
-    .nav-bar{flex-direction:row;height:auto;width:100%;overflow-x:auto;}
-    .nav-item{flex:0 0 auto;min-width:72px;border-left:none;border-bottom:3px solid transparent;}
-    .nav-item.active{border-left:none;border-bottom-color:#facc15;}
-    .dash-grid{grid-template-columns:repeat(2,1fr) !important;}
+    html,body{overflow-x:hidden;}
+    /* Sidebar → barra superior horizontal scrollable */
     .main-wrap{flex-direction:column;}
+    aside.nav-bar{flex-direction:row !important;width:100% !important;height:auto;
+      overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+      position:sticky;top:0;z-index:40;white-space:nowrap;}
+    aside.nav-bar > div:first-child{display:none;} /* oculta el logo grande */
+    aside.nav-bar nav{flex-direction:row !important;flex:1;}
+    .nav-item{flex:0 0 auto;min-width:64px;padding:8px 10px;font-size:10px;
+      border-left:none !important;border-bottom:3px solid transparent;}
+    .nav-item.active{border-left:none !important;border-bottom-color:#facc15;}
+    .nav-item svg{width:18px;height:18px;margin-bottom:2px;}
+    .nav-item[onclick*="doLogout"]{margin-top:0 !important;margin-left:auto;}
+
+    /* Main padding reducido + scroll horizontal controlado */
+    main{padding:12px !important;}
+    main.flex-1{min-width:0;}
+
+    /* Top bar */
+    #viewTitle{font-size:18px !important;}
+    #viewSub{font-size:11px !important;}
+
+    /* Dash cards: 2 columnas, más compactas */
+    .dash-grid{grid-template-columns:repeat(2,1fr) !important;gap:10px !important;}
+    .dash-card{padding:14px 12px;border-radius:12px;}
+    .dash-card h3{font-size:14px;}
+    .dash-card .ico svg{width:34px;height:34px;}
+
+    /* Quick stats en 2 columnas */
+    section#pageDashboard .grid.lg\:grid-cols-4{grid-template-columns:repeat(2,1fr) !important;}
+    section#pageDashboard .bg-white.rounded-xl.p-5{padding:14px;}
+    section#pageDashboard .text-3xl{font-size:22px !important;}
+
+    /* Tablas: scroll horizontal y fuente más pequeña */
+    .overflow-auto, .overflow-x-hidden{overflow-x:auto !important;}
+    table{font-size:12.5px;min-width:560px;}
+    th,td{padding:7px 8px;}
+    .prod-thumb{width:36px;height:36px;}
+
+    /* Inputs / botones más compactos */
+    .input{padding:8px 10px;font-size:14px;}
+    .btn{padding:8px 12px;font-size:13px;}
+
+    /* Filtros en inventario: se apilan */
+    #pageInventario > .flex.items-center.gap-3.mb-4{gap:8px;}
+    #pageInventario .max-w-xs{max-width:100%;flex:1 1 160px;}
+
+    /* Venta: catálogo + carro apilados */
+    #ventaConCaja{grid-template-columns:1fr !important;}
+    #catalogo{grid-template-columns:repeat(2,1fr) !important;gap:8px;}
+    #cartItems{max-height:40vh;}
+
+    /* Medios de pago: 3 columnas para que quepan las 7 */
+    [class*="grid-cols-3"][class*="lg:grid-cols-7"]{grid-template-columns:repeat(3,1fr) !important;}
+    .payment-method{padding:8px 4px;font-size:11px;}
+    .payment-method .pm-icon{width:28px;height:28px;font-size:14px;}
+
+    /* Acciones en tabla: envolver */
+    .act-pill{font-size:10px;padding:2px 8px 2px 2px;margin:1px 2px 1px 0;}
+    .act-pill .act-ico{width:18px;height:18px;font-size:10px;}
+
+    /* Modales: más grandes en móvil */
+    .modal{max-width:100%;border-radius:12px;max-height:96vh;}
+    .modal .p-6{padding:16px !important;}
+    .modal .grid.grid-cols-1.md\:grid-cols-2{grid-template-columns:1fr !important;}
+
+    /* Topbar secundario (botones a la derecha en Inventario/Reportes): wrap */
+    .flex.items-center.gap-3.mb-4.flex-wrap > .flex-1{display:none;}
+    .flex.items-center.gap-3.mb-4.flex-wrap{gap:6px;}
+
+    /* Reportes: stats cards a 2 columnas */
+    section#pageReportes .grid.lg\:grid-cols-4{grid-template-columns:repeat(2,1fr) !important;}
+  }
+
+  /* ─── EXTRA SMALL (≤ 400px) ─── */
+  @media (max-width:400px){
+    #catalogo{grid-template-columns:1fr !important;}
+    .dash-grid{gap:8px !important;}
+    .dash-card{padding:12px 10px;}
+    .dash-card h3{font-size:13px;}
+    [class*="grid-cols-3"][class*="lg:grid-cols-7"]{grid-template-columns:repeat(2,1fr) !important;}
   }
 </style>
 </head>
@@ -128,14 +209,21 @@
       <h1 class="text-2xl font-bold mt-4" style="color:var(--brand-dark)">Barra Indómita</h1>
       <p class="text-slate-500 text-sm">Sistema de Gestión · Ingresa a tu cuenta</p>
     </div>
-    <form id="loginForm" class="space-y-4">
+    <form id="loginForm" class="space-y-4" autocomplete="off" spellcheck="false">
+      <!-- Señuelos para evitar que Chrome/Safari autocompleten los campos reales -->
+      <input type="text" name="fakeusernameremembered" style="display:none" autocomplete="username">
+      <input type="password" name="fakepasswordremembered" style="display:none" autocomplete="new-password">
       <div>
         <label class="label">Email</label>
-        <input id="loginEmail" type="email" class="input" placeholder="admin@barra.cl" required>
+        <input id="loginEmail" type="text" class="input" placeholder="admin@barra.cl" required
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+               name="bi-usr-nocomplete" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
       </div>
       <div>
         <label class="label">Clave</label>
-        <input id="loginPassword" type="password" class="input" required>
+        <input id="loginPassword" type="password" class="input" required
+               autocomplete="new-password" name="bi-pw-nocomplete"
+               data-lpignore="true" data-1p-ignore="true" data-form-type="other">
       </div>
       <button class="btn btn-primary w-full">Ingresar</button>
       <p class="text-xs text-slate-400 text-center pt-2">v1.0 · Conecta con Google Sheets</p>
@@ -1771,15 +1859,23 @@ async function cargarUsuarios(){
   }
   try{
     const d = await api('listarUsuarios');
-    $('#usuariosTbody').innerHTML = d.usuarios.map(u=>`
+    $('#usuariosTbody').innerHTML = d.usuarios.map(u=>{
+      const esYo = Number(u.id) === Number(S.usuario.id);
+      return `
       <tr>
         <td class="font-semibold">${u.nombre}</td>
         <td class="text-sm text-slate-600">${u.email}</td>
         <td><span class="chip ${u.rol==='admin'?'chip-info':'chip-ok'}">${u.rol}</span></td>
         <td>${u.activo===true||u.activo==='TRUE'||u.activo==='true' ? '<span class="chip chip-ok">activo</span>' : '<span class="chip chip-err">inactivo</span>'}</td>
         <td class="text-xs text-slate-500">${u.ultimo_login?fmtDateTime(u.ultimo_login):'—'}</td>
-        <td><button class="text-xs text-blue-600 hover:underline" onclick='openEditarUsuario(${JSON.stringify(u)})'>Editar</button></td>
-      </tr>`).join('');
+        <td class="whitespace-nowrap">
+          <button class="text-xs text-blue-600 hover:underline mr-3" onclick='openEditarUsuario(${JSON.stringify(u)})'>Editar</button>
+          ${esYo
+            ? '<span class="text-xs text-slate-400" title="No puedes eliminar tu propio usuario">—</span>'
+            : `<button class="text-xs text-red-600 hover:underline" onclick='eliminarUsuarioConfirm(${JSON.stringify(u)})'>Eliminar</button>`}
+        </td>
+      </tr>`;
+    }).join('');
   }catch(err){ toast(err.message,'err'); }
 }
 function openNuevoUsuario(){
@@ -1821,6 +1917,21 @@ function openEditarUsuario(u){
     try{ await api('actualizarUsuario', data); toast('Actualizado','ok'); closeModal(); cargarUsuarios(); }
     catch(err){ toast(err.message,'err'); }
   });
+}
+
+async function eliminarUsuarioConfirm(u){
+  if(Number(u.id) === Number(S.usuario.id)){
+    return toast('No puedes eliminar tu propio usuario','err');
+  }
+  const msg = `¿Eliminar el usuario "${u.nombre}" (${u.email})?\n\n` +
+              `Por defecto se desactiva (soft delete) y queda inaccesible, conservando su historial.\n\n` +
+              `Confirmar con OK para desactivar.`;
+  if(!confirm(msg)) return;
+  try{
+    await api('eliminarUsuario', { id: u.id });
+    toast('Usuario eliminado','ok');
+    cargarUsuarios();
+  }catch(err){ toast(err.message,'err'); }
 }
 
 /* NOTIFICACIONES + STATS ───────────────────────────────────────── */
