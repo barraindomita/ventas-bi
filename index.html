@@ -132,6 +132,30 @@
   .scan-btn:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 10px rgba(14,165,233,.4);}
   .scan-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
 
+  /* Toggle mostrar/ocultar clave (ojo dentro del input) */
+  .pw-toggle{
+    position:absolute;right:8px;top:50%;transform:translateY(-50%);
+    background:transparent;border:none;cursor:pointer;font-size:16px;
+    color:#64748b;padding:4px 8px;border-radius:6px;
+  }
+  .pw-toggle:hover{background:#f1f5f9;color:var(--brand);}
+
+  /* Logo en el sidebar */
+  .sidebar-logo img{max-width:64px;max-height:64px;object-fit:contain;}
+
+  /* ─── DESKTOP: sidebar y top bar fijos ─── */
+  @media (min-width:761px){
+    aside.nav-bar{position:sticky;top:0;height:100vh;align-self:flex-start;z-index:30;}
+    /* Top bar del área principal */
+    main > .topbar-main{position:sticky;top:0;z-index:20;background:var(--bg);
+      padding-top:12px;padding-bottom:8px;margin-bottom:16px !important;
+      backdrop-filter:saturate(180%) blur(6px);}
+    /* En Inventario, la barra de filtros también queda sticky */
+    #pageInventario > .inv-toolbar{position:sticky;z-index:15;
+      top:74px;background:var(--bg);padding:10px 0;margin:-6px 0 8px;
+      border-bottom:1px solid #e2e8f0;}
+  }
+
   /* ─── MOBILE (≤ 760px) ─── */
   @media (max-width:760px){
     html,body{overflow-x:hidden;}
@@ -223,9 +247,12 @@
 <!-- ══════════════════ LOGIN ══════════════════ -->
 <div id="viewLogin" class="hidden min-h-screen flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
-    <div class="text-center mb-6">
-      <div class="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg">🍾</div>
-      <h1 class="text-2xl font-bold mt-4" style="color:var(--brand-dark)">Barra Indómita</h1>
+    <div class="text-center mb-4">
+      <!-- Logo: intenta cargar logo.png; si falla muestra emoji fallback -->
+      <img id="loginLogo" src="logo.png" alt="Barra Indómita"
+           class="mx-auto block" style="max-width:420px;max-height:340px;width:110%;margin-left:-5%;object-fit:contain;margin-bottom:-12px;"
+           onerror="this.style.display='none';document.getElementById('loginLogoFallback').style.display='flex';">
+      <div id="loginLogoFallback" class="mx-auto w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 items-center justify-center text-white text-4xl font-bold shadow-lg" style="display:none">🍾</div>
       <p class="text-slate-500 text-sm">Sistema de Gestión · Ingresa a tu cuenta</p>
     </div>
     <form id="loginForm" class="space-y-4" autocomplete="off" spellcheck="false">
@@ -233,19 +260,25 @@
       <input type="text" name="fakeusernameremembered" style="display:none" autocomplete="username">
       <input type="password" name="fakepasswordremembered" style="display:none" autocomplete="new-password">
       <div>
-        <label class="label">Email</label>
-        <input id="loginEmail" type="text" class="input" placeholder="admin@barra.cl" required
+        <label class="label">RUT o Email</label>
+        <input id="loginEmail" type="text" class="input" required
                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-               name="bi-usr-nocomplete" data-lpignore="true" data-1p-ignore="true" data-form-type="other">
+               name="bi-usr-nocomplete" data-lpignore="true" data-1p-ignore="true" data-form-type="other"
+               oninput="_tryFormatRut(this)"
+               placeholder="12.345.678-9">
       </div>
       <div>
         <label class="label">Clave</label>
-        <input id="loginPassword" type="password" class="input" required
-               autocomplete="new-password" name="bi-pw-nocomplete"
-               data-lpignore="true" data-1p-ignore="true" data-form-type="other">
+        <div class="relative">
+          <input id="loginPassword" type="password" class="input pr-10" required
+                 autocomplete="new-password" name="bi-pw-nocomplete"
+                 data-lpignore="true" data-1p-ignore="true" data-form-type="other">
+          <button type="button" class="pw-toggle" onclick="_togglePw('loginPassword', this)" title="Mostrar/ocultar clave" tabindex="-1">👁</button>
+        </div>
       </div>
       <button class="btn btn-primary w-full">Ingresar</button>
-      <p class="text-xs text-slate-400 text-center pt-2">v1.0 · Conecta con Google Sheets</p>
+      <button type="button" class="w-full text-sm text-blue-600 hover:underline mt-1" onclick="openRecuperarClave()">¿Olvidaste tu clave?</button>
+      <p class="text-xs text-slate-400 text-center pt-2">v1.2 · Conecta con Google Sheets</p>
     </form>
   </div>
 </div>
@@ -256,8 +289,10 @@
 
     <!-- Sidebar -->
     <aside class="nav-bar flex flex-col bg-slate-800 w-20" style="background:var(--brand-dark)">
-      <div class="p-3 border-b border-slate-700 flex items-center justify-center" style="border-color:#2c3a5c">
-        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-lg font-bold">🍾</div>
+      <div class="sidebar-logo p-2 border-b border-slate-700 flex items-center justify-center" style="border-color:#2c3a5c">
+        <img src="logo-icon.png" alt="Barra Indómita" style="width:60px;height:60px;object-fit:contain;border-radius:12px;"
+             onerror="this.style.display='none';document.getElementById('sidebarLogoFallback').style.display='flex';">
+        <div id="sidebarLogoFallback" class="w-12 h-12 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 items-center justify-center text-white text-lg font-bold" style="display:none">🍾</div>
       </div>
       <nav class="flex-1 flex md:flex-col">
         <a class="nav-item active" data-view="dashboard" onclick="go('dashboard')">
@@ -294,7 +329,7 @@
     <!-- Content -->
     <main class="flex-1 p-4 md:p-8 overflow-x-hidden">
       <!-- Topbar -->
-      <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div class="topbar-main flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <div id="viewTitle" class="text-2xl font-bold" style="color:var(--brand-dark)">Panel</div>
           <div id="viewSub" class="text-sm text-slate-500">Bienvenido</div>
@@ -308,6 +343,9 @@
             <div class="text-sm font-semibold" style="color:var(--brand-dark)" id="userName">—</div>
             <div class="text-xs text-slate-500" id="userRole">—</div>
           </div>
+          <button class="btn-ghost btn px-3" title="Cambiar mi clave" onclick="openCambiarMiClave()">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="M15 7a4 4 0 11-8 0 4 4 0 018 0zM17 17l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2M3 20c0-3 3-5 6-5s6 2 6 5"/></svg>
+          </button>
         </div>
       </div>
 
@@ -371,7 +409,7 @@
 
       <!-- ═══════ INVENTARIO ═══════ -->
       <section id="pageInventario" class="page hidden">
-        <div class="flex items-center gap-3 mb-4 flex-wrap">
+        <div class="inv-toolbar flex items-center gap-3 mb-4 flex-wrap">
           <input id="invSearch" class="input max-w-xs" placeholder="Buscar nombre o código…" oninput="renderInventario()">
           <select id="invCategoria" class="input max-w-xs" onchange="renderInventario()"><option value="">Todas las categorías</option></select>
           <label class="flex items-center gap-2 text-sm text-slate-600"><input id="invSoloBajo" type="checkbox" onchange="renderInventario()"> Sólo bajo stock</label>
@@ -417,6 +455,11 @@
               <button class="btn btn-primary" onclick="handleScan()">Agregar</button>
             </div>
             <div id="scanHint" class="text-xs text-slate-400 mb-3">Ingresa el código y presiona Enter, apunta con la pistola lectora o toca 📷 para usar la cámara del móvil.</div>
+
+            <div class="flex items-center justify-between mb-2">
+              <h4 id="catalogoTitulo" class="text-sm font-bold" style="color:var(--brand-dark)">🔥 Top 12 más vendidos (último mes)</h4>
+              <button class="text-xs text-blue-600 hover:underline" onclick="cargarTopVendidos(true)">Actualizar</button>
+            </div>
             <div id="catalogo" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
           </div>
           <!-- Carro -->
@@ -545,7 +588,7 @@
         </div>
         <div class="bg-white rounded-xl border border-slate-200 overflow-auto">
           <table>
-            <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>RUT</th><th>Email</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead>
             <tbody id="usuariosTbody"></tbody>
           </table>
         </div>
@@ -592,6 +635,55 @@ const parseMoney = v => Number(String(v).replace(/[^0-9\-]/g, '')) || 0;
 const fmtDateTime = s => s ? new Date(s).toLocaleString('es-CL') : '—';
 const fmtFechaCorta = s => s ? new Date(s).toLocaleDateString('es-CL') : '—';
 const fmtHora = s => s ? new Date(s).toLocaleTimeString('es-CL', {hour:'2-digit', minute:'2-digit'}) : '—';
+
+/* ── Mostrar/ocultar contraseña ───────────────────────────────── */
+function _togglePw(inputId, btn){
+  const el = document.getElementById(inputId);
+  if(!el) return;
+  if(el.type === 'password'){ el.type = 'text'; btn.textContent = '🙈'; btn.title = 'Ocultar'; }
+  else { el.type = 'password'; btn.textContent = '👁'; btn.title = 'Mostrar'; }
+}
+
+/* ── RUT chileno: formateo XX.XXX.XXX-X + validación mod-11 ───── */
+function _formatRut(raw){
+  const clean = String(raw||'').replace(/[^0-9kK]/g,'').toUpperCase();
+  if(clean.length < 2) return clean;
+  const dv = clean.slice(-1);
+  const body = clean.slice(0,-1);
+  // Inserta puntos cada 3 dígitos desde la derecha
+  const rev = body.split('').reverse().join('');
+  const withDots = rev.replace(/(\d{3})(?=\d)/g,'$1.').split('').reverse().join('');
+  return withDots + '-' + dv;
+}
+function _tryFormatRut(input){
+  const v = input.value;
+  // Si contiene @, asume que es email y no formatea
+  if(v.includes('@')) return;
+  // Si no tiene ni números ni K, es probablemente vacío o inválido — no tocar
+  if(!/[0-9kK]/.test(v)) return;
+  const pos = input.selectionStart;
+  input.value = _formatRut(v);
+  // Mantiene el cursor al final (formateo cambia longitud)
+  try { input.setSelectionRange(input.value.length, input.value.length); } catch(e){}
+}
+function _validarRut(rut){
+  const clean = String(rut||'').replace(/[^0-9kK]/g,'').toUpperCase();
+  if(clean.length < 2) return false;
+  const body = clean.slice(0,-1), dv = clean.slice(-1);
+  if(!/^\d+$/.test(body)) return false;
+  let suma = 0, mul = 2;
+  for(let i=body.length-1; i>=0; i--){
+    suma += parseInt(body[i],10) * mul;
+    mul = mul === 7 ? 2 : mul+1;
+  }
+  const resto = 11 - (suma % 11);
+  const esperado = resto === 11 ? '0' : resto === 10 ? 'K' : String(resto);
+  return dv === esperado;
+}
+function _normalizarRut(rut){
+  // Devuelve formato estándar XX.XXX.XXX-X (o lo que sea válido)
+  return _formatRut(rut);
+}
 
 /* Medios de pago soportados — orden fijo para la UI y los reportes */
 const MEDIOS_PAGO = ['efectivo','debito','credito','transferencia','fiado','rappi','pedidos_ya'];
@@ -647,16 +739,56 @@ function closeModal(){ $('#modalRoot').innerHTML=''; }
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
   try{
-    const d = await api('login', {
-      email: $('#loginEmail').value.trim(),
-      password: $('#loginPassword').value
-    });
+    const raw = $('#loginEmail').value.trim();
+    const payload = { password: $('#loginPassword').value };
+    // Detecta si es email o RUT; envía ambos campos para compatibilidad
+    if(raw.includes('@')){
+      payload.email = raw;
+    } else {
+      payload.rut = _formatRut(raw);
+      payload.email = raw; // fallback
+    }
+    const d = await api('login', payload);
     S.token = d.token; S.usuario = d.usuario;
     localStorage.setItem('bi_token', d.token);
     localStorage.setItem('bi_user', JSON.stringify(d.usuario));
     enterApp();
   }catch(err){ toast(err.message, 'err'); }
 });
+
+/* RECUPERACIÓN DE CLAVE ─────────────────────────────────────────── */
+function openRecuperarClave(){
+  openModal(`
+    <h3 class="text-xl font-bold mb-4">🔑 Recuperar clave</h3>
+    <p class="text-sm text-slate-600 mb-4">Ingresa tu RUT y correo registrado. Te enviaremos una clave temporal.</p>
+    <form id="formRecuperar" class="space-y-3" autocomplete="off">
+      <div>
+        <label class="label">RUT</label>
+        <input id="recRut" type="text" class="input" required placeholder="12.345.678-9"
+               oninput="_tryFormatRut(this)">
+      </div>
+      <div>
+        <label class="label">Correo electrónico</label>
+        <input id="recEmail" type="email" class="input" required placeholder="tu@correo.cl">
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button type="button" class="btn-outline flex-1" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn-primary flex-1">Enviar clave</button>
+      </div>
+    </form>
+  `);
+  document.getElementById('formRecuperar').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const rut = document.getElementById('recRut').value.trim();
+    const email = document.getElementById('recEmail').value.trim();
+    if(!_validarRut(rut)){ toast('RUT inválido', 'err'); return; }
+    try{
+      await api('recuperarClave', { rut: _formatRut(rut), email });
+      closeModal();
+      toast('Clave temporal enviada a tu correo', 'ok');
+    }catch(err){ toast(err.message, 'err'); }
+  });
+}
 
 async function doLogout(){
   try{ await api('logout'); }catch(_){}
@@ -703,7 +835,7 @@ function go(view){
   $('#viewSub').textContent = s;
 
   if(view==='inventario') renderInventario();
-  if(view==='ventas') renderVentas();
+  if(view==='ventas'){ renderVentas(); cargarTopVendidos(); }
   if(view==='caja') renderCajaStatus();
   if(view==='reportes'){ initRangoReportes(); cargarReportes(); }
   if(view==='configurar') cargarUsuarios();
@@ -1442,22 +1574,71 @@ function renderVentas(){
   renderCart(); renderCatalogo();
 }
 
+/* TOP VENDIDOS — último mes (cacheado en S.topVendidos) ─────────── */
+async function cargarTopVendidos(force){
+  // Si ya tenemos cache y no se fuerza, no recarga
+  if(!force && Array.isArray(S.topVendidos) && S.topVendidos.length) {
+    renderCatalogo();
+    return;
+  }
+  try{
+    const hasta = new Date();
+    const desde = new Date(); desde.setDate(desde.getDate() - 30);
+    const fmtDia = d => d.toISOString().slice(0,10);
+    const d = await api('topVendidos', { desde: fmtDia(desde), hasta: fmtDia(hasta), limite: 12 });
+    S.topVendidos = (d && d.productos) || [];
+    renderCatalogo();
+  }catch(err){
+    // Backend aún no redesplegado o sin ventas: fallback silencioso a primeros 12
+    S.topVendidos = [];
+    renderCatalogo();
+    console.warn('topVendidos no disponible:', err.message);
+  }
+}
+
 function renderCatalogo(){
   const el = $('#catalogo'); if(!el) return;
+  const titEl = $('#catalogoTitulo');
   const q = ($('#scanInput')?.value || '').toLowerCase().trim();
-  // Muestra todos los productos (con y sin stock). Si el usuario intenta vender
-  // uno sin stock, se advertirá y se permitirá quedar en negativo.
-  let rows = S.productos.slice();
-  if(q) rows = rows.filter(p=> (''+p.nombre).toLowerCase().includes(q) || (''+p.codigo_barra).includes(q));
-  rows = rows.slice(0, 24);
-  el.innerHTML = rows.map(p=>{
+
+  let rows;
+  if(q){
+    // Búsqueda activa: filtra todo el catálogo por nombre o código de barra
+    rows = S.productos.filter(p =>
+      (''+p.nombre).toLowerCase().includes(q) ||
+      (''+p.codigo_barra).includes(q)
+    ).slice(0, 48);
+    if(titEl) titEl.textContent = `🔍 Resultados de búsqueda (${rows.length})`;
+  } else {
+    // Sin búsqueda: sólo los 12 más vendidos del último mes
+    const top = Array.isArray(S.topVendidos) ? S.topVendidos : [];
+    if(top.length){
+      // Resuelve cada top entry con datos completos del producto
+      rows = top.map(t => {
+        const prod = S.productos.find(p => Number(p.id) === Number(t.producto_id));
+        if(prod) return Object.assign({}, prod, { _topQty: t.cantidad_total });
+        // Si el producto ya no existe, arma un placeholder
+        return { id:t.producto_id, nombre:t.nombre, valor_venta:0, stock_actual:0, _topQty:t.cantidad_total };
+      }).slice(0, 12);
+    } else {
+      // Fallback: primeros 12 si aún no cargó el top (o si falló)
+      rows = S.productos.slice(0, 12);
+    }
+    if(titEl) titEl.textContent = '🔥 Top 12 más vendidos (último mes)';
+  }
+
+  el.innerHTML = rows.map((p, i)=>{
     const sinStock = Number(p.stock_actual)<=0;
+    const topBadge = (!q && p._topQty != null)
+      ? `<span class="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">#${i+1}</span>`
+      : '';
     return `
-    <button onclick='addToCart(${p.id})' class="text-left ${sinStock?'bg-amber-50':'bg-slate-50 hover:bg-blue-50'} border border-slate-200 rounded-lg p-2 flex flex-col items-center">
+    <button onclick='addToCart(${p.id})' class="relative text-left ${sinStock?'bg-amber-50':'bg-slate-50 hover:bg-blue-50'} border border-slate-200 rounded-lg p-2 flex flex-col items-center">
+      ${topBadge}
       ${p.foto_url ? `<img src="${p.foto_url}" class="w-16 h-16 object-cover rounded mb-1" onerror="this.style.display='none'">` : `<div class="w-16 h-16 bg-slate-200 rounded mb-1 flex items-center justify-center text-slate-400">${esPack(p)?'📦':'🍾'}</div>`}
       <div class="text-xs font-semibold line-clamp-2 text-center" style="color:var(--brand-dark)">${p.nombre}${esPack(p)?' <span class="chip chip-info" style="font-size:9px">PACK</span>':''}</div>
       <div class="text-sm font-bold" style="color:var(--brand)">${fmt(p.valor_venta)}</div>
-      <div class="text-[10px] ${sinStock?'text-red-500 font-semibold':'text-slate-400'}">Stock: ${p.stock_actual}</div>
+      <div class="text-[10px] ${sinStock?'text-red-500 font-semibold':'text-slate-400'}">Stock: ${p.stock_actual}${p._topQty!=null?` • <span class="text-amber-600 font-semibold">${p._topQty} vend.</span>`:''}</div>
     </button>`;
   }).join('') || '<div class="col-span-4 text-center text-slate-400 py-6">Sin productos</div>';
 }
@@ -2031,84 +2212,195 @@ function descargarSabanaExcel(){
 /* USUARIOS ──────────────────────────────────────────────────────── */
 async function cargarUsuarios(){
   if(S.usuario.rol!=='admin'){
-    $('#usuariosTbody').innerHTML = '<tr><td colspan="6" class="text-center text-slate-400 py-6">Requiere perfil administrador</td></tr>';
+    $('#usuariosTbody').innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">Requiere perfil administrador</td></tr>';
     return;
   }
   try{
     const d = await api('listarUsuarios');
-    $('#usuariosTbody').innerHTML = d.usuarios.map(u=>{
+    // Filtrar usuarios eliminados (tombstone): no se muestran, pero su historial queda en Ventas
+    const visibles = d.usuarios.filter(u => !(u.eliminado===true || u.eliminado==='TRUE' || u.eliminado==='true'));
+    $('#usuariosTbody').innerHTML = visibles.map(u=>{
       const esYo = Number(u.id) === Number(S.usuario.id);
+      const activo = u.activo===true||u.activo==='TRUE'||u.activo==='true';
+      const chipEstado = activo
+        ? '<span class="chip chip-ok">activo</span>'
+        : '<span class="chip chip-warn">inactivo</span>';
+      // Acciones: editar / (inactivar | reactivar) / eliminar
+      const btnInactivar = esYo
+        ? ''
+        : (activo
+           ? `<button class="text-xs text-amber-600 hover:underline mr-3" onclick='inactivarUsuario(${JSON.stringify(u)})'>Inactivar</button>`
+           : `<button class="text-xs text-emerald-600 hover:underline mr-3" onclick='reactivarUsuario(${JSON.stringify(u)})'>Reactivar</button>`);
+      const btnEliminar = esYo
+        ? '<span class="text-xs text-slate-400" title="No puedes eliminar tu propio usuario">—</span>'
+        : `<button class="text-xs text-red-600 hover:underline" onclick='eliminarUsuarioConfirm(${JSON.stringify(u)})'>Eliminar</button>`;
       return `
       <tr>
-        <td class="font-semibold">${u.nombre}</td>
-        <td class="text-sm text-slate-600">${u.email}</td>
+        <td class="font-semibold">${u.nombre || ''}</td>
+        <td class="text-sm text-slate-700">${u.rut || '—'}</td>
+        <td class="text-sm text-slate-600">${u.email || ''}</td>
         <td><span class="chip ${u.rol==='admin'?'chip-info':'chip-ok'}">${u.rol}</span></td>
-        <td>${u.activo===true||u.activo==='TRUE'||u.activo==='true' ? '<span class="chip chip-ok">activo</span>' : '<span class="chip chip-err">inactivo</span>'}</td>
+        <td>${chipEstado}</td>
         <td class="text-xs text-slate-500">${u.ultimo_login?fmtDateTime(u.ultimo_login):'—'}</td>
         <td class="whitespace-nowrap">
           <button class="text-xs text-blue-600 hover:underline mr-3" onclick='openEditarUsuario(${JSON.stringify(u)})'>Editar</button>
-          ${esYo
-            ? '<span class="text-xs text-slate-400" title="No puedes eliminar tu propio usuario">—</span>'
-            : `<button class="text-xs text-red-600 hover:underline" onclick='eliminarUsuarioConfirm(${JSON.stringify(u)})'>Eliminar</button>`}
+          ${btnInactivar}
+          ${btnEliminar}
         </td>
       </tr>`;
     }).join('');
   }catch(err){ toast(err.message,'err'); }
 }
+
 function openNuevoUsuario(){
   openModal(`
     <div class="p-6"><h3 class="text-lg font-bold mb-3" style="color:var(--brand-dark)">Nuevo usuario</h3>
-    <form id="formUsr" class="space-y-3">
+    <form id="formUsr" class="space-y-3" autocomplete="off">
       <div><label class="label">Nombre</label><input name="nombre" class="input" required></div>
+      <div>
+        <label class="label">RUT</label>
+        <input name="rut" class="input" required placeholder="12.345.678-9" oninput="_tryFormatRut(this)">
+        <p class="text-xs text-slate-500 mt-1">Se usará como credencial de ingreso.</p>
+      </div>
       <div><label class="label">Email</label><input name="email" type="email" class="input" required></div>
-      <div><label class="label">Clave</label><input name="password" type="password" class="input" required minlength="4"></div>
+      <div>
+        <label class="label">Clave</label>
+        <div class="relative">
+          <input id="nuUsrPw" name="password" type="password" class="input pr-10" required minlength="4">
+          <button type="button" class="pw-toggle" onclick="_togglePw('nuUsrPw', this)" title="Mostrar">👁</button>
+        </div>
+      </div>
       <div><label class="label">Rol</label><select name="rol" class="input"><option value="vendedor">vendedor</option><option value="admin">admin</option></select></div>
       <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear</button></div>
     </form></div>`);
   $('#formUsr').addEventListener('submit', async e=>{
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
+    data.rut = _formatRut(data.rut);
+    if(!_validarRut(data.rut)){ toast('RUT inválido','err'); return; }
     try{ await api('crearUsuario', data); toast('Usuario creado','ok'); closeModal(); cargarUsuarios(); }
     catch(err){ toast(err.message,'err'); }
   });
 }
+
 function openEditarUsuario(u){
   openModal(`
     <div class="p-6"><h3 class="text-lg font-bold mb-3" style="color:var(--brand-dark)">Editar usuario</h3>
-    <form id="formUsrE" class="space-y-3">
-      <div><label class="label">Nombre</label><input name="nombre" class="input" value="${u.nombre}"></div>
+    <form id="formUsrE" class="space-y-3" autocomplete="off">
+      <div><label class="label">Nombre</label><input name="nombre" class="input" value="${u.nombre||''}"></div>
+      <div>
+        <label class="label">RUT</label>
+        <input name="rut" class="input" value="${u.rut||''}" placeholder="12.345.678-9" oninput="_tryFormatRut(this)">
+      </div>
       <div><label class="label">Rol</label><select name="rol" class="input">
         <option value="vendedor" ${u.rol==='vendedor'?'selected':''}>vendedor</option>
         <option value="admin" ${u.rol==='admin'?'selected':''}>admin</option></select></div>
       <div><label class="label">Activo</label><select name="activo" class="input">
         <option value="true" ${(''+u.activo).toLowerCase()==='true'?'selected':''}>Activo</option>
         <option value="false" ${(''+u.activo).toLowerCase()!=='true'?'selected':''}>Inactivo</option></select></div>
-      <div><label class="label">Nueva clave (opcional)</label><input name="password" type="password" class="input"></div>
+      <div>
+        <label class="label">Nueva clave (opcional)</label>
+        <div class="relative">
+          <input id="edUsrPw" name="password" type="password" class="input pr-10">
+          <button type="button" class="pw-toggle" onclick="_togglePw('edUsrPw', this)" title="Mostrar">👁</button>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">Dejar en blanco para mantener la clave actual.</p>
+      </div>
       <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar</button></div>
     </form></div>`);
   $('#formUsrE').addEventListener('submit', async e=>{
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.id = u.id; data.activo = data.activo==='true';
+    if(data.rut){
+      data.rut = _formatRut(data.rut);
+      if(!_validarRut(data.rut)){ toast('RUT inválido','err'); return; }
+    }
     if(!data.password) delete data.password;
     try{ await api('actualizarUsuario', data); toast('Actualizado','ok'); closeModal(); cargarUsuarios(); }
     catch(err){ toast(err.message,'err'); }
   });
 }
 
+async function inactivarUsuario(u){
+  if(Number(u.id) === Number(S.usuario.id)) return toast('No puedes inactivarte','err');
+  if(!confirm(`¿Inactivar el usuario "${u.nombre}"?\nNo podrá acceder, pero permanecerá en el listado y podrá reactivarse.`)) return;
+  try{
+    await api('actualizarUsuario', { id: u.id, activo: false });
+    toast('Usuario inactivado','ok');
+    cargarUsuarios();
+  }catch(err){ toast(err.message,'err'); }
+}
+async function reactivarUsuario(u){
+  if(!confirm(`¿Reactivar el usuario "${u.nombre}"?`)) return;
+  try{
+    await api('actualizarUsuario', { id: u.id, activo: true });
+    toast('Usuario reactivado','ok');
+    cargarUsuarios();
+  }catch(err){ toast(err.message,'err'); }
+}
+
 async function eliminarUsuarioConfirm(u){
   if(Number(u.id) === Number(S.usuario.id)){
     return toast('No puedes eliminar tu propio usuario','err');
   }
-  const msg = `¿Eliminar el usuario "${u.nombre}" (${u.email})?\n\n` +
-              `Por defecto se desactiva (soft delete) y queda inaccesible, conservando su historial.\n\n` +
-              `Confirmar con OK para desactivar.`;
+  const msg = `¿Eliminar definitivamente a "${u.nombre}" del listado?\n\n` +
+              `Se ocultará del listado y no podrá ingresar más.\n` +
+              `Su historial de ventas SÍ se conservará en los reportes.\n\n` +
+              `Si sólo deseas bloquearlo temporalmente, usa "Inactivar".`;
   if(!confirm(msg)) return;
   try{
     await api('eliminarUsuario', { id: u.id });
     toast('Usuario eliminado','ok');
     cargarUsuarios();
   }catch(err){ toast(err.message,'err'); }
+}
+
+/* CAMBIAR MI PROPIA CLAVE (con verificación de clave actual) ───── */
+function openCambiarMiClave(){
+  openModal(`
+    <div class="p-6"><h3 class="text-lg font-bold mb-3" style="color:var(--brand-dark)">🔒 Cambiar mi clave</h3>
+    <form id="formCambiarPw" class="space-y-3" autocomplete="off">
+      <div>
+        <label class="label">Clave actual</label>
+        <div class="relative">
+          <input id="pwActual" name="password_actual" type="password" class="input pr-10" required>
+          <button type="button" class="pw-toggle" onclick="_togglePw('pwActual', this)" title="Mostrar">👁</button>
+        </div>
+      </div>
+      <div>
+        <label class="label">Clave nueva</label>
+        <div class="relative">
+          <input id="pwNueva" name="password_nueva" type="password" class="input pr-10" required minlength="4">
+          <button type="button" class="pw-toggle" onclick="_togglePw('pwNueva', this)" title="Mostrar">👁</button>
+        </div>
+      </div>
+      <div>
+        <label class="label">Repetir clave nueva</label>
+        <div class="relative">
+          <input id="pwNueva2" name="password_nueva2" type="password" class="input pr-10" required minlength="4">
+          <button type="button" class="pw-toggle" onclick="_togglePw('pwNueva2', this)" title="Mostrar">👁</button>
+        </div>
+      </div>
+      <div class="flex gap-2 justify-end pt-2">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary">Actualizar</button>
+      </div>
+    </form></div>`);
+  $('#formCambiarPw').addEventListener('submit', async e=>{
+    e.preventDefault();
+    const f = e.target;
+    const actual = f.password_actual.value;
+    const nueva  = f.password_nueva.value;
+    const nueva2 = f.password_nueva2.value;
+    if(nueva !== nueva2){ toast('Las claves nuevas no coinciden','err'); return; }
+    if(nueva.length < 4){ toast('Mínimo 4 caracteres','err'); return; }
+    try{
+      await api('cambiarPassword', { password_actual: actual, password_nueva: nueva });
+      toast('Clave actualizada','ok');
+      closeModal();
+    }catch(err){ toast(err.message,'err'); }
+  });
 }
 
 /* NOTIFICACIONES + STATS ───────────────────────────────────────── */
