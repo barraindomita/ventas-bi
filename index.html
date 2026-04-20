@@ -523,6 +523,15 @@
             <div id="cajaTotales" class="grid grid-cols-2 md:grid-cols-5 gap-3"></div>
           </div>
         </div>
+
+        <!-- Sólo admin: panel de cajas abiertas por otros vendedores -->
+        <div id="cajaAdminPanel" class="hidden mt-4 bg-white rounded-xl p-5 border border-slate-200">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="font-bold text-lg" style="color:var(--brand-dark)">👥 Cajas abiertas ahora</h3>
+            <button class="btn btn-ghost" onclick="cargarCajasAbiertas()">🔄 Refrescar</button>
+          </div>
+          <div id="cajaAdminTbl" class="overflow-auto"></div>
+        </div>
       </section>
 
       <!-- ═══════ REPORTES ═══════ -->
@@ -577,6 +586,16 @@
           <p class="text-xs text-slate-500 mb-3">Usa las fechas y horas de arriba para acotar el rango. El Excel incluye una fila por artículo vendido con fecha, hora, vendedor, medio de pago y totales.</p>
           <div id="repVendedoresResumen" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3"></div>
           <div id="repVentasDetalle" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg"></div>
+        </div>
+
+        <!-- Sólo admin: Reporte histórico de cajas -->
+        <div id="repCajasBox" class="hidden mt-4 bg-white rounded-xl p-4 border border-slate-200">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h4 class="font-semibold" style="color:var(--brand-dark)">🗃️ Reporte de Cajas</h4>
+          </div>
+          <p class="text-xs text-slate-500 mb-3">Historial de aperturas y cierres de caja — usa las fechas y horas de arriba para acotar el rango. Incluye monto inicial, totales por medio de pago y estado.</p>
+          <div id="repCajasResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
+          <div id="repCajasTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg"></div>
         </div>
       </section>
 
@@ -806,7 +825,12 @@ function enterApp(){
   if(S.usuario.rol !== 'admin'){
     $('#btnNuevoProd')?.remove();
     $('#btnNuevoPack')?.remove();
-    // El menú Config + Movimientos + Merma siguen visibles pero validan en servidor.
+    // Ocultar del menú los items Reportes y Configuración para perfil vendedor.
+    $$('.nav-item[data-view="reportes"]').forEach(el => el.classList.add('hidden'));
+    $$('.nav-item[data-view="configurar"]').forEach(el => el.classList.add('hidden'));
+  } else {
+    $$('.nav-item[data-view="reportes"]').forEach(el => el.classList.remove('hidden'));
+    $$('.nav-item[data-view="configurar"]').forEach(el => el.classList.remove('hidden'));
   }
   go('dashboard');
   cargarInventario();
@@ -1487,7 +1511,59 @@ async function cargarCajaAbierta(){
     const d = await api('cajaAbierta');
     S.caja = d.caja;
     renderVentas(); renderCajaStatus();
+    if(S.usuario?.rol === 'admin') cargarCajasAbiertas();
   }catch(err){ toast(err.message,'err'); }
+}
+
+/* CAJAS ABIERTAS (admin) ─────────────────────────────────────────── */
+async function cargarCajasAbiertas(){
+  const panel = $('#cajaAdminPanel');
+  const tbl = $('#cajaAdminTbl');
+  if(!panel || !tbl) return;
+  if(S.usuario?.rol !== 'admin'){ panel.classList.add('hidden'); return; }
+  panel.classList.remove('hidden');
+  tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">Cargando…</div>';
+  try{
+    const d = await api('cajasAbiertas');
+    const cajas = d.cajas || [];
+    if(!cajas.length){
+      tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">No hay cajas abiertas en este momento.</div>';
+      return;
+    }
+    const rows = cajas.map(c=>{
+      const abierta = fmtDateTime(c.fecha_apertura);
+      const transcurrido = _tiempoTranscurrido(c.fecha_apertura);
+      return `<tr>
+        <td class="font-semibold">${c.vendedor_nombre||'—'}</td>
+        <td>${abierta}<div class="text-xs text-slate-400">hace ${transcurrido}</div></td>
+        <td class="text-right">${fmt(c.monto_inicial)}</td>
+        <td class="text-right">${c.cant_ventas||0}</td>
+        <td class="text-right font-bold" style="color:var(--ok)">${fmt(c.total_ventas)}</td>
+      </tr>`;
+    }).join('');
+    tbl.innerHTML = `<table>
+      <thead><tr>
+        <th>Vendedor</th><th>Apertura</th>
+        <th class="text-right">Monto inicial</th>
+        <th class="text-right">Ventas</th>
+        <th class="text-right">Total cursado</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }catch(err){
+    tbl.innerHTML = `<div class="text-red-500 p-4 text-sm">No se pudo cargar: ${err.message}<br><span class="text-xs text-slate-500">Si actualizaste el código, recuerda volver a desplegar el Apps Script.</span></div>`;
+  }
+}
+
+function _tiempoTranscurrido(iso){
+  const t = new Date(iso); if(isNaN(t)) return '—';
+  const diff = Math.max(0, Date.now() - t.getTime());
+  const m = Math.floor(diff/60000);
+  if(m < 60) return m + ' min';
+  const h = Math.floor(m/60); const mm = m % 60;
+  if(h < 24) return h + 'h ' + mm + 'min';
+  const d = Math.floor(h/24);
+  return d + 'd ' + (h % 24) + 'h';
 }
 
 function openAbrirCaja(){
@@ -1547,6 +1623,15 @@ function confirmCerrarCaja(){
 }
 
 function renderCajaStatus(){
+  // Mostrar/ocultar panel admin de cajas abiertas según rol
+  const panelAdmin = $('#cajaAdminPanel');
+  if(panelAdmin){
+    if(S.usuario?.rol === 'admin'){
+      panelAdmin.classList.remove('hidden');
+    } else {
+      panelAdmin.classList.add('hidden');
+    }
+  }
   if(!S.caja){
     $('#cajaEmpty').classList.remove('hidden'); $('#cajaStatus').classList.add('hidden'); return;
   }
@@ -2033,7 +2118,12 @@ async function cargarReportes(){
   // Sección admin visible sólo para administradores
   const boxAdmin = $('#repAdminBox');
   if(boxAdmin) boxAdmin.classList.toggle('hidden', S.usuario?.rol !== 'admin');
-  if(S.usuario?.rol === 'admin') cargarVentasDetalladas(params);
+  const boxCajas = $('#repCajasBox');
+  if(boxCajas) boxCajas.classList.toggle('hidden', S.usuario?.rol !== 'admin');
+  if(S.usuario?.rol === 'admin'){
+    cargarVentasDetalladas(params);
+    cargarReporteCajas(params);
+  }
   try{
     const [v, p, m, c] = await Promise.all([
       api('reporteVentas', params),
@@ -2114,6 +2204,76 @@ async function cargarVentasDetalladas(params){
     renderVentasPorVendedor();
   }catch(err){
     wrap.innerHTML = `<div class="text-red-500 p-4 text-sm">No se pudo cargar el detalle: ${err.message}. <br><span class="text-xs text-slate-500">Si actualizaste el código, recuerda volver a desplegar el Apps Script.</span></div>`;
+  }
+}
+
+/* REPORTE DE CAJAS (admin) ──────────────────────────────────────── */
+async function cargarReporteCajas(params){
+  const tbl = $('#repCajasTbl');
+  const resumen = $('#repCajasResumen');
+  if(!tbl) return;
+  tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">Cargando…</div>';
+  if(resumen) resumen.innerHTML = '';
+  try{
+    const d = await api('reporteCajas', params);
+    const cajas = d.cajas || [];
+    if(!cajas.length){
+      tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">No hay cajas en el rango seleccionado.</div>';
+      return;
+    }
+    // Resumen
+    const abiertas = cajas.filter(c => String(c.estado).toLowerCase()==='abierta').length;
+    const cerradas = cajas.length - abiertas;
+    const totalVentas = cajas.reduce((a,c)=>a + (Number(c.total_ventas)||0), 0);
+    const totalEfectivo = cajas.reduce((a,c)=>a + (Number(c.total_efectivo)||0), 0);
+    if(resumen){
+      resumen.innerHTML = `
+        <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Cajas</div><div class="text-lg font-bold">${cajas.length}</div><div class="text-xs text-slate-400">${abiertas} abiertas · ${cerradas} cerradas</div></div>
+        <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Total ventas</div><div class="text-lg font-bold" style="color:var(--ok)">${fmt(totalVentas)}</div></div>
+        <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Efectivo</div><div class="text-lg font-bold">${fmt(totalEfectivo)}</div></div>
+        <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Rango</div><div class="text-sm font-semibold">${fmtDateTime(d.desde)}</div><div class="text-xs text-slate-400">hasta ${fmtDateTime(d.hasta)}</div></div>
+      `;
+    }
+    const rows = cajas.map(c => {
+      const estado = String(c.estado||'').toLowerCase();
+      const pill = estado === 'abierta'
+        ? '<span class="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 font-semibold">Abierta</span>'
+        : '<span class="px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-600 font-semibold">Cerrada</span>';
+      return `<tr>
+        <td>${c.id}</td>
+        <td class="font-semibold">${c.vendedor_nombre||'—'}</td>
+        <td>${fmtDateTime(c.fecha_apertura)}</td>
+        <td>${c.fecha_cierre ? fmtDateTime(c.fecha_cierre) : '—'}</td>
+        <td class="text-right">${fmt(c.monto_inicial)}</td>
+        <td class="text-right">${fmt(c.total_efectivo)}</td>
+        <td class="text-right">${fmt(c.total_debito)}</td>
+        <td class="text-right">${fmt(c.total_credito)}</td>
+        <td class="text-right">${fmt(c.total_transferencia)}</td>
+        <td class="text-right">${fmt(c.total_fiado)}</td>
+        <td class="text-right">${fmt((Number(c.total_rappi)||0) + (Number(c.total_pedidos_ya)||0))}</td>
+        <td class="text-right">${c.cant_ventas||0}</td>
+        <td class="text-right font-bold" style="color:var(--ok)">${fmt(c.total_ventas)}</td>
+        <td>${pill}</td>
+      </tr>`;
+    }).join('');
+    tbl.innerHTML = `<table class="w-full text-sm">
+      <thead><tr>
+        <th>#</th><th>Vendedor</th><th>Apertura</th><th>Cierre</th>
+        <th class="text-right">M. inicial</th>
+        <th class="text-right">Efectivo</th>
+        <th class="text-right">Débito</th>
+        <th class="text-right">Crédito</th>
+        <th class="text-right">Transf.</th>
+        <th class="text-right">Fiado</th>
+        <th class="text-right">Apps</th>
+        <th class="text-right">Ventas</th>
+        <th class="text-right">Total</th>
+        <th>Estado</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }catch(err){
+    tbl.innerHTML = `<div class="text-red-500 p-4 text-sm">No se pudo cargar: ${err.message}<br><span class="text-xs text-slate-500">Si actualizaste el código, recuerda volver a desplegar el Apps Script.</span></div>`;
   }
 }
 
