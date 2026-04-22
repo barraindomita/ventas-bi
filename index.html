@@ -255,31 +255,49 @@
       <div id="loginLogoFallback" class="mx-auto w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 items-center justify-center text-white text-4xl font-bold shadow-lg" style="display:none">🍾</div>
       <p class="text-slate-500 text-sm">Sistema de Gestión · Ingresa a tu cuenta</p>
     </div>
-    <form id="loginForm" class="space-y-4" autocomplete="off" spellcheck="false">
-      <!-- Señuelos para evitar que Chrome/Safari autocompleten los campos reales -->
-      <input type="text" name="fakeusernameremembered" style="display:none" autocomplete="username">
-      <input type="password" name="fakepasswordremembered" style="display:none" autocomplete="new-password">
-      <div>
-        <label class="label">RUT o Email</label>
-        <input id="loginEmail" type="text" class="input" required
-               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-               name="bi-usr-nocomplete" data-lpignore="true" data-1p-ignore="true" data-form-type="other"
-               oninput="_tryFormatRut(this)"
-               placeholder="12.345.678-9">
+
+    <!-- Paso 1: botón "Iniciar sesión" que abre la lista -->
+    <div id="loginStep1" class="space-y-3">
+      <button type="button" class="btn btn-primary w-full" onclick="openLoginUserList()">Iniciar sesión</button>
+      <p class="text-xs text-slate-400 text-center pt-2">v1.3 · Conecta con Google Sheets</p>
+    </div>
+
+    <!-- Paso 2: lista de usuarios -->
+    <div id="loginStep2" class="hidden">
+      <h3 class="font-bold text-lg mb-1" style="color:var(--brand-dark)">Selecciona el usuario</h3>
+      <p class="text-xs text-slate-400 uppercase tracking-wide mb-3">Barra Indómita</p>
+      <div id="loginUserList" class="space-y-2 max-h-[55vh] overflow-auto pr-1">
+        <div class="text-slate-400 text-sm py-6 text-center">Cargando usuarios…</div>
       </div>
-      <div>
-        <label class="label">Clave</label>
-        <div class="relative">
-          <input id="loginPassword" type="password" class="input pr-10" required
-                 autocomplete="new-password" name="bi-pw-nocomplete"
-                 data-lpignore="true" data-1p-ignore="true" data-form-type="other">
-          <button type="button" class="pw-toggle" onclick="_togglePw('loginPassword', this)" title="Mostrar/ocultar clave" tabindex="-1">👁</button>
+      <button type="button" class="btn btn-ghost w-full mt-3" onclick="backToLoginStart()">← Volver</button>
+    </div>
+
+    <!-- Paso 3: pedir contraseña al usuario seleccionado -->
+    <div id="loginStep3" class="hidden">
+      <div id="loginUserPickedBox" class="bg-slate-50 rounded-xl p-3 mb-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold" id="loginUserAvatar">?</div>
+        <div class="flex-1 min-w-0">
+          <div id="loginUserName" class="font-bold truncate" style="color:var(--brand-dark)">—</div>
+          <div id="loginUserRole" class="text-xs text-slate-500">—</div>
         </div>
       </div>
-      <button class="btn btn-primary w-full">Ingresar</button>
-      <button type="button" class="w-full text-sm text-blue-600 hover:underline mt-1" onclick="openRecuperarClave()">¿Olvidaste tu clave?</button>
-      <p class="text-xs text-slate-400 text-center pt-2">v1.2 · Conecta con Google Sheets</p>
-    </form>
+      <form id="loginPwForm" class="space-y-3" autocomplete="off" spellcheck="false">
+        <input type="text" name="fakeusernameremembered" style="display:none" autocomplete="username">
+        <input type="password" name="fakepasswordremembered" style="display:none" autocomplete="new-password">
+        <div>
+          <label class="label">Contraseña</label>
+          <div class="relative">
+            <input id="loginPassword" type="password" class="input pr-10" required autofocus
+                   autocomplete="new-password" name="bi-pw-nocomplete"
+                   data-lpignore="true" data-1p-ignore="true" data-form-type="other">
+            <button type="button" class="pw-toggle" onclick="_togglePw('loginPassword', this)" title="Mostrar/ocultar clave" tabindex="-1">👁</button>
+          </div>
+        </div>
+        <button class="btn btn-primary w-full">Ingresar</button>
+        <button type="button" class="btn btn-ghost w-full" onclick="backToLoginList()">← Elegir otro usuario</button>
+        <button type="button" class="w-full text-sm text-blue-600 hover:underline mt-1" onclick="openRecuperarClave()">¿Olvidaste tu clave?</button>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -460,7 +478,7 @@
               <h4 id="catalogoTitulo" class="text-sm font-bold" style="color:var(--brand-dark)">🔥 Top 12 más vendidos (último mes)</h4>
               <button class="text-xs text-blue-600 hover:underline" onclick="cargarTopVendidos(true)">Actualizar</button>
             </div>
-            <div id="catalogo" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+            <div id="catalogo" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
           </div>
           <!-- Carro -->
           <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col">
@@ -473,9 +491,13 @@
               <div class="flex items-center justify-between text-sm">
                 <span>Subtotal</span><span id="cartSubtotal" class="font-semibold">$0</span>
               </div>
-              <div class="flex items-center justify-between text-sm">
-                <label class="text-slate-500">Descuento total %</label>
-                <input id="descuentoTotal" type="number" min="0" max="100" value="0" class="input w-20 text-right" oninput="renderCart()">
+              <div class="flex items-center justify-between text-sm gap-2">
+                <label class="text-slate-500 flex-1">Descuento total</label>
+                <button id="btnDescTotal" type="button" class="btn btn-ghost text-xs py-1 px-2" onclick="openDescuentoTotal()">🏷️ <span id="descTotalLabel">Sin descuento</span></button>
+              </div>
+              <div id="cargoCigarroRow" class="hidden flex items-center justify-between text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                <span>🚬 Recargo cigarrillos (tarjeta)</span>
+                <span id="cargoCigarroMonto">+$0</span>
               </div>
               <div class="flex items-center justify-between text-sm text-red-500">
                 <span>Descuento</span><span id="cartDescuento">-$0</span>
@@ -624,7 +646,7 @@
 /* ══════════════════════════════════════════════════════════════════
    CONFIGURACIÓN — PEGA AQUÍ LA URL DE TU APPS SCRIPT (ver README)
    ══════════════════════════════════════════════════════════════════ */
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJ920LSOId7tXDBcqOCq-naj5qHIi7dGfFPUFHVF5t6oWcHb6EFrbdd3hDqXOLZhDzgA/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyLBThElQXEVjjrSfAfDUd5ZQAnICKV9bBas8ID1U8LVvWwPOF9QX7sY5dDbfjB2qwaIA/exec';
 
 /* Estado global ─────────────────────────────────────────────────── */
 const S = {
@@ -633,7 +655,8 @@ const S = {
   view: 'dashboard',
   productos: [],
   categorias: [],
-  cart: [],          // {producto, cantidad, descPct}
+  cart: [],          // {producto, cantidad, descTipo:'pct'|'monto', descValor}
+  descuentoVenta: { tipo:'pct', valor:0 },  // descuento aplicado al total
   caja: null,
   repDesde: null, repHasta: null,
   charts: {}
@@ -754,20 +777,76 @@ function openModal(html){
 }
 function closeModal(){ $('#modalRoot').innerHTML=''; }
 
-/* LOGIN ─────────────────────────────────────────────────────────── */
-$('#loginForm').addEventListener('submit', async e => {
-  e.preventDefault();
+/* LOGIN (lista de usuarios → contraseña) ────────────────────────── */
+let _loginUserPicked = null; // {id, nombre, rol}
+
+function backToLoginStart(){
+  $('#loginStep1').classList.remove('hidden');
+  $('#loginStep2').classList.add('hidden');
+  $('#loginStep3').classList.add('hidden');
+  _loginUserPicked = null;
+}
+function backToLoginList(){
+  $('#loginStep1').classList.add('hidden');
+  $('#loginStep2').classList.remove('hidden');
+  $('#loginStep3').classList.add('hidden');
+  _loginUserPicked = null;
+  const pw = $('#loginPassword'); if(pw) pw.value = '';
+}
+
+async function openLoginUserList(){
+  $('#loginStep1').classList.add('hidden');
+  $('#loginStep2').classList.remove('hidden');
+  $('#loginStep3').classList.add('hidden');
+  const list = $('#loginUserList');
+  list.innerHTML = '<div class="text-slate-400 text-sm py-6 text-center">Cargando usuarios…</div>';
   try{
-    const raw = $('#loginEmail').value.trim();
-    const payload = { password: $('#loginPassword').value };
-    // Detecta si es email o RUT; envía ambos campos para compatibilidad
-    if(raw.includes('@')){
-      payload.email = raw;
-    } else {
-      payload.rut = _formatRut(raw);
-      payload.email = raw; // fallback
+    const d = await api('listarUsuariosLogin');
+    const usuarios = d.usuarios || [];
+    if(!usuarios.length){
+      list.innerHTML = '<div class="text-slate-400 text-sm py-6 text-center">No hay usuarios activos.</div>';
+      return;
     }
-    const d = await api('login', payload);
+    list.innerHTML = usuarios.map(u => {
+      const inicial = (u.nombre||'?').trim().charAt(0).toUpperCase();
+      const rolLbl = u.rol === 'admin' ? 'Administrador' : 'Vendedor';
+      const isAdmin = u.rol === 'admin';
+      const avatarCls = isAdmin ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600';
+      const borderCls = isAdmin ? 'border-blue-200 bg-blue-50' : 'border-green-200 bg-green-50';
+      return `<button type="button" class="w-full flex items-center gap-3 p-3 rounded-xl border ${borderCls} hover:shadow transition text-left"
+                onclick='pickLoginUser(${JSON.stringify(u).replace(/'/g,"&#39;")})'>
+        <div class="w-10 h-10 rounded-full ${avatarCls} flex items-center justify-center font-bold">${inicial}</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-bold truncate uppercase" style="color:var(--brand-dark)">${u.nombre||'—'}</div>
+          <div class="text-xs ${isAdmin?'text-blue-700':'text-green-700'} font-semibold">${rolLbl}</div>
+        </div>
+        <span class="text-slate-400">›</span>
+      </button>`;
+    }).join('');
+  }catch(err){
+    list.innerHTML = `<div class="text-red-500 text-sm p-4">No se pudo cargar: ${err.message}<br><span class="text-xs text-slate-500">Si actualizaste el código, recuerda volver a desplegar el Apps Script.</span></div>`;
+  }
+}
+
+function pickLoginUser(u){
+  _loginUserPicked = u;
+  $('#loginStep2').classList.add('hidden');
+  $('#loginStep3').classList.remove('hidden');
+  const inicial = (u.nombre||'?').trim().charAt(0).toUpperCase();
+  $('#loginUserAvatar').textContent = inicial;
+  $('#loginUserName').textContent = u.nombre || '—';
+  $('#loginUserRole').textContent = u.rol === 'admin' ? 'Administrador' : 'Vendedor';
+  setTimeout(()=>{ const pw = $('#loginPassword'); if(pw) pw.focus(); }, 80);
+}
+
+$('#loginPwForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if(!_loginUserPicked){ toast('Selecciona un usuario', 'err'); return; }
+  try{
+    const d = await api('login', {
+      usuario_id: _loginUserPicked.id,
+      password: $('#loginPassword').value
+    });
     S.token = d.token; S.usuario = d.usuario;
     localStorage.setItem('bi_token', d.token);
     localStorage.setItem('bi_user', JSON.stringify(d.usuario));
@@ -815,6 +894,8 @@ async function doLogout(){
   S.token=null; S.usuario=null;
   $('#viewApp').classList.add('hidden');
   $('#viewLogin').classList.remove('hidden');
+  // Regresar al paso 1 del login (botón "Iniciar sesión")
+  if(typeof backToLoginStart === 'function') backToLoginStart();
 }
 
 function enterApp(){
@@ -1715,15 +1796,23 @@ function renderCatalogo(){
   el.innerHTML = rows.map((p, i)=>{
     const sinStock = Number(p.stock_actual)<=0;
     const topBadge = (!q && p._topQty != null)
-      ? `<span class="absolute top-1 left-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">#${i+1}</span>`
+      ? `<span class="absolute top-2 left-2 bg-amber-500 text-white text-[11px] font-bold px-1.5 py-0.5 rounded z-10">#${i+1}</span>`
       : '';
     return `
-    <button onclick='addToCart(${p.id})' class="relative text-left ${sinStock?'bg-amber-50':'bg-slate-50 hover:bg-blue-50'} border border-slate-200 rounded-lg p-2 flex flex-col items-center">
+    <button onclick='addToCart(${p.id})' class="relative text-left ${sinStock?'bg-amber-50':'bg-white hover:bg-blue-50'} border border-slate-200 rounded-xl p-3 flex flex-col shadow-sm hover:shadow-md transition">
       ${topBadge}
-      ${p.foto_url ? `<img src="${p.foto_url}" class="w-16 h-16 object-cover rounded mb-1" onerror="this.style.display='none'">` : `<div class="w-16 h-16 bg-slate-200 rounded mb-1 flex items-center justify-center text-slate-400">${esPack(p)?'📦':'🍾'}</div>`}
-      <div class="text-xs font-semibold line-clamp-2 text-center" style="color:var(--brand-dark)">${p.nombre}${esPack(p)?' <span class="chip chip-info" style="font-size:9px">PACK</span>':''}</div>
-      <div class="text-sm font-bold" style="color:var(--brand)">${fmt(p.valor_venta)}</div>
-      <div class="text-[10px] ${sinStock?'text-red-500 font-semibold':'text-slate-400'}">Stock: ${p.stock_actual}${p._topQty!=null?` • <span class="text-amber-600 font-semibold">${p._topQty} vend.</span>`:''}</div>
+      <div class="w-full bg-slate-50 rounded-lg mb-2 overflow-hidden flex items-center justify-center" style="aspect-ratio:1/1;">
+        ${p.foto_url
+          ? `<img src="${p.foto_url}" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='';this.style.display='none';this.parentNode.innerHTML='<div class=&quot;text-5xl text-slate-300&quot;>${esPack(p)?'📦':'🍾'}</div>';">`
+          : `<div class="text-5xl text-slate-300">${esPack(p)?'📦':'🍾'}</div>`}
+      </div>
+      <div class="text-sm font-semibold line-clamp-2" style="color:var(--brand-dark)">${p.nombre}${esPack(p)?' <span class="chip chip-info" style="font-size:9px">PACK</span>':''}</div>
+      <div class="text-xs text-slate-400 mt-0.5">Cód: ${p.codigo_barra||'—'}</div>
+      <div class="flex items-end justify-between mt-1">
+        <div class="text-lg font-bold" style="color:var(--brand)">${fmt(p.valor_venta)}</div>
+        <div class="text-[10px] px-2 py-0.5 rounded ${sinStock?'bg-red-100 text-red-600 font-semibold':(Number(p.stock_actual)<=5?'bg-amber-100 text-amber-700':'bg-green-100 text-green-700')}">Stock: ${p.stock_actual}</div>
+      </div>
+      ${p._topQty!=null?`<div class="text-[10px] text-amber-600 font-semibold mt-1">🔥 ${p._topQty} vend. este mes</div>`:''}
     </button>`;
   }).join('') || '<div class="col-span-4 text-center text-slate-400 py-6">Sin productos</div>';
 }
@@ -1890,7 +1979,7 @@ function addToCart(id, qty=1){
 
   const pushItem = () => {
     if(ex) ex.cantidad += qty;
-    else S.cart.push({ producto: p, cantidad: qty, descPct: 0 });
+    else S.cart.push({ producto: p, cantidad: qty, descTipo: 'pct', descValor: 0 });
     renderCart();
   };
 
@@ -1921,19 +2010,75 @@ function confirmStockNegativo(p, stockActual, faltante, onConfirm){
   $('#btnConfNeg').addEventListener('click', ()=>{ closeModal(); onConfirm(); });
 }
 
+/* Monto de descuento por ítem (sobre precio × cantidad) */
+function _itemDescMonto(c){
+  const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
+  if(!bruto) return 0;
+  if(c.descTipo === 'monto') return Math.min(bruto, Math.max(0, Number(c.descValor)||0));
+  const pct = Math.max(0, Math.min(100, Number(c.descValor)||0));
+  return bruto * pct / 100;
+}
+function _itemDescLabel(c){
+  if(!c.descValor) return null;
+  return c.descTipo === 'monto' ? `-${fmt(c.descValor)}` : `-${Number(c.descValor)}%`;
+}
+
+/* Subtotal neto (después de descuentos por ítem) */
+function _cartSubtotalNeto(){
+  let s = 0;
+  S.cart.forEach(c => {
+    const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
+    s += bruto - _itemDescMonto(c);
+  });
+  return s;
+}
+/* Monto del descuento total (venta) */
+function _ventaDescMonto(){
+  const sub = _cartSubtotalNeto();
+  if(!sub) return 0;
+  const d = S.descuentoVenta || { tipo:'pct', valor:0 };
+  if(d.tipo === 'monto') return Math.min(sub, Math.max(0, Number(d.valor)||0));
+  const pct = Math.max(0, Math.min(100, Number(d.valor)||0));
+  return sub * pct / 100;
+}
+function _ventaDescLabel(){
+  const d = S.descuentoVenta || { tipo:'pct', valor:0 };
+  if(!d.valor) return 'Sin descuento';
+  return d.tipo === 'monto' ? `-${fmt(d.valor)}` : `-${Number(d.valor)}%`;
+}
+
+/* Cigarrillos: helper para detectar por categoría */
+function _esCigarrillo(producto){
+  const cat = String(producto.categoria || '').trim().toLowerCase();
+  return cat === 'cigarrillos' || cat === 'cigarrillo';
+}
+/* Cantidad total de cigarrillos en el carro */
+function _cantidadCigarrillos(){
+  let q = 0;
+  S.cart.forEach(c => { if(_esCigarrillo(c.producto)) q += Number(c.cantidad)||0; });
+  return q;
+}
+const RECARGO_CIGARRILLO = 400; // pesos por unidad con pago tarjeta
+
 function renderCart(){
   const wrap = $('#cartItems'); if(!wrap) return;
   if(!S.cart.length){ wrap.innerHTML = '<div class="text-slate-400 text-center py-8 text-sm">Carrito vacío</div>'; }
   else {
-    wrap.innerHTML = S.cart.map((c,i)=>`
+    wrap.innerHTML = S.cart.map((c,i)=>{
+      const lbl = _itemDescLabel(c);
+      const chipCig = _esCigarrillo(c.producto)
+        ? '<span class="chip" style="background:#fef3c7;color:#b45309;font-size:9px;margin-left:4px">🚬 CIG</span>'
+        : '';
+      return `
       <div class="cart-item">
         ${c.producto.foto_url ? `<img src="${c.producto.foto_url}" class="w-10 h-10 rounded object-cover">` : `<div class="w-10 h-10 bg-slate-200 rounded flex items-center justify-center text-xs">🍾</div>`}
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-semibold truncate">${c.producto.nombre}</div>
+          <div class="text-sm font-semibold truncate">${c.producto.nombre}${chipCig}</div>
           <div class="text-xs text-slate-500">${fmt(c.producto.valor_venta)} c/u</div>
           <div class="flex items-center gap-1 text-xs mt-1">
-            <input type="number" min="0" max="100" value="${c.descPct}" class="input w-14 py-0 text-xs" onchange="setCartDesc(${i}, this.value)">
-            <span class="text-slate-400">%dto</span>
+            <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="openDescuentoItem(${i})" title="Aplicar descuento">
+              🏷️ ${lbl ? `<span class="text-red-600 font-semibold">${lbl}</span>` : 'Descuento'}
+            </button>
           </div>
         </div>
         <div class="cart-qty">
@@ -1942,37 +2087,169 @@ function renderCart(){
           <button onclick="setQty(${i},${c.cantidad+1})">+</button>
         </div>
         <button onclick="removeCart(${i})" class="text-red-400 text-sm">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
-  const descTot = Number($('#descuentoTotal').value)||0;
-  let sub = 0;
-  S.cart.forEach(c=>{ sub += c.producto.valor_venta * c.cantidad * (1 - (c.descPct||0)/100); });
-  const descMonto = sub * descTot/100;
-  const total = Math.round(sub - descMonto);
+  const sub = _cartSubtotalNeto();
+  const descMonto = _ventaDescMonto();
+  const total = Math.max(0, Math.round(sub - descMonto));
   $('#cartSubtotal').textContent = fmt(sub);
   $('#cartDescuento').textContent = '-'+fmt(descMonto);
   $('#cartTotal').textContent = fmt(total);
+  const lblBtn = $('#descTotalLabel'); if(lblBtn) lblBtn.textContent = _ventaDescLabel();
+  // Ocultar fila de recargo cigarrillos en el resumen del carrito: se aplica al
+  // elegir medio de pago (mostraremos el aviso recién en openPago).
+  const row = $('#cargoCigarroRow'); if(row) row.classList.add('hidden');
 }
+
 function setQty(i,q){
   q = Number(q);
   if(q<=0){ S.cart.splice(i,1); renderCart(); return; }
   S.cart[i].cantidad = q; // permitimos exceder stock (se advierte al cobrar)
   renderCart();
 }
-function setCartDesc(i,v){ S.cart[i].descPct = Math.max(0, Math.min(100, Number(v)||0)); renderCart(); }
 function removeCart(i){ S.cart.splice(i,1); renderCart(); }
-function vaciarCarro(){ S.cart=[]; $('#descuentoTotal').value=0; renderCart(); }
+function vaciarCarro(){ S.cart=[]; S.descuentoVenta={tipo:'pct',valor:0}; renderCart(); }
+
+/* Modal descuento por ítem (% o monto) */
+function openDescuentoItem(i){
+  const c = S.cart[i]; if(!c) return;
+  const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">🏷️ Descuento por producto</h3>
+      <p class="text-sm text-slate-500 mb-4">${c.producto.nombre} · ${c.cantidad} × ${fmt(c.producto.valor_venta)} = <b>${fmt(bruto)}</b></p>
+      <div class="flex gap-2 mb-3">
+        <button type="button" class="btn flex-1" id="descTipoPct">Por porcentaje (%)</button>
+        <button type="button" class="btn flex-1" id="descTipoMonto">Por monto ($)</button>
+      </div>
+      <div>
+        <label class="label" id="descLbl">Descuento</label>
+        <input id="descValor" type="number" min="0" class="input" value="${c.descValor||0}">
+      </div>
+      <p id="descHint" class="text-xs text-slate-400 mt-2"></p>
+      <div class="flex gap-2 justify-end mt-4">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="button" class="btn btn-warn" onclick="__quitarDescuentoItem(${i})">Quitar descuento</button>
+        <button type="button" class="btn btn-success" onclick="__guardarDescuentoItem(${i})">Aplicar</button>
+      </div>
+    </div>`);
+  let tipo = c.descTipo || 'pct';
+  const pintar = () => {
+    const b1 = $('#descTipoPct'), b2 = $('#descTipoMonto');
+    b1.className = 'btn flex-1 ' + (tipo==='pct' ? 'btn-primary' : 'btn-ghost');
+    b2.className = 'btn flex-1 ' + (tipo==='monto' ? 'btn-primary' : 'btn-ghost');
+    $('#descLbl').textContent = tipo==='pct' ? 'Porcentaje (0-100)' : 'Monto en pesos';
+    $('#descValor').max = tipo==='pct' ? 100 : bruto;
+    const v = Number($('#descValor').value) || 0;
+    const m = tipo==='pct' ? (bruto * v / 100) : Math.min(bruto, v);
+    $('#descHint').textContent = `Se descontarán ${fmt(m)} — quedando ${fmt(Math.max(0, bruto - m))}`;
+  };
+  $('#descTipoPct').onclick = ()=>{ tipo='pct'; pintar(); };
+  $('#descTipoMonto').onclick = ()=>{ tipo='monto'; pintar(); };
+  $('#descValor').addEventListener('input', pintar);
+  pintar();
+  window.__guardarDescuentoItem = (idx) => {
+    const item = S.cart[idx]; if(!item) return;
+    item.descTipo = tipo;
+    item.descValor = Math.max(0, Number($('#descValor').value) || 0);
+    closeModal(); renderCart();
+  };
+  window.__quitarDescuentoItem = (idx) => {
+    const item = S.cart[idx]; if(!item) return;
+    item.descTipo = 'pct'; item.descValor = 0;
+    closeModal(); renderCart();
+  };
+}
+
+/* Modal descuento total de la venta (% o monto) */
+function openDescuentoTotal(){
+  const sub = _cartSubtotalNeto();
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">🏷️ Descuento total de la venta</h3>
+      <p class="text-sm text-slate-500 mb-4">Subtotal neto del carrito: <b>${fmt(sub)}</b></p>
+      <div class="flex gap-2 mb-3">
+        <button type="button" class="btn flex-1" id="descVTipoPct">Por porcentaje (%)</button>
+        <button type="button" class="btn flex-1" id="descVTipoMonto">Por monto ($)</button>
+      </div>
+      <div>
+        <label class="label" id="descVLbl">Descuento</label>
+        <input id="descVValor" type="number" min="0" class="input" value="${S.descuentoVenta.valor||0}">
+      </div>
+      <p id="descVHint" class="text-xs text-slate-400 mt-2"></p>
+      <div class="flex gap-2 justify-end mt-4">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="button" class="btn btn-warn" onclick="__quitarDescuentoTotal()">Quitar descuento</button>
+        <button type="button" class="btn btn-success" onclick="__guardarDescuentoTotal()">Aplicar</button>
+      </div>
+    </div>`);
+  let tipo = S.descuentoVenta.tipo || 'pct';
+  const pintar = () => {
+    $('#descVTipoPct').className = 'btn flex-1 ' + (tipo==='pct' ? 'btn-primary' : 'btn-ghost');
+    $('#descVTipoMonto').className = 'btn flex-1 ' + (tipo==='monto' ? 'btn-primary' : 'btn-ghost');
+    $('#descVLbl').textContent = tipo==='pct' ? 'Porcentaje (0-100)' : 'Monto en pesos';
+    $('#descVValor').max = tipo==='pct' ? 100 : sub;
+    const v = Number($('#descVValor').value) || 0;
+    const m = tipo==='pct' ? (sub * v / 100) : Math.min(sub, v);
+    $('#descVHint').textContent = `Se descontarán ${fmt(m)} — total ${fmt(Math.max(0, Math.round(sub - m)))}`;
+  };
+  $('#descVTipoPct').onclick = ()=>{ tipo='pct'; pintar(); };
+  $('#descVTipoMonto').onclick = ()=>{ tipo='monto'; pintar(); };
+  $('#descVValor').addEventListener('input', pintar);
+  pintar();
+  window.__guardarDescuentoTotal = () => {
+    S.descuentoVenta = { tipo, valor: Math.max(0, Number($('#descVValor').value) || 0) };
+    closeModal(); renderCart();
+  };
+  window.__quitarDescuentoTotal = () => {
+    S.descuentoVenta = { tipo:'pct', valor:0 };
+    closeModal(); renderCart();
+  };
+}
+
+/* Calcula el recargo por cigarrillos aplicable a los pagos elegidos.
+   Regla: $400 por unidad de cigarrillo, proporcional al % pagado con tarjeta
+   (débito o crédito). Si 100% se paga con tarjeta → recargo completo. Si
+   50% con tarjeta y 50% en efectivo → recargo/2. Si 0% en tarjeta → 0. */
+function _cargoCigarrillosPagos(pagos, totalBase){
+  const cantCig = _cantidadCigarrillos();
+  if(!cantCig) return 0;
+  if(!totalBase) return 0;
+  let tarjeta = 0;
+  (pagos || []).forEach(p => {
+    if(p.medio === 'debito' || p.medio === 'credito') tarjeta += Number(p.monto)||0;
+  });
+  if(!tarjeta) return 0;
+  const fraccion = Math.min(1, tarjeta / totalBase);
+  return Math.round(cantCig * RECARGO_CIGARRILLO * fraccion);
+}
 
 function openPago(){
   if(!S.cart.length) return toast('Carrito vacío','err');
-  const total = _cartTotal();
-  let pago1 = { medio:'efectivo', monto: total }, pago2 = null;
+  const totalBase = _cartTotal();    // total previo al recargo cigarrillos
+  let pago1 = { medio:'efectivo', monto: totalBase }, pago2 = null;
   let cliente_fiado = '';
+
+  /* Recalcula recargo + ajusta monto pago 2 para cuadrar al total con recargo */
+  function recalc(){
+    const recargo = _cargoCigarrillosPagos([pago1, pago2].filter(Boolean), totalBase);
+    return { recargo, totalFinal: totalBase + recargo };
+  }
+
   function render(){
+    const { recargo, totalFinal } = recalc();
+    const cantCig = _cantidadCigarrillos();
+    const avisoCig = (recargo > 0)
+      ? `<div class="mb-3 p-3 rounded border border-amber-200 bg-amber-50 text-sm text-amber-800">
+          🚬 <b>Recargo por cigarrillos con tarjeta:</b> ${cantCig} unidad(es) × ${fmt(RECARGO_CIGARRILLO)} = <b>${fmt(recargo)}</b>.
+          <div class="text-xs mt-0.5">Se suma automáticamente al total porque hay un pago con débito o crédito.</div>
+        </div>` : '';
     const html = `
     <div class="p-6">
-      <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">Cobrar ${fmt(total)}</h3>
+      <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">Cobrar ${fmt(totalFinal)}</h3>
       <p class="text-sm text-slate-500 mb-4">Selecciona medio(s) de pago</p>
+      ${avisoCig}
       <div class="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
         ${MEDIOS_PAGO.map(m=>`
           <div class="payment-method pm-${m} ${pago1.medio===m?'active':''}" onclick="__setMedio1('${m}')" role="button" aria-pressed="${pago1.medio===m}">
@@ -2003,7 +2280,7 @@ function openPago(){
         <div class="mb-3"><label class="label">Cliente (fiado)</label>
           <input class="input" value="${cliente_fiado}" oninput="__setCliente(this.value)"></div>` : ''}
       <div class="bg-slate-50 rounded p-2 text-sm mb-3">
-        Total pagado: <b>${fmt((Number(pago1.monto)||0) + (pago2?Number(pago2.monto)||0:0))}</b> de <b>${fmt(total)}</b>
+        Total pagado: <b>${fmt((Number(pago1.monto)||0) + (pago2?Number(pago2.monto)||0:0))}</b> de <b>${fmt(totalFinal)}</b>
       </div>
       <div class="flex gap-2 justify-end">
         <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -2012,23 +2289,77 @@ function openPago(){
     </div>`;
     $('#modalRoot').innerHTML = `<div class="modal-bg"><div class="modal">${html}</div></div>`;
   }
-  window.__setMedio1 = m => { pago1.medio = m; render(); };
-  window.__setMedio2 = m => { pago2.medio = m; render(); };
-  window.__setMonto1 = v => { pago1.monto = Number(v)||0; if(pago2) pago2.monto = Math.max(0, total - pago1.monto); render(); };
-  window.__setMonto2 = v => { pago2.monto = Number(v)||0; pago1.monto = Math.max(0, total - pago2.monto); render(); };
-  window.__togglePago2 = on => { pago2 = on ? { medio:'debito', monto: 0 } : null; if(pago2){ pago2.monto = Math.max(0, total - pago1.monto);} else { pago1.monto = total; } render(); };
+  /* Reajusta los montos de pago para que cuadren al total con recargo */
+  function ajustar(){
+    const { totalFinal } = recalc();
+    if(pago2){
+      pago2.monto = Math.max(0, totalFinal - (Number(pago1.monto)||0));
+    } else {
+      pago1.monto = totalFinal;
+    }
+  }
+  window.__setMedio1 = m => {
+    pago1.medio = m;
+    // Si pasamos a un medio tarjeta y no hay pago2, el monto se recalcula.
+    ajustar(); render();
+  };
+  window.__setMedio2 = m => { if(pago2) pago2.medio = m; ajustar(); render(); };
+  window.__setMonto1 = v => {
+    pago1.monto = Number(v)||0;
+    const { totalFinal } = recalc();
+    if(pago2) pago2.monto = Math.max(0, totalFinal - pago1.monto);
+    render();
+  };
+  window.__setMonto2 = v => {
+    if(!pago2) return;
+    pago2.monto = Number(v)||0;
+    const { totalFinal } = recalc();
+    pago1.monto = Math.max(0, totalFinal - pago2.monto);
+    render();
+  };
+  window.__togglePago2 = on => {
+    if(on){
+      pago2 = { medio:'debito', monto: 0 };
+    } else {
+      pago2 = null;
+    }
+    ajustar(); render();
+  };
   window.__setCliente = v => { cliente_fiado = v; };
   window.__confirmarVenta = async () => {
+    const { recargo, totalFinal } = recalc();
     const pagos = [pago1]; if(pago2 && pago2.monto>0) pagos.push(pago2);
+    const totalPagado = pagos.reduce((a,p)=>a + (Number(p.monto)||0), 0);
+    if(Math.abs(totalPagado - totalFinal) > 1){
+      toast(`Los pagos (${fmt(totalPagado)}) no cuadran con el total (${fmt(totalFinal)})`,'err');
+      return;
+    }
     try{
+      // El backend espera descuento_pct_venta y descuento_pct_item; convertimos
+      // los descuentos por monto a porcentaje sobre el bruto correspondiente.
+      const sub = _cartSubtotalNeto();
+      let pctVenta = 0;
+      if(S.descuentoVenta.valor > 0){
+        if(S.descuentoVenta.tipo === 'pct') pctVenta = Number(S.descuentoVenta.valor)||0;
+        else if(sub > 0) pctVenta = Math.min(100, (Number(S.descuentoVenta.valor)||0) * 100 / sub);
+      }
+      const items = S.cart.map(c => {
+        const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
+        let pct = 0;
+        if(c.descValor > 0){
+          if(c.descTipo === 'pct') pct = Number(c.descValor)||0;
+          else if(bruto > 0) pct = Math.min(100, (Number(c.descValor)||0) * 100 / bruto);
+        }
+        return { producto_id: c.producto.id, cantidad: c.cantidad, descuento_pct_item: pct };
+      });
       await api('registrarVenta', {
         caja_id: S.caja ? S.caja.id : null,
-        descuento_pct_venta: Number($('#descuentoTotal').value)||0,
-        items: S.cart.map(c=>({ producto_id: c.producto.id, cantidad: c.cantidad, descuento_pct_item: c.descPct })),
-        pagos, cliente_fiado
+        descuento_pct_venta: pctVenta,
+        recargo_cigarrillos: recargo,
+        items, pagos, cliente_fiado
       });
       toast('Venta registrada','ok');
-      S.cart = []; $('#descuentoTotal').value = 0;
+      S.cart = []; S.descuentoVenta = { tipo:'pct', valor:0 };
       closeModal();
       await cargarInventario();
       await cargarCajaAbierta();
@@ -2037,10 +2368,10 @@ function openPago(){
   render();
 }
 function _cartTotal(){
-  const descTot = Number($('#descuentoTotal').value)||0;
-  let sub = 0;
-  S.cart.forEach(c=>{ sub += c.producto.valor_venta * c.cantidad * (1 - (c.descPct||0)/100); });
-  return Math.round(sub * (1 - descTot/100));
+  // Total base previo al recargo por cigarrillos (se suma al confirmar pago)
+  const sub = _cartSubtotalNeto();
+  const desc = _ventaDescMonto();
+  return Math.max(0, Math.round(sub - desc));
 }
 
 /* ÚLTIMA VENTA ─────────────────────────────────────────────────── */
