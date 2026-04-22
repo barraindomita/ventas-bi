@@ -2047,10 +2047,14 @@ function _ventaDescLabel(){
   return d.tipo === 'monto' ? `-${fmt(d.valor)}` : `-${Number(d.valor)}%`;
 }
 
-/* Cigarrillos: helper para detectar por categoría */
+/* Cigarrillos: detectar por marca en el nombre del producto.
+   Se considera cigarrillo sólo si el nombre contiene una de estas marcas
+   (case-insensitive): Pall Mall / PallMall, Lucky Strike, Kent, Marlboro. */
+const MARCAS_CIGARRILLOS = ['pall mall','pallmall','lucky strike','kent','marlboro'];
 function _esCigarrillo(producto){
-  const cat = String(producto.categoria || '').trim().toLowerCase();
-  return cat === 'cigarrillos' || cat === 'cigarrillo';
+  const nombre = String(producto.nombre || '').toLowerCase();
+  if(!nombre) return false;
+  return MARCAS_CIGARRILLOS.some(m => nombre.includes(m));
 }
 /* Cantidad total de cigarrillos en el carro */
 function _cantidadCigarrillos(){
@@ -2211,8 +2215,10 @@ function openDescuentoTotal(){
 /* Calcula el recargo por cigarrillos aplicable a los pagos elegidos.
    Regla: $400 por unidad de cigarrillo, proporcional al % pagado con tarjeta
    (débito o crédito). Si 100% se paga con tarjeta → recargo completo. Si
-   50% con tarjeta y 50% en efectivo → recargo/2. Si 0% en tarjeta → 0. */
-function _cargoCigarrillosPagos(pagos, totalBase){
+   50% con tarjeta y 50% en efectivo → recargo/2. Si 0% en tarjeta → 0.
+   El parámetro activo permite que el cajero desmarque el recargo. */
+function _cargoCigarrillosPagos(pagos, totalBase, activo){
+  if(activo === false) return 0;
   const cantCig = _cantidadCigarrillos();
   if(!cantCig) return 0;
   if(!totalBase) return 0;
@@ -2230,21 +2236,43 @@ function openPago(){
   const totalBase = _cartTotal();    // total previo al recargo cigarrillos
   let pago1 = { medio:'efectivo', monto: totalBase }, pago2 = null;
   let cliente_fiado = '';
+  let recargoActivo = true;   // el cajero puede destildarlo
 
   /* Recalcula recargo + ajusta monto pago 2 para cuadrar al total con recargo */
   function recalc(){
-    const recargo = _cargoCigarrillosPagos([pago1, pago2].filter(Boolean), totalBase);
+    const recargo = _cargoCigarrillosPagos([pago1, pago2].filter(Boolean), totalBase, recargoActivo);
     return { recargo, totalFinal: totalBase + recargo };
   }
 
   function render(){
     const { recargo, totalFinal } = recalc();
     const cantCig = _cantidadCigarrillos();
-    const avisoCig = (recargo > 0)
-      ? `<div class="mb-3 p-3 rounded border border-amber-200 bg-amber-50 text-sm text-amber-800">
-          🚬 <b>Recargo por cigarrillos con tarjeta:</b> ${cantCig} unidad(es) × ${fmt(RECARGO_CIGARRILLO)} = <b>${fmt(recargo)}</b>.
-          <div class="text-xs mt-0.5">Se suma automáticamente al total porque hay un pago con débito o crédito.</div>
-        </div>` : '';
+    // Hay pago con tarjeta?
+    const hayTarjeta = (pago1.medio === 'debito' || pago1.medio === 'credito')
+      || (pago2 && (pago2.medio === 'debito' || pago2.medio === 'credito'));
+    // Mostrar el panel de recargo sólo si hay cigarrillos y hay pago con tarjeta
+    const mostrarPanelCig = cantCig > 0 && hayTarjeta;
+    const potencial = cantCig * RECARGO_CIGARRILLO;   // máximo posible
+    const avisoCig = mostrarPanelCig ? `
+      <div class="mb-3 p-3 rounded border ${recargoActivo?'border-amber-300 bg-amber-50':'border-slate-200 bg-slate-50'}">
+        <label class="flex items-start gap-2 cursor-pointer text-sm ${recargoActivo?'text-amber-800':'text-slate-600'}">
+          <input type="checkbox" ${recargoActivo?'checked':''} onchange="__toggleRecargo(this.checked)" class="mt-0.5">
+          <div class="flex-1">
+            <div>🚬 <b>Recargo por cigarrillos con tarjeta</b></div>
+            <div class="text-xs mt-0.5">
+              ${cantCig} unidad(es) × ${fmt(RECARGO_CIGARRILLO)} = <b>${fmt(recargoActivo ? recargo : 0)}</b>
+              ${recargoActivo
+                ? (recargo < potencial
+                    ? ` <span class="text-amber-700">(proporcional al % pagado con tarjeta)</span>`
+                    : '')
+                : ` <span class="text-slate-500">— Recargo desactivado</span>`}
+            </div>
+            <div class="text-xs mt-1 ${recargoActivo?'text-amber-700':'text-slate-500'}">
+              ${recargoActivo ? 'Se suma automáticamente al total. Destilda para no aplicarlo.' : 'Marca la casilla si quieres aplicar el recargo.'}
+            </div>
+          </div>
+        </label>
+      </div>` : '';
     const html = `
     <div class="p-6">
       <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">Cobrar ${fmt(totalFinal)}</h3>
@@ -2323,6 +2351,10 @@ function openPago(){
     } else {
       pago2 = null;
     }
+    ajustar(); render();
+  };
+  window.__toggleRecargo = on => {
+    recargoActivo = !!on;
     ajustar(); render();
   };
   window.__setCliente = v => { cliente_fiado = v; };
