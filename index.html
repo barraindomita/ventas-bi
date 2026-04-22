@@ -2237,6 +2237,8 @@ function openPago(){
   let pago1 = { medio:'efectivo', monto: totalBase }, pago2 = null;
   let cliente_fiado = '';
   let recargoActivo = true;   // el cajero puede destildarlo
+  let pagaCon1 = 0;           // vuelto: monto con que paga el cliente (efectivo) — pago 1
+  let pagaCon2 = 0;           // vuelto: monto con que paga el cliente (efectivo) — pago 2
 
   /* Recalcula recargo + ajusta monto pago 2 para cuadrar al total con recargo */
   function recalc(){
@@ -2289,6 +2291,20 @@ function openPago(){
         <input type="text" inputmode="numeric" class="input" value="${fmtMoney(pago1.monto)}"
           oninput="this.value=fmtMoney(parseMoney(this.value))"
           onchange="__setMonto1(parseMoney(this.value))">
+        ${pago1.medio==='efectivo' ? `
+          <div class="mt-2">
+            <label class="label">💵 Paga con (opcional)</label>
+            <input type="text" inputmode="numeric" class="input" value="${pagaCon1 ? fmtMoney(pagaCon1) : ''}"
+              placeholder="Monto entregado por el cliente"
+              oninput="this.value=fmtMoney(parseMoney(this.value))"
+              onchange="__setPagaCon1(parseMoney(this.value))">
+            ${pagaCon1 > 0 ? `
+              <div class="mt-2 p-2 rounded text-sm ${pagaCon1 >= (Number(pago1.monto)||0) ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}">
+                ${pagaCon1 >= (Number(pago1.monto)||0)
+                  ? `↩️ Vuelto: <b>${fmt(pagaCon1 - (Number(pago1.monto)||0))}</b>`
+                  : `⚠️ Falta: <b>${fmt((Number(pago1.monto)||0) - pagaCon1)}</b>`}
+              </div>` : ''}
+          </div>` : ''}
       </div>
       <label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" ${pago2?'checked':''} onchange="__togglePago2(this.checked)"> Usar 2 medios de pago</label>
       ${pago2 ? `
@@ -2303,6 +2319,20 @@ function openPago(){
           <input type="text" inputmode="numeric" class="input" value="${fmtMoney(pago2.monto)}"
             oninput="this.value=fmtMoney(parseMoney(this.value))"
             onchange="__setMonto2(parseMoney(this.value))">
+          ${pago2.medio==='efectivo' ? `
+            <div class="mt-2">
+              <label class="label">💵 Paga con (opcional)</label>
+              <input type="text" inputmode="numeric" class="input" value="${pagaCon2 ? fmtMoney(pagaCon2) : ''}"
+                placeholder="Monto entregado por el cliente"
+                oninput="this.value=fmtMoney(parseMoney(this.value))"
+                onchange="__setPagaCon2(parseMoney(this.value))">
+              ${pagaCon2 > 0 ? `
+                <div class="mt-2 p-2 rounded text-sm ${pagaCon2 >= (Number(pago2.monto)||0) ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}">
+                  ${pagaCon2 >= (Number(pago2.monto)||0)
+                    ? `↩️ Vuelto: <b>${fmt(pagaCon2 - (Number(pago2.monto)||0))}</b>`
+                    : `⚠️ Falta: <b>${fmt((Number(pago2.monto)||0) - pagaCon2)}</b>`}
+                </div>` : ''}
+            </div>` : ''}
         </div>` : ''}
       ${(pago1.medio==='fiado'||(pago2&&pago2.medio==='fiado')) ? `
         <div class="mb-3"><label class="label">Cliente (fiado)</label>
@@ -2328,10 +2358,15 @@ function openPago(){
   }
   window.__setMedio1 = m => {
     pago1.medio = m;
+    if(m !== 'efectivo') pagaCon1 = 0;   // limpiar vuelto si cambió de efectivo
     // Si pasamos a un medio tarjeta y no hay pago2, el monto se recalcula.
     ajustar(); render();
   };
-  window.__setMedio2 = m => { if(pago2) pago2.medio = m; ajustar(); render(); };
+  window.__setMedio2 = m => {
+    if(pago2) pago2.medio = m;
+    if(m !== 'efectivo') pagaCon2 = 0;
+    ajustar(); render();
+  };
   window.__setMonto1 = v => {
     pago1.monto = Number(v)||0;
     const { totalFinal } = recalc();
@@ -2350,6 +2385,7 @@ function openPago(){
       pago2 = { medio:'debito', monto: 0 };
     } else {
       pago2 = null;
+      pagaCon2 = 0;
     }
     ajustar(); render();
   };
@@ -2357,6 +2393,8 @@ function openPago(){
     recargoActivo = !!on;
     ajustar(); render();
   };
+  window.__setPagaCon1 = v => { pagaCon1 = Number(v)||0; render(); };
+  window.__setPagaCon2 = v => { pagaCon2 = Number(v)||0; render(); };
   window.__setCliente = v => { cliente_fiado = v; };
   window.__confirmarVenta = async () => {
     const { recargo, totalFinal } = recalc();
