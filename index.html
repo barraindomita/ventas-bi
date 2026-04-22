@@ -1892,30 +1892,136 @@ function openAbrirCaja(){
 
 function confirmCerrarCaja(){
   if(!S.caja) return;
+  const montoInicial = Number(S.caja.monto_inicial) || 0;
+  const totalEfectivo = Number(S.caja.total_efectivo) || 0;
+  const efectivoEsperado = montoInicial + totalEfectivo;
   openModal(`
     <div class="p-6">
       <h3 class="text-lg font-bold mb-3" style="color:var(--err)">Cerrar caja</h3>
+
+      <!-- Resumen de ventas por medio de pago -->
       <div class="bg-slate-50 rounded-lg p-3 mb-3 text-sm">
-        <div class="flex justify-between"><span>Total ventas</span><b>${fmt(S.caja.total_ventas)}</b></div>
-        ${MEDIOS_PAGO.map(m=>`<div class="flex justify-between"><span>${medioLabel(m)}</span><span>${fmt(S.caja['total_'+m])}</span></div>`).join('')}
+        <div class="flex justify-between font-semibold pb-2 mb-2 border-b border-slate-200" style="color:var(--brand-dark)">
+          <span>Total ventas</span><b>${fmt(S.caja.total_ventas)}</b>
+        </div>
+        ${MEDIOS_PAGO.map(m=>`<div class="flex justify-between text-slate-600"><span>${medioLabel(m)}</span><span>${fmt(S.caja['total_'+m])}</span></div>`).join('')}
       </div>
+
+      <!-- Efectivo esperado, calculado y destacado -->
+      <div class="rounded-lg p-4 mb-3 border-2 border-emerald-300 bg-emerald-50">
+        <div class="text-xs text-emerald-800 uppercase font-semibold mb-1">💵 Efectivo que debería quedar en caja</div>
+        <div class="text-3xl font-bold text-emerald-700">${fmt(efectivoEsperado)}</div>
+        <div class="text-xs text-emerald-700 mt-1">
+          Monto inicial <b>${fmt(montoInicial)}</b> + Ventas en efectivo <b>${fmt(totalEfectivo)}</b>
+        </div>
+      </div>
+
       <form id="formCerrar" class="space-y-3">
-        <div><label class="label">Observaciones al cierre</label>
-          <textarea name="observaciones" class="input" rows="2"></textarea></div>
-        <div class="flex gap-2 justify-end">
+        <!-- Checkbox: el monto no coincide -->
+        <label class="flex items-start gap-2 text-sm cursor-pointer p-3 rounded border border-slate-300 bg-white hover:bg-amber-50">
+          <input id="chkNoCoincide" type="checkbox" class="mt-0.5">
+          <div class="flex-1">
+            <div class="font-semibold">⚠️ El monto en caja no coincide con el esperado</div>
+            <div class="text-xs text-slate-500 mt-0.5">Marca esta casilla si al contar el efectivo el total es distinto. Deberás ingresar el monto real y una nota explicando la causa.</div>
+          </div>
+        </label>
+
+        <!-- Campos que aparecen sólo si el monto no coincide -->
+        <div id="boxDiferencia" class="hidden space-y-3 p-3 rounded border border-amber-300 bg-amber-50">
+          <div>
+            <label class="label">Monto real en caja *</label>
+            <input id="inpMontoReal" name="monto_real" type="text" inputmode="numeric" class="input"
+              placeholder="${fmtMoney(efectivoEsperado)}"
+              oninput="this.value=fmtMoney(parseMoney(this.value));__recalcDiferencia()">
+            <div id="diferenciaTxt" class="text-xs mt-1 text-slate-500">Diferencia se calculará al ingresar el monto real.</div>
+          </div>
+          <div>
+            <label class="label">Nota explicando la diferencia *</label>
+            <textarea id="inpNotaDif" name="nota_diferencia" class="input" rows="3"
+              placeholder="Ej: Faltan $2.000, posible error al dar vuelto a cliente de las 20:15"></textarea>
+            <div class="text-xs text-slate-600 mt-1">Esta nota se enviará como notificación al administrador.</div>
+          </div>
+        </div>
+
+        <!-- Observaciones siempre disponibles -->
+        <div>
+          <label class="label">Observaciones al cierre (opcional)</label>
+          <textarea name="observaciones" class="input" rows="2" placeholder="Cualquier comentario general sobre el cierre…"></textarea>
+        </div>
+
+        <div class="flex gap-2 justify-end pt-2">
           <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
           <button class="btn btn-danger">Cerrar caja</button>
         </div>
       </form>
     </div>`);
+
+  // Mostrar / ocultar el bloque de diferencia
+  const chk = document.getElementById('chkNoCoincide');
+  const box = document.getElementById('boxDiferencia');
+  const inpMonto = document.getElementById('inpMontoReal');
+  const inpNota = document.getElementById('inpNotaDif');
+  chk.addEventListener('change', () => {
+    if(chk.checked){
+      box.classList.remove('hidden');
+      inpMonto.required = true;
+      inpNota.required = true;
+      if(!inpMonto.value) inpMonto.value = fmtMoney(efectivoEsperado);
+      __recalcDiferencia();
+      inpMonto.focus();
+    } else {
+      box.classList.add('hidden');
+      inpMonto.required = false;
+      inpNota.required = false;
+    }
+  });
+  window.__recalcDiferencia = () => {
+    const real = parseMoney(inpMonto.value);
+    const dif = real - efectivoEsperado;
+    const txt = document.getElementById('diferenciaTxt');
+    if(!txt) return;
+    if(Number.isNaN(real) || inpMonto.value === ''){
+      txt.textContent = 'Diferencia se calculará al ingresar el monto real.';
+      txt.className = 'text-xs mt-1 text-slate-500';
+    } else if(dif === 0){
+      txt.innerHTML = '✔️ El monto coincide con el esperado. Puedes desmarcar la casilla.';
+      txt.className = 'text-xs mt-1 text-emerald-700 font-semibold';
+    } else if(dif < 0){
+      txt.innerHTML = `⬇️ <b>Falta</b>: ${fmt(Math.abs(dif))} respecto al esperado (${fmt(efectivoEsperado)}).`;
+      txt.className = 'text-xs mt-1 text-red-700 font-semibold';
+    } else {
+      txt.innerHTML = `⬆️ <b>Sobra</b>: ${fmt(dif)} respecto al esperado (${fmt(efectivoEsperado)}).`;
+      txt.className = 'text-xs mt-1 text-blue-700 font-semibold';
+    }
+  };
+
   $('#formCerrar').addEventListener('submit', async e=>{
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.caja_id = S.caja.id;
+    data.no_coincide = chk.checked;
+    if(chk.checked){
+      const monto = parseMoney(String(data.monto_real || ''));
+      if(!Number.isFinite(monto)){
+        return toast('Ingresa un monto real válido', 'err');
+      }
+      if(!String(data.nota_diferencia || '').trim()){
+        return toast('La nota explicando la diferencia es obligatoria', 'err');
+      }
+      data.monto_real = monto;
+    } else {
+      // Aseguramos que no se envíen restos del form
+      delete data.monto_real;
+      delete data.nota_diferencia;
+    }
     try{
       await api('cerrarCaja', data);
-      S.caja = null; toast('Caja cerrada','ok'); closeModal();
+      S.caja = null;
+      toast(chk.checked ? 'Caja cerrada — se notificó al administrador' : 'Caja cerrada', 'ok');
+      closeModal();
       renderVentas(); renderCajaStatus();
+      // Refrescar notificaciones por si el admin está logueado en otra pestaña
+      cargarNotificaciones();
     }catch(err){ toast(err.message,'err'); }
   });
 }
@@ -2838,30 +2944,63 @@ async function cargarReporteCajas(params){
       return;
     }
     // Resumen
+    const _truthy = v => v===true||v==='TRUE'||v==='true'||v===1||v==='1';
     const abiertas = cajas.filter(c => String(c.estado).toLowerCase()==='abierta').length;
     const cerradas = cajas.length - abiertas;
     const totalVentas = cajas.reduce((a,c)=>a + (Number(c.total_ventas)||0), 0);
     const totalEfectivo = cajas.reduce((a,c)=>a + (Number(c.total_efectivo)||0), 0);
+    const conDiferencia = cajas.filter(c => _truthy(c.no_coincide)).length;
+    const totalDiferencia = cajas.reduce((a,c)=> a + (_truthy(c.no_coincide) ? (Number(c.diferencia_cierre)||0) : 0), 0);
+    // Guardar cajas para el modal de nota
+    window._repCajasCache = cajas;
     if(resumen){
+      const difCard = conDiferencia > 0
+        ? `<div class="bg-amber-50 border border-amber-200 rounded-lg p-3"><div class="text-xs text-amber-700 uppercase font-semibold">⚠️ Cajas con diferencia</div><div class="text-lg font-bold text-amber-700">${conDiferencia}</div><div class="text-xs ${totalDiferencia<0?'text-red-600':'text-emerald-600'} font-semibold">${totalDiferencia>=0?'+':''}${fmt(totalDiferencia)} neto</div></div>`
+        : `<div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3"><div class="text-xs text-emerald-700 uppercase font-semibold">✓ Sin diferencias</div><div class="text-lg font-bold text-emerald-700">0</div><div class="text-xs text-emerald-600">Todas las cajas cuadraron</div></div>`;
       resumen.innerHTML = `
         <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Cajas</div><div class="text-lg font-bold">${cajas.length}</div><div class="text-xs text-slate-400">${abiertas} abiertas · ${cerradas} cerradas</div></div>
         <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Total ventas</div><div class="text-lg font-bold" style="color:var(--ok)">${fmt(totalVentas)}</div></div>
         <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Efectivo</div><div class="text-lg font-bold">${fmt(totalEfectivo)}</div></div>
+        ${difCard}
         <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Rango</div><div class="text-sm font-semibold">${fmtDateTime(d.desde)}</div><div class="text-xs text-slate-400">hasta ${fmtDateTime(d.hasta)}</div></div>
       `;
     }
     const rows = cajas.map(c => {
       const estado = String(c.estado||'').toLowerCase();
+      const noCoincide = _truthy(c.no_coincide);
+      const revisada = _truthy(c.diferencia_revisada);
+      const diferencia = Number(c.diferencia_cierre) || 0;
+      const esperado = (c.efectivo_esperado !== undefined && c.efectivo_esperado !== '' && c.efectivo_esperado !== null)
+        ? Number(c.efectivo_esperado)
+        : ((Number(c.monto_inicial)||0) + (Number(c.total_efectivo)||0));
+      const real = (c.monto_real_cierre !== undefined && c.monto_real_cierre !== '' && c.monto_real_cierre !== null && noCoincide)
+        ? Number(c.monto_real_cierre)
+        : esperado;
       const pill = estado === 'abierta'
         ? '<span class="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 font-semibold">Abierta</span>'
-        : '<span class="px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-600 font-semibold">Cerrada</span>';
-      return `<tr>
+        : (noCoincide
+            ? `<span class="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-800 font-semibold" title="${revisada?'Revisada':'Pendiente de revisar'}">${revisada?'✓':'⚠'} Dif. ${diferencia>=0?'+':''}${fmt(diferencia)}</span>`
+            : '<span class="px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-600 font-semibold">Cerrada</span>');
+      const tieneObs = (c.observaciones_cierre||'').toString().trim().length > 0;
+      const tieneNota = (c.nota_diferencia||'').toString().trim().length > 0;
+      const btnNota = (tieneNota || tieneObs)
+        ? `<button class="text-xs px-2 py-1 rounded ${noCoincide?'bg-amber-100 text-amber-700 hover:bg-amber-200':'bg-slate-100 text-slate-600 hover:bg-slate-200'} font-semibold" onclick="verNotaCaja(${c.id})">📝 Ver</button>`
+        : '<span class="text-xs text-slate-300">—</span>';
+      const difCell = noCoincide
+        ? `<span class="font-semibold ${diferencia<0?'text-red-600':'text-emerald-600'}">${diferencia>=0?'+':''}${fmt(diferencia)}</span>`
+        : '<span class="text-slate-400">—</span>';
+      const rowCls = (noCoincide && !revisada) ? 'style="background:#fffbeb"' : '';
+      return `<tr ${rowCls}>
         <td>${c.id}</td>
         <td class="font-semibold">${c.vendedor_nombre||'—'}</td>
         <td>${fmtDateTime(c.fecha_apertura)}</td>
         <td>${c.fecha_cierre ? fmtDateTime(c.fecha_cierre) : '—'}</td>
         <td class="text-right">${fmt(c.monto_inicial)}</td>
         <td class="text-right">${fmt(c.total_efectivo)}</td>
+        <td class="text-right text-xs text-slate-500">${estado==='cerrada'?fmt(esperado):'—'}</td>
+        <td class="text-right text-xs ${noCoincide?'font-semibold':'text-slate-500'}">${estado==='cerrada'&&noCoincide?fmt(real):'—'}</td>
+        <td class="text-right">${estado==='cerrada'?difCell:'—'}</td>
+        <td class="text-center">${btnNota}</td>
         <td class="text-right">${fmt(c.total_debito)}</td>
         <td class="text-right">${fmt(c.total_credito)}</td>
         <td class="text-right">${fmt(c.total_transferencia)}</td>
@@ -2877,6 +3016,10 @@ async function cargarReporteCajas(params){
         <th>#</th><th>Vendedor</th><th>Apertura</th><th>Cierre</th>
         <th class="text-right">M. inicial</th>
         <th class="text-right">Efectivo</th>
+        <th class="text-right">Esperado</th>
+        <th class="text-right">Real</th>
+        <th class="text-right">Diferencia</th>
+        <th class="text-center">Nota</th>
         <th class="text-right">Débito</th>
         <th class="text-right">Crédito</th>
         <th class="text-right">Transf.</th>
@@ -2892,6 +3035,85 @@ async function cargarReporteCajas(params){
     tbl.innerHTML = `<div class="text-red-500 p-4 text-sm">No se pudo cargar: ${err.message}<br><span class="text-xs text-slate-500">Si actualizaste el código, recuerda volver a desplegar el Apps Script.</span></div>`;
   }
 }
+
+/* Ver nota / observación de una caja desde Reporte de Cajas */
+window.verNotaCaja = function(cajaId){
+  const cajas = window._repCajasCache || [];
+  const c = cajas.find(x => Number(x.id) === Number(cajaId));
+  if(!c){ toast('Caja no encontrada','err'); return; }
+  const _truthy = v => v===true||v==='TRUE'||v==='true'||v===1||v==='1';
+  const noCoincide = _truthy(c.no_coincide);
+  const revisada = _truthy(c.diferencia_revisada);
+  const diferencia = Number(c.diferencia_cierre) || 0;
+  const esperado = (c.efectivo_esperado !== undefined && c.efectivo_esperado !== '' && c.efectivo_esperado !== null)
+    ? Number(c.efectivo_esperado)
+    : ((Number(c.monto_inicial)||0) + (Number(c.total_efectivo)||0));
+  const real = noCoincide ? (Number(c.monto_real_cierre)||0) : esperado;
+  const tieneNota = (c.nota_diferencia||'').toString().trim().length > 0;
+  const tieneObs = (c.observaciones_cierre||'').toString().trim().length > 0;
+
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const bloqueDif = noCoincide ? `
+    <div class="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-sm font-bold text-amber-800">⚠️ Monto no coincide</div>
+        ${revisada
+          ? `<span class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">✓ Revisada${c.diferencia_revisada_por?' · '+esc(c.diferencia_revisada_por):''}</span>`
+          : `<span class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 font-semibold">Pendiente</span>`}
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-sm mb-3">
+        <div class="bg-white rounded p-2"><div class="text-xs text-slate-500">Esperado</div><div class="font-bold">${fmt(esperado)}</div></div>
+        <div class="bg-white rounded p-2"><div class="text-xs text-slate-500">Real</div><div class="font-bold">${fmt(real)}</div></div>
+        <div class="bg-white rounded p-2"><div class="text-xs text-slate-500">Diferencia</div><div class="font-bold ${diferencia<0?'text-red-600':'text-emerald-600'}">${diferencia>=0?'+':''}${fmt(diferencia)}</div></div>
+      </div>
+      ${tieneNota ? `
+        <div class="text-xs font-semibold text-amber-800 mb-1">Nota del vendedor:</div>
+        <div class="bg-white rounded p-3 text-sm whitespace-pre-wrap border border-amber-200">${esc(c.nota_diferencia)}</div>
+      ` : '<div class="text-xs text-slate-500 italic">Sin nota registrada.</div>'}
+    </div>` : '';
+
+  const bloqueObs = tieneObs ? `
+    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-3">
+      <div class="text-xs font-semibold text-slate-600 mb-2">📋 Observaciones de cierre</div>
+      <div class="bg-white rounded p-3 text-sm whitespace-pre-wrap border border-slate-200">${esc(c.observaciones_cierre)}</div>
+    </div>` : '';
+
+  const botonRevisar = (noCoincide && !revisada && S.usuario?.rol === 'admin')
+    ? `<button class="btn btn-success mt-3 w-full" onclick="__marcarRevisadaDesdeReporte(${c.id})">✓ Marcar diferencia como revisada</button>`
+    : '';
+
+  openModal(`
+    <div class="p-6 max-w-2xl">
+      <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">Caja #${c.id} · ${esc(c.vendedor_nombre||'—')}</h3>
+      <div class="text-xs text-slate-500 mb-4">
+        Apertura: ${fmtDateTime(c.fecha_apertura)} · Cierre: ${c.fecha_cierre?fmtDateTime(c.fecha_cierre):'—'}
+      </div>
+      ${bloqueDif}
+      ${bloqueObs}
+      ${(!tieneNota && !tieneObs) ? '<div class="text-slate-400 text-sm italic text-center py-4">Esta caja no tiene notas ni observaciones.</div>' : ''}
+      ${botonRevisar}
+      <div class="flex justify-end mt-4">
+        <button class="btn btn-ghost" onclick="closeModal()">Cerrar</button>
+      </div>
+    </div>
+  `);
+};
+
+window.__marcarRevisadaDesdeReporte = async (id) => {
+  try{
+    await api('marcarDiferenciaRevisada', { caja_id: id });
+    toast('Diferencia marcada como revisada','ok');
+    closeModal();
+    await cargarNotificaciones();
+    cargarReporteCajas({
+      desde: $('#repDesde')?.value || '',
+      hasta: $('#repHasta')?.value || '',
+      hora_desde: $('#repHoraDesde')?.value || '00:00',
+      hora_hasta: $('#repHoraHasta')?.value || '23:59'
+    });
+  }catch(err){ toast(err.message,'err'); }
+};
 
 function renderVentasPorVendedor(){
   const wrap = $('#repVentasDetalle');
@@ -3180,15 +3402,122 @@ function openCambiarMiClave(){
 }
 
 /* NOTIFICACIONES + STATS ───────────────────────────────────────── */
+// Caché de cajas con diferencia para el modal de notificaciones
+let _notifCajasDif = [];
+let _notifBajoStockN = 0;
+
 async function cargarNotificaciones(){
+  const badge = $('#badgeNotifs');
+  let totalBajo = 0;
+  let cajasDif = [];
   try{
     const d = await api('productosBajoStock');
-    const n = d.productos.length;
-    const badge = $('#badgeNotifs');
-    if(n>0){ badge.classList.remove('hidden'); badge.textContent = n; $('#btnNotifs').onclick = openBajoStock; }
-    else { badge.classList.add('hidden'); }
+    totalBajo = d.productos.length;
   }catch(_){}
+  // Las discrepancias de caja sólo las ve el admin
+  if(S.usuario?.rol === 'admin'){
+    try{
+      const d = await api('cajasConDiferencia');
+      cajasDif = d.cajas || [];
+    }catch(_){}
+  }
+  _notifCajasDif = cajasDif;
+  _notifBajoStockN = totalBajo;
+  const total = totalBajo + cajasDif.length;
+  if(total > 0){
+    badge.classList.remove('hidden');
+    badge.textContent = total;
+    $('#btnNotifs').onclick = openNotificaciones;
+  } else {
+    badge.classList.add('hidden');
+    $('#btnNotifs').onclick = openNotificaciones; // igual dejamos abrible para revisar historial
+  }
 }
+
+// Modal de notificaciones: muestra cajas con diferencia (para admin)
+// y el acceso directo al listado de productos bajo stock.
+function openNotificaciones(){
+  const esAdmin = S.usuario?.rol === 'admin';
+  const cajas = _notifCajasDif || [];
+  const bajoN = _notifBajoStockN || 0;
+  openModal(`
+    <div class="p-6">
+      <h3 class="text-lg font-bold mb-3" style="color:var(--brand-dark)">🔔 Notificaciones</h3>
+
+      ${esAdmin ? `
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-semibold" style="color:var(--err)">⚠️ Cajas cerradas con diferencia (${cajas.length})</h4>
+          </div>
+          ${cajas.length ? `
+            <div class="space-y-2 max-h-[50vh] overflow-auto">
+              ${cajas.map(c => {
+                const dif = Number(c.diferencia_cierre) || 0;
+                const signo = dif > 0 ? '+' : (dif < 0 ? '−' : '');
+                const color = dif < 0 ? 'text-red-700 bg-red-50 border-red-200' :
+                              dif > 0 ? 'text-blue-700 bg-blue-50 border-blue-200' :
+                                        'text-slate-700 bg-slate-50 border-slate-200';
+                return `
+                  <div class="rounded-lg p-3 border ${color}">
+                    <div class="flex items-start justify-between gap-2 flex-wrap">
+                      <div class="flex-1 min-w-0">
+                        <div class="font-semibold">${c.vendedor_nombre || 'Vendedor'}</div>
+                        <div class="text-xs text-slate-600">
+                          Cerrada el ${fmtDateTime(c.fecha_cierre)}
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <div class="text-xs text-slate-600">Diferencia</div>
+                        <div class="text-lg font-bold">${signo}${fmt(Math.abs(dif))}</div>
+                      </div>
+                    </div>
+                    <div class="mt-2 text-xs text-slate-600">
+                      Esperado: <b>${fmt(c.efectivo_esperado)}</b> · Real: <b>${fmt(c.monto_real_cierre)}</b>
+                    </div>
+                    <div class="mt-2 bg-white rounded p-2 text-sm border border-slate-200">
+                      <div class="text-xs text-slate-500 font-semibold mb-1">Nota del vendedor:</div>
+                      <div class="whitespace-pre-wrap">${(c.nota_diferencia||'').replace(/</g,'&lt;')}</div>
+                    </div>
+                    <div class="mt-2 flex justify-end">
+                      <button class="btn btn-success text-xs py-1" onclick="__marcarDifRevisada(${c.id})">✓ Marcar como revisada</button>
+                    </div>
+                  </div>`;
+              }).join('')}
+            </div>
+          ` : `<div class="text-slate-400 text-sm py-3 text-center">✔️ Sin diferencias pendientes de revisión.</div>`}
+        </div>
+      ` : ''}
+
+      <div class="${esAdmin ? 'border-t border-slate-200 pt-3' : ''}">
+        <button class="btn btn-ghost w-full" onclick="closeModal(); openBajoStock()">
+          ⚠️ Productos bajo stock ${bajoN ? `<span class="chip chip-warn ml-2">${bajoN}</span>` : ''}
+        </button>
+      </div>
+
+      <div class="flex justify-end mt-4">
+        <button class="btn btn-ghost" onclick="closeModal()">Cerrar</button>
+      </div>
+    </div>
+  `);
+}
+
+window.__marcarDifRevisada = async (id) => {
+  try{
+    await api('marcarDiferenciaRevisada', { caja_id: id });
+    toast('Diferencia marcada como revisada','ok');
+    closeModal();
+    await cargarNotificaciones();
+    // Si estamos viendo el reporte de cajas, refrescar
+    if(typeof cargarReporteCajas === 'function' && S.view === 'reportes'){
+      cargarReporteCajas({
+        desde: $('#repDesde')?.value || '',
+        hasta: $('#repHasta')?.value || '',
+        hora_desde: $('#repHoraDesde')?.value || '00:00',
+        hora_hasta: $('#repHoraHasta')?.value || '23:59'
+      });
+    }
+  }catch(err){ toast(err.message,'err'); }
+};
 
 async function cargarStatsDashboard(){
   try{
