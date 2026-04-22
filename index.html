@@ -430,10 +430,23 @@
         <div class="inv-toolbar flex items-center gap-3 mb-4 flex-wrap">
           <input id="invSearch" class="input max-w-xs" placeholder="Buscar nombre o código…" oninput="renderInventario()">
           <select id="invCategoria" class="input max-w-xs" onchange="renderInventario()"><option value="">Todas las categorías</option></select>
+          <select id="invOrden" class="input max-w-xs" onchange="renderInventario()" title="Ordenar inventario">
+            <option value="nombre_asc">Nombre (A→Z)</option>
+            <option value="nombre_desc">Nombre (Z→A)</option>
+            <option value="margen_desc">Margen (mayor → menor)</option>
+            <option value="margen_asc">Margen (menor → mayor)</option>
+            <option value="stock_desc">Stock (mayor → menor)</option>
+            <option value="stock_asc">Stock (menor → mayor)</option>
+            <option value="compra_desc">V. Compra (mayor → menor)</option>
+            <option value="compra_asc">V. Compra (menor → mayor)</option>
+            <option value="venta_desc">V. Venta (mayor → menor)</option>
+            <option value="venta_asc">V. Venta (menor → mayor)</option>
+          </select>
           <label class="flex items-center gap-2 text-sm text-slate-600"><input id="invSoloBajo" type="checkbox" onchange="renderInventario()"> Sólo bajo stock</label>
           <label class="flex items-center gap-2 text-sm text-slate-600"><input id="invSinFoto" type="checkbox" onchange="renderInventario()"> Sólo sin foto</label>
           <label class="flex items-center gap-2 text-sm text-slate-600"><input id="invSoloPacks" type="checkbox" onchange="renderInventario()"> Sólo packs</label>
           <div class="flex-1"></div>
+          <button class="btn btn-success" onclick="descargarInventarioExcel()" title="Descargar inventario filtrado en Excel">📊 Excel</button>
           <button class="btn btn-ghost" onclick="openMovimientos()">Movimientos</button>
           <button id="btnNuevoPack" class="btn btn-ghost" onclick="openNuevoPack()">+ Nuevo pack</button>
           <button id="btnNuevoProd" class="btn btn-primary" onclick="openNuevoProducto()">+ Nuevo producto</button>
@@ -571,53 +584,84 @@
           <button class="btn btn-ghost" onclick="setRango('año')">Año</button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-          <div class="bg-white rounded-xl p-5 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Ingresos</div><div id="repIngresos" class="text-2xl font-bold" style="color:var(--brand-dark)">—</div></div>
-          <div class="bg-white rounded-xl p-5 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Costo</div><div id="repCosto" class="text-2xl font-bold text-slate-600">—</div></div>
-          <div class="bg-white rounded-xl p-5 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Margen</div><div id="repMargen" class="text-2xl font-bold" style="color:var(--ok)">—</div></div>
-          <div class="bg-white rounded-xl p-5 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Ventas</div><div id="repCantVentas" class="text-2xl font-bold" style="color:var(--brand-dark)">—</div></div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-          <div class="bg-white rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por día</h4><canvas id="chartDia" height="120"></canvas></div>
-          <div class="bg-white rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por mes</h4><canvas id="chartMes" height="120"></canvas></div>
-          <div class="bg-white rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por hora</h4><canvas id="chartHora" height="120"></canvas></div>
-          <div class="bg-white rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por día de la semana</h4><canvas id="chartSemana" height="120"></canvas></div>
-          <div class="bg-white rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Medios de pago</h4><canvas id="chartPagos" height="120"></canvas></div>
-          <div class="bg-white rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por categoría</h4><canvas id="chartCat" height="120"></canvas></div>
-        </div>
-
-        <div class="bg-white rounded-xl p-4 border border-slate-200">
-          <h4 class="font-semibold mb-3">Top 20 productos más vendidos</h4>
-          <div class="overflow-auto"><table><thead><tr><th>#</th><th>Producto</th><th>Categoría</th><th class="text-right">Cantidad</th><th class="text-right">Total</th></tr></thead><tbody id="topProductosTbody"></tbody></table></div>
-        </div>
-
-        <!-- Solo admin: ventas por perfil + exportar sábana -->
-        <div id="repAdminBox" class="hidden mt-4 bg-white rounded-xl p-4 border border-slate-200">
-          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <h4 class="font-semibold" style="color:var(--brand-dark)">Ventas por perfil (vendedor)</h4>
-            <div class="flex gap-2 flex-wrap">
-              <select id="repVendedorFilter" class="input" onchange="renderVentasPorVendedor()">
-                <option value="">Todos los vendedores</option>
-              </select>
-              <button class="btn btn-success" onclick="descargarSabanaExcel()">
-                <span>📊</span> Descargar sábana Excel
-              </button>
+        <!-- Categorías colapsables del módulo Reportes -->
+        <div class="space-y-3">
+          <!-- ═══ Categoría 1: Reporte de Ventas por ingresos ═══ -->
+          <details class="rep-cat bg-white rounded-xl border border-slate-200" open>
+            <summary class="cursor-pointer select-none p-4 font-bold text-base flex items-center gap-2" style="color:var(--brand-dark)">
+              <span class="rep-cat-ico">💰</span>
+              <span>Reporte de Ventas por Ingresos</span>
+              <span class="text-xs font-normal text-slate-400 ml-2">Ingresos, totales y medios de pago</span>
+            </summary>
+            <div class="p-4 border-t border-slate-100">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div class="bg-slate-50 rounded-xl p-5 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Ingresos</div><div id="repIngresos" class="text-2xl font-bold" style="color:var(--brand-dark)">—</div></div>
+                <div class="bg-slate-50 rounded-xl p-5 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Costo</div><div id="repCosto" class="text-2xl font-bold text-slate-600">—</div></div>
+                <div class="bg-slate-50 rounded-xl p-5 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Margen</div><div id="repMargen" class="text-2xl font-bold" style="color:var(--ok)">—</div></div>
+                <div class="bg-slate-50 rounded-xl p-5 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Ventas</div><div id="repCantVentas" class="text-2xl font-bold" style="color:var(--brand-dark)">—</div></div>
+              </div>
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por día</h4><canvas id="chartDia" height="120"></canvas></div>
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por mes</h4><canvas id="chartMes" height="120"></canvas></div>
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por hora</h4><canvas id="chartHora" height="120"></canvas></div>
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por día de la semana</h4><canvas id="chartSemana" height="120"></canvas></div>
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 lg:col-span-2"><h4 class="font-semibold mb-3">Medios de pago</h4><canvas id="chartPagos" height="120"></canvas></div>
+              </div>
             </div>
-          </div>
-          <p class="text-xs text-slate-500 mb-3">Usa las fechas y horas de arriba para acotar el rango. El Excel incluye una fila por artículo vendido con fecha, hora, vendedor, medio de pago y totales.</p>
-          <div id="repVendedoresResumen" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3"></div>
-          <div id="repVentasDetalle" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg"></div>
-        </div>
+          </details>
 
-        <!-- Sólo admin: Reporte histórico de cajas -->
-        <div id="repCajasBox" class="hidden mt-4 bg-white rounded-xl p-4 border border-slate-200">
-          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <h4 class="font-semibold" style="color:var(--brand-dark)">🗃️ Reporte de Cajas</h4>
-          </div>
-          <p class="text-xs text-slate-500 mb-3">Historial de aperturas y cierres de caja — usa las fechas y horas de arriba para acotar el rango. Incluye monto inicial, totales por medio de pago y estado.</p>
-          <div id="repCajasResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
-          <div id="repCajasTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg"></div>
+          <!-- ═══ Categoría 2: Reporte de Ventas por Productos ═══ -->
+          <details class="rep-cat bg-white rounded-xl border border-slate-200">
+            <summary class="cursor-pointer select-none p-4 font-bold text-base flex items-center gap-2" style="color:var(--brand-dark)">
+              <span class="rep-cat-ico">📦</span>
+              <span>Reporte de Ventas por Productos</span>
+              <span class="text-xs font-normal text-slate-400 ml-2">Por categoría y más vendidos</span>
+            </summary>
+            <div class="p-4 border-t border-slate-100 space-y-4">
+              <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por categoría</h4><canvas id="chartCat" height="120"></canvas></div>
+              <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <h4 class="font-semibold mb-3">Top 20 productos más vendidos</h4>
+                <div class="overflow-auto"><table><thead><tr><th>#</th><th>Producto</th><th>Categoría</th><th class="text-right">Cantidad</th><th class="text-right">Total</th></tr></thead><tbody id="topProductosTbody"></tbody></table></div>
+              </div>
+            </div>
+          </details>
+
+          <!-- ═══ Categoría 3: Venta por Perfil y Caja (solo admin) ═══ -->
+          <details id="repCatPerfilCaja" class="rep-cat bg-white rounded-xl border border-slate-200 hidden">
+            <summary class="cursor-pointer select-none p-4 font-bold text-base flex items-center gap-2" style="color:var(--brand-dark)">
+              <span class="rep-cat-ico">👥</span>
+              <span>Venta por Perfil y Caja</span>
+              <span class="text-xs font-normal text-slate-400 ml-2">Ventas por vendedor, histórico de cajas</span>
+            </summary>
+            <div class="p-4 border-t border-slate-100 space-y-4">
+              <!-- Ventas por perfil -->
+              <div id="repAdminBox" class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <h4 class="font-semibold" style="color:var(--brand-dark)">Ventas por perfil (vendedor)</h4>
+                  <div class="flex gap-2 flex-wrap">
+                    <select id="repVendedorFilter" class="input" onchange="renderVentasPorVendedor()">
+                      <option value="">Todos los vendedores</option>
+                    </select>
+                    <button class="btn btn-success" onclick="descargarSabanaExcel()">
+                      <span>📊</span> Descargar sábana Excel
+                    </button>
+                  </div>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Usa las fechas y horas de arriba para acotar el rango. El Excel incluye una fila por artículo vendido con fecha, hora, vendedor, medio de pago y totales.</p>
+                <div id="repVendedoresResumen" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3"></div>
+                <div id="repVentasDetalle" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg bg-white"></div>
+              </div>
+              <!-- Reporte de Cajas -->
+              <div id="repCajasBox" class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <h4 class="font-semibold" style="color:var(--brand-dark)">🗃️ Reporte de Cajas</h4>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Historial de aperturas y cierres de caja — usa las fechas y horas de arriba para acotar el rango. Incluye monto inicial, totales por medio de pago y estado.</p>
+                <div id="repCajasResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
+                <div id="repCajasTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg bg-white"></div>
+              </div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -976,7 +1020,8 @@ function renderInventario(){
   const soloBajo = $('#invSoloBajo')?.checked;
   const sinFoto = $('#invSinFoto')?.checked;
   const soloPacks = $('#invSoloPacks')?.checked;
-  const rows = S.productos.filter(p=>{
+  const orden = $('#invOrden')?.value || 'nombre_asc';
+  let rows = S.productos.filter(p=>{
     if(cat && p.categoria!==cat) return false;
     if(soloBajo && !esBajoStock(p)) return false;
     if(sinFoto && p.foto_url) return false;
@@ -984,6 +1029,7 @@ function renderInventario(){
     if(q && !((''+p.nombre).toLowerCase().includes(q) || (''+p.codigo_barra).includes(q))) return false;
     return true;
   });
+  rows = _ordenarInventario(rows, orden);
   const admin = S.usuario?.rol==='admin';
   $('#invTbody').innerHTML = rows.map(p=>{
     const pack = esPack(p);
@@ -1020,6 +1066,72 @@ function esPack(p){
   return s==='true' || s==='verdadero' || s==='sí' || s==='si' || s==='1';
 }
 
+/* Ordena el array de productos del inventario según la opción seleccionada.
+   claves admitidas: nombre_asc|nombre_desc | margen_asc|margen_desc |
+   stock_asc|stock_desc | compra_asc|compra_desc | venta_asc|venta_desc */
+function _ordenarInventario(arr, orden){
+  const [campo, dir] = String(orden || 'nombre_asc').split('_');
+  const mult = dir === 'desc' ? -1 : 1;
+  const keyFn = {
+    nombre: p => String(p.nombre || '').toLowerCase(),
+    margen: p => Number(p.margen_pct) || 0,
+    stock:  p => Number(p.stock_actual) || 0,
+    compra: p => Number(p.valor_compra) || 0,
+    venta:  p => Number(p.valor_venta)  || 0,
+  }[campo] || (p => String(p.nombre || '').toLowerCase());
+  return [...arr].sort((a,b) => {
+    const va = keyFn(a), vb = keyFn(b);
+    if(va < vb) return -1 * mult;
+    if(va > vb) return  1 * mult;
+    return 0;
+  });
+}
+
+/* Descarga el inventario filtrado/ordenado como archivo Excel .xlsx */
+function descargarInventarioExcel(){
+  if(!window.XLSX){ return toast('La librería de Excel aún no cargó, intenta de nuevo en un segundo.','err'); }
+  // Aplicar los mismos filtros y orden que la vista actual
+  const q = ($('#invSearch')?.value || '').toLowerCase().trim();
+  const cat = $('#invCategoria')?.value || '';
+  const soloBajo = $('#invSoloBajo')?.checked;
+  const sinFoto = $('#invSinFoto')?.checked;
+  const soloPacks = $('#invSoloPacks')?.checked;
+  const orden = $('#invOrden')?.value || 'nombre_asc';
+  let rows = S.productos.filter(p=>{
+    if(cat && p.categoria!==cat) return false;
+    if(soloBajo && !esBajoStock(p)) return false;
+    if(sinFoto && p.foto_url) return false;
+    if(soloPacks && !esPack(p)) return false;
+    if(q && !((''+p.nombre).toLowerCase().includes(q) || (''+p.codigo_barra).includes(q))) return false;
+    return true;
+  });
+  rows = _ordenarInventario(rows, orden);
+  const data = rows.map(p => ({
+    'Código':        String(p.codigo_barra || ''),
+    'Nombre':        String(p.nombre || ''),
+    'Categoría':     String(p.categoria || ''),
+    'Tipo':          esPack(p) ? 'Pack' : 'Producto',
+    'V. Compra':     Number(p.valor_compra) || 0,
+    'V. Venta':      Number(p.valor_venta)  || 0,
+    'Margen %':      Number((Number(p.margen_pct) || 0).toFixed(1)),
+    'Stock actual':  Number(p.stock_actual)  || 0,
+    'Stock mínimo':  Number(p.stock_minimo)  || 0,
+  }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
+  // Ancho de columnas aproximado
+  ws['!cols'] = [
+    { wch:14 },{ wch:34 },{ wch:16 },{ wch:10 },
+    { wch:11 },{ wch:11 },{ wch:9 },{ wch:12 },{ wch:12 }
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+  const d = new Date();
+  const stamp = d.toISOString().slice(0,10).replace(/-/g,'');
+  const file = `Inventario_BarraIndomita_${stamp}.xlsx`;
+  XLSX.writeFile(wb, file);
+  toast(`Descargado: ${rows.length} productos`,'ok');
+}
+
 function openNuevoProducto(){
   if(S.usuario.rol!=='admin') return toast('Requiere perfil administrador','err');
   openModal(`
@@ -1053,9 +1165,20 @@ function openNuevoProducto(){
     e.preventDefault();
     const f = new FormData(e.target);
     const data = Object.fromEntries(f.entries());
-    if(!String(data.codigo_barra||'').trim()){
+    const cod = String(data.codigo_barra||'').trim();
+    if(!cod){
       return toast('Código de barra / SKU es obligatorio','err');
     }
+    // No permitir el prefijo "P-" reservado para packs
+    if(cod.toUpperCase().startsWith('P-')){
+      return toast('El prefijo "P-" está reservado para packs. Usa otro código para este producto.','err');
+    }
+    // Validar unicidad contra inventario
+    const duplicado = S.productos.find(p => String(p.codigo_barra||'').trim() === cod);
+    if(duplicado){
+      return toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err');
+    }
+    data.codigo_barra = cod;
     try{
       await api('crearProducto', data);
       toast('Producto creado','ok'); closeModal(); cargarInventario();
@@ -1083,6 +1206,27 @@ function _generarCodigoBarra(){
   const input = document.getElementById('codBarraInput');
   if(input){ input.value = candidato; input.focus(); }
   toast('Código generado: '+candidato,'ok');
+}
+
+/* Genera un código único para packs con prefijo P- + 6 dígitos aleatorios. */
+function _generarCodigoPack(){
+  const PREFIX = 'P-';
+  const existentes = new Set(S.productos.map(p => String(p.codigo_barra||'').trim().toUpperCase()).filter(Boolean));
+  let candidato = '';
+  let digitos = 6;
+  for(let intento=0; intento<50; intento++){
+    const max = Math.pow(10, digitos);
+    const n = Math.floor(Math.random() * max);
+    candidato = PREFIX + String(n).padStart(digitos, '0');
+    if(!existentes.has(candidato.toUpperCase())) break;
+    if(intento>0 && intento%10===0) digitos++;
+  }
+  if(existentes.has(candidato.toUpperCase())){
+    return toast('No se pudo generar un código único, intenta de nuevo','err');
+  }
+  const input = document.getElementById('packCodInput');
+  if(input){ input.value = candidato; input.focus(); }
+  toast('Código de pack generado: '+candidato,'ok');
 }
 
 /* Escanea con la cámara y vuelca el resultado al input de Nuevo Producto.
@@ -1155,8 +1299,13 @@ function _packFormHtml({ nuevo, p }){
       <form id="formPack" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="md:col-span-2"><label class="label">Nombre *</label>
           <input name="nombre" class="input" required value="${val('nombre')}"></div>
-        <div><label class="label">Código de barra (opcional)</label>
-          <input name="codigo_barra" class="input" value="${val('codigo_barra')}" placeholder="se genera automático si lo dejas vacío"></div>
+        <div><label class="label">Código de barra *</label>
+          <div class="flex gap-2 flex-wrap">
+            <input id="packCodInput" name="codigo_barra" class="input flex-1" style="min-width:140px" value="${val('codigo_barra') || 'P-'}" required placeholder="P-xxxxxx">
+            <button type="button" class="btn btn-ghost" style="white-space:nowrap" onclick="_generarCodigoPack()" title="Genera un código único con prefijo P-">🎲 Generar</button>
+          </div>
+          <div class="text-xs text-slate-500 mt-1">Obligatorio. Siempre empieza con <b>P-</b>. Puedes editarlo o usar 🎲 Generar.</div>
+        </div>
         <div><label class="label">Categoría</label>
           <input name="categoria" class="input" value="${val('categoria') || 'Packs'}" list="catListPack">
           <datalist id="catListPack">${S.categorias.map(c=>`<option value="${c}">`).join('')}</datalist></div>
@@ -1202,12 +1351,45 @@ function _packFormHtml({ nuevo, p }){
 function _wirePackForm({ nuevo, p }){
   _renderPackPicker();
   _renderPackDraft();
+  // Mantener siempre el prefijo "P-" en el código
+  const codInput = document.getElementById('packCodInput');
+  if(codInput){
+    codInput.addEventListener('input', () => {
+      let v = String(codInput.value || '');
+      if(!v.toUpperCase().startsWith('P-')){
+        // Quitar cualquier prefijo parecido y forzar "P-"
+        v = v.replace(/^p-?/i,'').replace(/^-+/,'');
+        codInput.value = 'P-' + v;
+      } else {
+        // Normalizar a mayúscula en la P
+        codInput.value = 'P-' + v.slice(2);
+      }
+    });
+  }
   $('#formPack').addEventListener('submit', async e=>{
     e.preventDefault();
     if(!__packDraft.length) return toast('Agrega al menos un componente','err');
     const fd = new FormData(e.target);
     const data = Object.fromEntries(fd.entries());
     data.componentes = __packDraft;
+    // Validar código de pack
+    let cod = String(data.codigo_barra || '').trim();
+    if(!cod) return toast('El código del pack es obligatorio','err');
+    if(!cod.toUpperCase().startsWith('P-')){
+      cod = 'P-' + cod.replace(/^-+/,'');
+    } else {
+      cod = 'P-' + cod.slice(2);
+    }
+    if(cod.length <= 2) return toast('Ingresa un código después del prefijo P-','err');
+    // Verificar unicidad (excluir el pack actual si estamos editando)
+    const duplicado = S.productos.find(x =>
+      String(x.codigo_barra || '').trim() === cod &&
+      (!p || Number(x.id) !== Number(p.id))
+    );
+    if(duplicado){
+      return toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err');
+    }
+    data.codigo_barra = cod;
     try{
       if(nuevo){
         await api('crearPack', data);
@@ -1322,6 +1504,21 @@ function openEditarProducto(id){
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.id = id;
+    const cod = String(data.codigo_barra||'').trim();
+    if(cod){
+      // Reservar "P-" para packs
+      if(cod.toUpperCase().startsWith('P-')){
+        return toast('El prefijo "P-" está reservado para packs.','err');
+      }
+      // Unicidad (excluir el producto actual)
+      const duplicado = S.productos.find(x =>
+        String(x.codigo_barra||'').trim() === cod && Number(x.id) !== Number(id)
+      );
+      if(duplicado){
+        return toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err');
+      }
+      data.codigo_barra = cod;
+    }
     try{ await api('actualizarProducto', data); toast('Actualizado','ok'); closeModal(); cargarInventario(); }
     catch(err){ toast(err.message,'err'); }
   });
@@ -2516,11 +2713,9 @@ async function cargarReportes(){
   const hora_desde = $('#repHoraDesde')?.value || '00:00';
   const hora_hasta = $('#repHoraHasta')?.value || '23:59';
   const params = {desde, hasta, hora_desde, hora_hasta};
-  // Sección admin visible sólo para administradores
-  const boxAdmin = $('#repAdminBox');
-  if(boxAdmin) boxAdmin.classList.toggle('hidden', S.usuario?.rol !== 'admin');
-  const boxCajas = $('#repCajasBox');
-  if(boxCajas) boxCajas.classList.toggle('hidden', S.usuario?.rol !== 'admin');
+  // Categoría "Venta por Perfil y Caja" visible sólo para administradores
+  const catPerfilCaja = $('#repCatPerfilCaja');
+  if(catPerfilCaja) catPerfilCaja.classList.toggle('hidden', S.usuario?.rol !== 'admin');
   if(S.usuario?.rol === 'admin'){
     cargarVentasDetalladas(params);
     cargarReporteCajas(params);
