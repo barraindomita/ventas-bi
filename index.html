@@ -697,6 +697,24 @@
             <tbody id="usuariosTbody"></tbody>
           </table>
         </div>
+
+        <!-- IMPORT MASIVO DE INVENTARIO -->
+        <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+            <div>
+              <h3 class="text-lg font-bold" style="color:var(--brand-dark)">📥 Importar inventario desde Excel</h3>
+              <p class="text-xs text-slate-500 mt-1 max-w-xl">Sube una planilla con columnas <b>Código de Barra · Nombre · Precio de Compra · Precio de Venta · Stock</b>. Se comparan los códigos con el inventario actual y se te muestra una vista previa antes de aplicar los cambios. Los packs (código con prefijo <code>P-</code>) nunca se tocan.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <label class="btn btn-primary cursor-pointer">
+              📁 Elegir archivo .xlsx
+              <input id="importFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="__onImportFile(event)">
+            </label>
+            <span id="importFileName" class="text-sm text-slate-500">Ningún archivo seleccionado.</span>
+          </div>
+          <div id="importHint" class="text-xs text-slate-400 mt-2">Al subir el archivo se genera una vista previa; nada se escribe hasta que confirmes.</div>
+        </div>
       </section>
     </main>
   </div>
@@ -1150,6 +1168,208 @@ function descargarInventarioExcel(){
   const file = `Inventario_BarraIndomita_${stamp}.xlsx`;
   XLSX.writeFile(wb, file);
   toast(`Descargado: ${rows.length} productos`,'ok');
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   IMPORT MASIVO DE INVENTARIO (admin)
+   — Parsea un Excel del sistema anterior y sincroniza el POS.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Mapeo flexible de columnas del archivo de entrada. Acepta variaciones
+   comunes de títulos para no obligar al usuario a renombrar el archivo. */
+function _matchCol(headers, candidates){
+  const norm = s => String(s||'').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')  // strip tildes
+    .replace(/[^a-z0-9]/g,'').trim();
+  const H = headers.map(norm);
+  for(const cand of candidates){
+    const idx = H.indexOf(norm(cand));
+    if(idx >= 0) return headers[idx];
+  }
+  return null;
+}
+
+let _importPayload = null; // { rows: [...] } preparado para enviar al backend
+
+async function __onImportFile(ev){
+  const f = ev.target?.files?.[0];
+  if(!f) return;
+  if(!window.XLSX){ return toast('La librería Excel aún no cargó, intenta de nuevo.','err'); }
+  if(S.usuario?.rol !== 'admin'){ return toast('Requiere perfil administrador','err'); }
+  $('#importFileName').textContent = f.name;
+  try{
+    const buf = await f.arrayBuffer();
+    const wb = XLSX.read(buf, { type:'array' });
+    const sh = wb.Sheets[wb.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sh, { defval:'' });
+    if(!json.length) throw new Error('La planilla no tiene filas.');
+    const headers = Object.keys(json[0]);
+    const colCod = _matchCol(headers, ['Código de Barra','Codigo de Barra','Código','Codigo','SKU','Barcode']);
+    const colNom = _matchCol(headers, ['Nombre','Producto','Descripción','Descripcion']);
+    const colVc  = _matchCol(headers, ['Precio de Compra','Valor Compra','Costo','V. Compra','P. Compra']);
+    const colVv  = _matchCol(headers, ['Precio de Venta','Valor Venta','Precio','V. Venta','P. Venta']);
+    const colStk = _matchCol(headers, ['Stock','Stock Actual','Existencia','Cantidad']);
+    const faltan = [];
+    if(!colCod) faltan.push('Código de Barra');
+    if(!colNom) faltan.push('Nombre');
+    if(!colVc)  faltan.push('Precio de Compra');
+    if(!colVv)  faltan.push('Precio de Venta');
+    if(!colStk) faltan.push('Stock');
+    if(faltan.length){
+      throw new Error('Faltan columnas en la planilla: ' + faltan.join(', '));
+    }
+    const rows = json.map(r => ({
+      codigo_barra: r[colCod],
+      nombre: r[colNom],
+      valor_compra: r[colVc],
+      valor_venta: r[colVv],
+      stock: r[colStk]
+    }));
+    _importPayload = { rows };
+    toast(`${rows.length} filas leídas — generando vista previa…`,'ok');
+    const prev = await api('previewImportInventario', { rows });
+    _mostrarPreviewImport(prev, f.name);
+  }catch(err){
+    toast('Error al leer el archivo: ' + err.message, 'err');
+    $('#importFileName').textContent = 'Ningún archivo seleccionado.';
+    _importPayload = null;
+  }finally{
+    ev.target.value = ''; // permitir re-subir el mismo archivo
+  }
+}
+
+function _mostrarPreviewImport(prev, fileName){
+  const r = prev.resumen || {};
+  const m = prev.muestras || {};
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const _diffCell = (anterior, nuevo) => {
+    if(Number(anterior) === Number(nuevo)) return `<span class="text-slate-400">${fmt(nuevo)}</span>`;
+    return `${fmt(anterior)} → <b>${fmt(nuevo)}</b>`;
+  };
+  const muestraUpdate = (m.to_update||[]).slice(0,10).map(x => `
+    <tr>
+      <td class="font-mono text-xs">${esc(x.codigo)}</td>
+      <td class="text-xs truncate max-w-[12rem]" title="${esc(x.nombre_actual)}">${esc(x.nombre_actual)}</td>
+      <td class="text-right text-xs">${x.stock_anterior} → <b>${x.stock_nuevo}</b> <span class="${x.delta_stock>=0?'text-emerald-600':'text-red-600'}">(${x.delta_stock>=0?'+':''}${x.delta_stock})</span></td>
+      <td class="text-right text-xs">${_diffCell(x.valor_compra_anterior, x.valor_compra_nuevo)}</td>
+      <td class="text-right text-xs">${_diffCell(x.valor_venta_anterior, x.valor_venta_nuevo)}</td>
+    </tr>`).join('') || '<tr><td colspan="5" class="text-center text-slate-400 text-xs py-2">Ninguno.</td></tr>';
+
+  const muestraCreate = (m.to_create||[]).slice(0,10).map(x => `
+    <tr>
+      <td class="font-mono text-xs">${esc(x.codigo_barra)}</td>
+      <td class="text-xs truncate max-w-[20rem]" title="${esc(x.nombre)}">${esc(x.nombre)}</td>
+      <td class="text-right text-xs">${fmt(x.valor_venta)}</td>
+      <td class="text-right text-xs">${x.stock}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="text-center text-slate-400 text-xs py-2">Ninguno.</td></tr>';
+
+  const muestraDeact = (m.to_deactivate||[]).slice(0,10).map(x => `
+    <tr>
+      <td class="font-mono text-xs">${esc(x.codigo)}</td>
+      <td class="text-xs truncate max-w-[20rem]" title="${esc(x.nombre)}">${esc(x.nombre)}</td>
+      <td class="text-right text-xs">${x.stock_actual}</td>
+    </tr>`).join('') || '<tr><td colspan="3" class="text-center text-slate-400 text-xs py-2">Ninguno.</td></tr>';
+
+  const dupWarning = r.duplicados_en_archivo > 0
+    ? `<div class="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800 mb-3">⚠️ El archivo tiene <b>${r.duplicados_en_archivo}</b> código(s) duplicado(s). Se usa solo la primera aparición. Códigos: ${(m.duplicados||[]).map(esc).join(', ')}</div>`
+    : '';
+
+  openModal(`
+    <div class="p-6 max-w-5xl">
+      <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">📋 Vista previa del import</h3>
+      <div class="text-xs text-slate-500 mb-4">Archivo: <b>${esc(fileName||'')}</b> · Filas válidas: <b>${r.filas_archivo}</b>${r.filas_invalidas?` · Descartadas: ${r.filas_invalidas}`:''}</div>
+
+      ${dupWarning}
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3"><div class="text-xs text-blue-700 uppercase font-semibold">Actualizar</div><div class="text-2xl font-bold text-blue-700">${r.actualizables}</div><div class="text-xs text-slate-500">existentes con cambios</div></div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3"><div class="text-xs text-emerald-700 uppercase font-semibold">Nuevos</div><div class="text-2xl font-bold text-emerald-700">${r.nuevos}</div><div class="text-xs text-slate-500">se crearán</div></div>
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3"><div class="text-xs text-slate-600 uppercase font-semibold">Sin cambios</div><div class="text-2xl font-bold text-slate-700">${r.sin_cambios}</div><div class="text-xs text-slate-500">ya están iguales</div></div>
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3"><div class="text-xs text-amber-700 uppercase font-semibold">Ausentes</div><div class="text-2xl font-bold text-amber-700">${r.ausentes}</div><div class="text-xs text-slate-500">en POS, no en archivo</div></div>
+      </div>
+
+      <!-- Opciones -->
+      <div class="bg-slate-50 rounded-lg p-3 mb-4 border border-slate-200">
+        <div class="text-xs font-semibold text-slate-600 mb-2">Acciones a ejecutar</div>
+        <label class="flex items-center gap-2 text-sm mb-1"><input type="checkbox" id="optStock" checked> Actualizar <b>stock</b> de los productos existentes</label>
+        <label class="flex items-center gap-2 text-sm mb-1"><input type="checkbox" id="optPrecio" checked> Actualizar <b>precio de venta</b> de los productos existentes</label>
+        <label class="flex items-center gap-2 text-sm mb-1"><input type="checkbox" id="optCompra" checked> Actualizar <b>precio de compra</b> de los productos existentes <span class="text-xs text-slate-400">(recalcula el margen)</span></label>
+        <label class="flex items-center gap-2 text-sm mb-1"><input type="checkbox" id="optNuevos" ${r.nuevos?'checked':''} ${r.nuevos?'':'disabled'}> Crear los ${r.nuevos} productos <b>nuevos</b> con categoría "Sin categoría"</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="optAusentes" ${r.ausentes?'checked':''} ${r.ausentes?'':'disabled'}> Marcar como <b>inactivos</b> los ${r.ausentes} productos ausentes del archivo</label>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 max-h-[50vh] overflow-auto">
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <div class="bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800">🔄 Actualizar (${r.actualizables}) — muestra</div>
+          <table class="w-full text-xs">
+            <thead class="bg-slate-50"><tr><th class="text-left px-2 py-1">Código</th><th class="text-left px-2 py-1">Nombre</th><th class="text-right px-2 py-1">Stock</th><th class="text-right px-2 py-1">P. Compra</th><th class="text-right px-2 py-1">P. Venta</th></tr></thead>
+            <tbody>${muestraUpdate}</tbody>
+          </table>
+        </div>
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <div class="bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">➕ Nuevos (${r.nuevos}) — muestra</div>
+          <table class="w-full text-xs">
+            <thead class="bg-slate-50"><tr><th class="text-left px-2 py-1">Código</th><th class="text-left px-2 py-1">Nombre</th><th class="text-right px-2 py-1">P. venta</th><th class="text-right px-2 py-1">Stock</th></tr></thead>
+            <tbody>${muestraCreate}</tbody>
+          </table>
+        </div>
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <div class="bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">⚠️ Ausentes (${r.ausentes}) — muestra</div>
+          <table class="w-full text-xs">
+            <thead class="bg-slate-50"><tr><th class="text-left px-2 py-1">Código</th><th class="text-left px-2 py-1">Nombre</th><th class="text-right px-2 py-1">Stock</th></tr></thead>
+            <tbody>${muestraDeact}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-5">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="__confirmarImport()">✓ Aplicar cambios</button>
+      </div>
+    </div>
+  `);
+}
+
+async function __confirmarImport(){
+  if(!_importPayload){ toast('No hay datos para importar','err'); return; }
+  const opciones = {
+    actualizar_stock: $('#optStock')?.checked || false,
+    actualizar_precio_venta: $('#optPrecio')?.checked || false,
+    actualizar_precio_compra: $('#optCompra')?.checked || false,
+    crear_nuevos: $('#optNuevos')?.checked || false,
+    desactivar_ausentes: $('#optAusentes')?.checked || false
+  };
+  if(!opciones.actualizar_stock && !opciones.actualizar_precio_venta && !opciones.actualizar_precio_compra && !opciones.crear_nuevos && !opciones.desactivar_ausentes){
+    return toast('Elige al menos una acción','err');
+  }
+  closeModal();
+  toast('Aplicando cambios… puede demorar unos segundos','ok');
+  try{
+    const r = await api('aplicarImportInventario', { rows: _importPayload.rows, opciones });
+    const x = r.resumen || {};
+    openModal(`
+      <div class="p-6 max-w-md">
+        <h3 class="text-lg font-bold mb-3" style="color:var(--ok)">✅ Import completado</h3>
+        <ul class="text-sm space-y-1 mb-4">
+          <li>🔄 Stocks actualizados: <b>${x.stock_actualizados||0}</b></li>
+          <li>💵 Precios de venta actualizados: <b>${x.precios_actualizados||0}</b></li>
+          <li>🛒 Precios de compra actualizados: <b>${x.compras_actualizadas||0}</b></li>
+          <li>➕ Productos creados: <b>${x.creados||0}</b></li>
+          <li>⚠️ Productos desactivados: <b>${x.desactivados||0}</b></li>
+          ${x.omitidos_pack?`<li class="text-xs text-slate-500">🎁 Packs omitidos: ${x.omitidos_pack}</li>`:''}
+        </ul>
+        <div class="flex justify-end"><button class="btn btn-primary" onclick="closeModal()">Listo</button></div>
+      </div>
+    `);
+    _importPayload = null;
+    $('#importFileName').textContent = 'Ningún archivo seleccionado.';
+    // Refrescar inventario si está cargado
+    if(typeof cargarInventario === 'function') cargarInventario();
+    if(typeof cargarStatsDashboard === 'function') cargarStatsDashboard();
+  }catch(err){
+    toast('Error al aplicar: ' + err.message, 'err');
+  }
 }
 
 function openNuevoProducto(){
