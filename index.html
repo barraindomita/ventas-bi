@@ -857,11 +857,28 @@ async function api(action, payload={}){
   return data;
 }
 
+/* Modal genérico.
+   Cierra con click en el backdrop SOLO si el mousedown + mouseup cayeron ambos
+   en el backdrop. Esto evita cierres accidentales cuando el usuario selecciona
+   texto dentro del modal y suelta el mouse afuera (un bug típico al estar
+   completando un formulario largo).
+   Si el HTML del modal incluye el atributo `data-persistent="1"` en su
+   contenedor raíz, NO se cierra por click en el backdrop — el usuario debe
+   usar Cancelar/Cerrar. Esto protege formularios de creación/edición. */
 function openModal(html){
   const bg = document.createElement('div');
   bg.className='modal-bg';
   bg.innerHTML = `<div class="modal">${html}</div>`;
-  bg.addEventListener('click', e=>{ if(e.target===bg) bg.remove(); });
+  const persistent = /data-persistent\s*=\s*["']?1/.test(html);
+  if(!persistent){
+    let mdTarget = null;
+    bg.addEventListener('mousedown', e => { mdTarget = e.target; });
+    // touchstart/end equivalente para móvil
+    bg.addEventListener('touchstart', e => { mdTarget = e.target; }, { passive: true });
+    bg.addEventListener('click', e => {
+      if(e.target === bg && mdTarget === bg) bg.remove();
+    });
+  }
   $('#modalRoot').appendChild(bg);
   return bg;
 }
@@ -1503,7 +1520,7 @@ async function __confirmarImport(){
 function openNuevoProducto(){
   if(S.usuario.rol!=='admin') return toast('Requiere perfil administrador','err');
   openModal(`
-    <div class="p-6">
+    <div class="p-6" data-persistent="1">
       <h3 class="text-lg font-bold mb-4" style="color:var(--brand-dark)">Nuevo producto</h3>
       <form id="formProd" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="md:col-span-2">
@@ -1659,7 +1676,7 @@ function openEditarPack(id){
 function _packFormHtml({ nuevo, p }){
   const val = k => p && p[k] !== undefined ? String(p[k]).replace(/"/g,'&quot;') : '';
   return `
-    <div class="p-6">
+    <div class="p-6" data-persistent="1">
       <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">
         ${nuevo ? 'Nuevo pack' : 'Editar pack: ' + (p?.nombre||'')}
       </h3>
@@ -1848,7 +1865,7 @@ function _recalcPackMargen(){
 function openEditarProducto(id){
   const p = S.productos.find(x=>Number(x.id)===id); if(!p) return;
   openModal(`
-    <div class="p-6">
+    <div class="p-6" data-persistent="1">
       <h3 class="text-lg font-bold mb-4" style="color:var(--brand-dark)">Editar producto</h3>
       <form id="formProdEdit" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="md:col-span-2"><label class="label">Código de barra</label>
@@ -1906,7 +1923,7 @@ async function eliminarProductoConfirm(id){
 function openActualizarStock(id){
   const p = S.productos.find(x=>Number(x.id)===id); if(!p) return;
   openModal(`
-    <div class="p-6">
+    <div class="p-6" data-persistent="1">
       <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">Actualizar stock</h3>
       <p class="text-sm text-slate-500 mb-4">${p.nombre} — Stock actual: <b>${p.stock_actual}</b></p>
       <form id="formStk" class="space-y-3">
@@ -1942,7 +1959,7 @@ function openMermarProducto(id){
 }
 function _mermaForm(p){
   return `
-  <div class="p-6">
+  <div class="p-6" data-persistent="1">
     <h3 class="text-lg font-bold mb-1" style="color:var(--err)">Registrar merma</h3>
     <p class="text-sm text-slate-500 mb-4">${p.nombre} — Stock actual: <b>${p.stock_actual}</b></p>
     <form id="formMerma" class="space-y-3">
