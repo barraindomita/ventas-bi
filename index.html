@@ -475,6 +475,7 @@
           <table>
             <thead>
               <tr>
+                <th id="invSelAllCell" class="hidden" style="width:36px"><input type="checkbox" id="invSelAll" onchange="__toggleInvSelAll(event)" title="Seleccionar todos los filtrados"></th>
                 <th>Foto</th><th>Código</th><th>Nombre</th><th>Categoría</th>
                 <th class="text-right">V. Compra</th><th class="text-right">V. Venta</th>
                 <th class="text-right">Margen</th><th class="text-right">Stock</th>
@@ -483,6 +484,13 @@
             </thead>
             <tbody id="invTbody"></tbody>
           </table>
+        </div>
+
+        <!-- Barra flotante de acciones en bloque -->
+        <div id="invBulkBar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white rounded-full shadow-lg border border-slate-200 pl-4 pr-2 py-2 flex items-center gap-3">
+          <span class="text-sm"><b id="invBulkCount">0</b> seleccionado(s)</span>
+          <button class="btn btn-ghost text-xs" onclick="__limpiarInvSel()">Limpiar</button>
+          <button class="btn text-xs" style="background:var(--err);color:#fff" onclick="__openEliminarBulk()">🗑️ Eliminar seleccionados</button>
         </div>
       </section>
 
@@ -1052,6 +1060,11 @@ function esBajoStock(p){
   return act/ini <= 0.2;
 }
 
+/* Set de IDs seleccionados para operaciones en bloque. Se conserva entre filtros
+   para que el usuario pueda acumular selecciones a través de varias búsquedas. */
+if(!S.invSel) S.invSel = new Set();
+window._lastInvFiltered = [];   // IDs actualmente visibles (post-filtro)
+
 function renderInventario(){
   const q = ($('#invSearch')?.value || '').toLowerCase().trim();
   const cat = $('#invCategoria')?.value || '';
@@ -1069,10 +1082,23 @@ function renderInventario(){
   });
   rows = _ordenarInventario(rows, orden);
   const admin = S.usuario?.rol==='admin';
+
+  // Mostrar/ocultar columna de selección según rol
+  const selAllCell = $('#invSelAllCell');
+  if(selAllCell) selAllCell.classList.toggle('hidden', !admin);
+
+  window._lastInvFiltered = rows.map(p => Number(p.id));
+  const colspan = admin ? 10 : 9;
+
   $('#invTbody').innerHTML = rows.map(p=>{
     const pack = esPack(p);
+    const selected = S.invSel.has(Number(p.id));
+    const selTd = admin
+      ? `<td><input type="checkbox" class="inv-sel-row" data-id="${p.id}" ${selected?'checked':''} onchange="__toggleInvSel(${p.id}, this.checked)"></td>`
+      : '';
     return `
-    <tr class="${esBajoStock(p)?'stock-low':''}">
+    <tr class="${esBajoStock(p)?'stock-low':''} ${selected?'bg-blue-50':''}">
+      ${selTd}
       <td>${p.foto_url ? `<img class="prod-thumb" src="${p.foto_url}" onerror="this.style.display='none'">` : `<span class="prod-thumb placeholder">Sin foto</span>`}</td>
       <td class="font-mono text-xs text-slate-500">${p.codigo_barra||'—'}</td>
       <td class="font-semibold">${p.nombre}${pack?' <span class="chip chip-info" style="font-size:10px">PACK</span>':''}</td>
@@ -1094,7 +1120,109 @@ function renderInventario(){
         ) : `<button class="act-pill act-hist" title="Ver historial" onclick="openHistorialProducto(${p.id})"><span class="act-ico">📜</span>Historial</button>`}
       </td>
     </tr>`;
-  }).join('') || `<tr><td colspan="9" class="text-center text-slate-400 py-6">Sin productos</td></tr>`;
+  }).join('') || `<tr><td colspan="${colspan}" class="text-center text-slate-400 py-6">Sin productos</td></tr>`;
+
+  __actualizarInvBulkBar();
+  __actualizarSelAllEstado();
+}
+
+/* ── Bulk selection helpers ──────────────────────────────────────── */
+function __toggleInvSel(id, checked){
+  id = Number(id);
+  if(checked) S.invSel.add(id); else S.invSel.delete(id);
+  __actualizarInvBulkBar();
+  __actualizarSelAllEstado();
+  // Resalto visual de la fila
+  const row = document.querySelector(`input.inv-sel-row[data-id="${id}"]`)?.closest('tr');
+  if(row) row.classList.toggle('bg-blue-50', checked);
+}
+
+function __toggleInvSelAll(ev){
+  const checked = ev.target.checked;
+  (window._lastInvFiltered || []).forEach(id => {
+    if(checked) S.invSel.add(id); else S.invSel.delete(id);
+  });
+  // Re-renderizar filas para reflejar cambios (sin recargar datos)
+  document.querySelectorAll('input.inv-sel-row').forEach(cb => {
+    const id = Number(cb.dataset.id);
+    cb.checked = S.invSel.has(id);
+    cb.closest('tr')?.classList.toggle('bg-blue-50', cb.checked);
+  });
+  __actualizarInvBulkBar();
+}
+
+function __actualizarSelAllEstado(){
+  const master = $('#invSelAll');
+  if(!master) return;
+  const visibles = window._lastInvFiltered || [];
+  if(!visibles.length){ master.checked = false; master.indeterminate = false; return; }
+  const seleccionadosVisibles = visibles.filter(id => S.invSel.has(id)).length;
+  master.checked = seleccionadosVisibles === visibles.length && visibles.length > 0;
+  master.indeterminate = seleccionadosVisibles > 0 && seleccionadosVisibles < visibles.length;
+}
+
+function __actualizarInvBulkBar(){
+  const bar = $('#invBulkBar');
+  const count = S.invSel.size;
+  if(!bar) return;
+  $('#invBulkCount').textContent = count;
+  bar.classList.toggle('hidden', count === 0);
+}
+
+function __limpiarInvSel(){
+  S.invSel.clear();
+  document.querySelectorAll('input.inv-sel-row').forEach(cb => {
+    cb.checked = false;
+    cb.closest('tr')?.classList.remove('bg-blue-50');
+  });
+  __actualizarInvBulkBar();
+  __actualizarSelAllEstado();
+}
+
+function __openEliminarBulk(){
+  const ids = Array.from(S.invSel);
+  if(!ids.length) return;
+  const productos = S.productos.filter(p => S.invSel.has(Number(p.id)));
+  const conPack = productos.filter(p => esPack(p)).length;
+  const conStock = productos.filter(p => Number(p.stock_actual) > 0).length;
+  const muestra = productos.slice(0, 15).map(p => `<li class="text-xs">• <span class="font-mono text-slate-500">${p.codigo_barra||'—'}</span> — ${p.nombre} ${esPack(p)?'<span class=\"chip chip-info\" style=\"font-size:10px\">PACK</span>':''}</li>`).join('');
+  const resto = productos.length > 15 ? `<li class="text-xs text-slate-500 italic">…y ${productos.length - 15} más</li>` : '';
+
+  openModal(`
+    <div class="p-6 max-w-xl">
+      <h3 class="text-lg font-bold mb-2" style="color:var(--err)">🗑️ Eliminar ${productos.length} producto(s)</h3>
+      <p class="text-sm text-slate-600 mb-3">
+        Los productos se marcarán como <b>inactivos</b> (no aparecen más en búsqueda, ventas ni listados), pero su <b>historial de ventas queda intacto</b> en reportes.
+        ${conStock > 0 ? `<br><span class="text-amber-700"><b>Atención:</b> ${conStock} de estos productos aún tiene stock &gt; 0.</span>` : ''}
+        ${conPack > 0 ? `<br><span class="text-blue-700">Incluye ${conPack} pack(s).</span>` : ''}
+      </p>
+      <div class="bg-slate-50 rounded-lg p-3 max-h-64 overflow-auto mb-4 border border-slate-200">
+        <ul class="space-y-0.5">${muestra}${resto}</ul>
+      </div>
+      <label class="flex items-center gap-2 text-xs text-slate-600 mb-3">
+        Motivo (opcional):
+        <input id="inpMotivoBulkDel" class="input flex-1 text-xs" placeholder="Ej: Migración de packs antiguos">
+      </label>
+      <div class="flex justify-end gap-2">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn" style="background:var(--err);color:#fff" onclick="__ejecutarEliminarBulk()">✓ Eliminar ${productos.length}</button>
+      </div>
+    </div>
+  `);
+}
+
+async function __ejecutarEliminarBulk(){
+  const ids = Array.from(S.invSel);
+  if(!ids.length) return;
+  const obs = $('#inpMotivoBulkDel')?.value || '';
+  closeModal();
+  toast('Eliminando…','ok');
+  try{
+    const r = await api('eliminarProductosBulk', { ids, observaciones: obs });
+    toast(`${r.eliminados} producto(s) eliminado(s)${r.no_encontrados?' · '+r.no_encontrados+' no encontrados':''}`,'ok');
+    S.invSel.clear();
+    await cargarInventario();
+  }catch(err){ toast(err.message,'err'); }
 }
 
 function esPack(p){
