@@ -75,6 +75,9 @@
   .toast-ok{background:var(--ok);} .toast-err{background:var(--err);} .toast-info{background:var(--brand);}
   .modal-bg{position:fixed;inset:0;background:rgba(12,24,54,.55);z-index:90;display:flex;align-items:center;justify-content:center;padding:16px;}
   .modal{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+  /* Spinner para overlay Tuu */
+  .tuu-spinner{width:48px;height:48px;border-radius:50%;border:4px solid #dbeafe;border-top-color:#1E88E5;animation:tuuSpin 1s linear infinite;}
+  @keyframes tuuSpin{to{transform:rotate(360deg);}}
   .prod-thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;background:#eef3fb;display:inline-block;}
   .prod-thumb.placeholder{display:inline-flex;align-items:center;justify-content:center;color:#94a3b8;font-size:10px;text-align:center;}
   .cart-item{display:flex;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid #eef2f8;}
@@ -273,7 +276,7 @@
 <body>
 
 <!-- ══════════════════ LOGIN ══════════════════ -->
-<div id="viewLogin" class="hidden min-h-screen flex items-center justify-center p-4">
+<div id="viewLogin" class="hidden min-h-screen flex items-start justify-center p-4 pt-20 md:pt-32">
   <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
     <div class="text-center mb-4">
       <!-- Logo: intenta cargar logo.png; si falla muestra emoji fallback -->
@@ -449,6 +452,7 @@
       <section id="pageInventario" class="page hidden">
         <div class="inv-toolbar flex items-center gap-3 mb-4 flex-wrap">
           <input id="invSearch" class="input max-w-xs" placeholder="Buscar nombre o código…" oninput="renderInventario()">
+          <button type="button" class="scan-btn" onclick="scanInventarioCamara()" title="Escanear con la cámara del móvil">📷 Cámara</button>
           <select id="invCategoria" class="input max-w-xs" onchange="renderInventario()"><option value="">Todas las categorías</option></select>
           <select id="invOrden" class="input max-w-xs" onchange="renderInventario()" title="Ordenar inventario">
             <option value="nombre_asc">Nombre (A→Z)</option>
@@ -487,10 +491,11 @@
         </div>
 
         <!-- Barra flotante de acciones en bloque -->
-        <div id="invBulkBar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white rounded-full shadow-lg border border-slate-200 pl-4 pr-2 py-2 flex items-center gap-3">
-          <span class="text-sm"><b id="invBulkCount">0</b> seleccionado(s)</span>
+        <div id="invBulkBar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white rounded-full shadow-lg border border-slate-200 pl-4 pr-2 py-2 flex items-center gap-2 flex-wrap max-w-[95vw]">
+          <span class="text-sm whitespace-nowrap"><b id="invBulkCount">0</b> seleccionado(s)</span>
           <button class="btn btn-ghost text-xs" onclick="__limpiarInvSel()">Limpiar</button>
-          <button class="btn text-xs" style="background:var(--err);color:#fff" onclick="__openEliminarBulk()">🗑️ Eliminar seleccionados</button>
+          <button class="btn text-xs" style="background:var(--brand);color:#fff" onclick="__openCambiarCategoriaBulk()">🏷️ Cambiar categoría</button>
+          <button class="btn text-xs" style="background:var(--err);color:#fff" onclick="__openEliminarBulk()">🗑️ Eliminar</button>
         </div>
       </section>
 
@@ -615,7 +620,7 @@
         <!-- Categorías colapsables del módulo Reportes -->
         <div class="space-y-3">
           <!-- ═══ Categoría 1: Reporte de Ventas por ingresos ═══ -->
-          <details class="rep-cat bg-white rounded-xl border border-slate-200" open>
+          <details class="rep-cat bg-white rounded-xl border border-slate-200">
             <summary class="cursor-pointer select-none p-4 font-bold text-base flex items-center gap-2" style="color:var(--brand-dark)">
               <span class="rep-cat-ico">💰</span>
               <span>Reporte de Ventas por Ingresos</span>
@@ -633,7 +638,7 @@
                 <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por mes</h4><canvas id="chartMes" height="120"></canvas></div>
                 <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por hora</h4><canvas id="chartHora" height="120"></canvas></div>
                 <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por día de la semana</h4><canvas id="chartSemana" height="120"></canvas></div>
-                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 lg:col-span-2"><h4 class="font-semibold mb-3">Medios de pago</h4><canvas id="chartPagos" height="120"></canvas></div>
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 lg:col-span-2"><h4 class="font-semibold mb-3">Medios de pago</h4><div class="mx-auto" style="max-width:390px;aspect-ratio:1/1;"><canvas id="chartPagos"></canvas></div></div>
               </div>
             </div>
           </details>
@@ -749,7 +754,13 @@ const S = {
   descuentoVenta: { tipo:'pct', valor:0 },  // descuento aplicado al total
   caja: null,
   repDesde: null, repHasta: null,
-  charts: {}
+  charts: {},
+  /* Integración Tuu (máquina de pago Haulmer) ───────────────
+     terminalesTuu se carga al entrar a la app. Si el backend no devuelve
+     terminales configurados, el flujo Tuu queda oculto silenciosamente. */
+  terminalesTuu: [],
+  tuuLastSerial: localStorage.getItem('bi_tuu_last_serial') || '',
+  tuuLastDte: Number(localStorage.getItem('bi_tuu_last_dte')) || 39
 };
 
 /* Helpers ───────────────────────────────────────────────────────── */
@@ -1024,6 +1035,30 @@ function enterApp(){
   cargarInventario();
   cargarCajaAbierta();
   cargarNotificaciones();
+  cargarTerminalesTuu();
+}
+
+/* Carga la lista de terminales Tuu configurados en el backend.
+   Si no hay ninguno configurado (propiedad TUU_TERMINALES vacía), el flujo
+   "Enviar a Tuu" se oculta silenciosamente — el POS sigue funcionando sin
+   la integración. Cualquier error se ignora para no bloquear el login. */
+async function cargarTerminalesTuu(){
+  try{
+    const d = await api('tuuListarTerminales');
+    const list = Array.isArray(d.terminales) ? d.terminales : [];
+    S.terminalesTuu = list.filter(t => t && t.serial);
+    // Si el último serial recordado ya no existe, limpiarlo
+    if(S.tuuLastSerial && !S.terminalesTuu.find(t => t.serial === S.tuuLastSerial)){
+      S.tuuLastSerial = S.terminalesTuu[0]?.serial || '';
+      if(S.tuuLastSerial) localStorage.setItem('bi_tuu_last_serial', S.tuuLastSerial);
+      else localStorage.removeItem('bi_tuu_last_serial');
+    } else if(!S.tuuLastSerial && S.terminalesTuu.length){
+      S.tuuLastSerial = S.terminalesTuu[0].serial;
+    }
+  }catch(e){
+    S.terminalesTuu = [];
+    // Silencioso: es opcional
+  }
 }
 
 /* NAV ───────────────────────────────────────────────────────────── */
@@ -1247,6 +1282,58 @@ function esPack(p){
   if(v===true) return true;
   const s = String(v).toLowerCase().trim();
   return s==='true' || s==='verdadero' || s==='sí' || s==='si' || s==='1';
+}
+
+/* Cambio masivo de categoría para los productos seleccionados.
+   Incluye data-persistent="1" para que un clic accidental fuera no cierre el modal. */
+function __openCambiarCategoriaBulk(){
+  const ids = Array.from(S.invSel);
+  if(!ids.length) return;
+  const productos = S.productos.filter(p => S.invSel.has(Number(p.id)));
+  const actuales = {};
+  productos.forEach(p => {
+    const c = String(p.categoria||'—').trim() || '—';
+    actuales[c] = (actuales[c]||0) + 1;
+  });
+  const resumenActual = Object.keys(actuales).sort().map(c => `<span class="chip chip-info" style="font-size:11px">${c}: ${actuales[c]}</span>`).join(' ');
+  const muestra = productos.slice(0, 15).map(p => `<li class="text-xs">• <span class="font-mono text-slate-500">${p.codigo_barra||'—'}</span> — ${p.nombre} <span class="text-slate-400">(${p.categoria||'—'})</span></li>`).join('');
+  const resto = productos.length > 15 ? `<li class="text-xs text-slate-500 italic">…y ${productos.length - 15} más</li>` : '';
+
+  openModal(`
+    <div class="p-6 max-w-xl" data-persistent="1">
+      <h3 class="text-lg font-bold mb-2" style="color:var(--brand-dark)">🏷️ Cambiar categoría de ${productos.length} producto(s)</h3>
+      <p class="text-sm text-slate-600 mb-2">Elige una categoría existente o escribe una nueva.</p>
+      <div class="mb-3 flex flex-wrap gap-1">${resumenActual}</div>
+      <label class="label">Nueva categoría *</label>
+      <input id="inpBulkCat" class="input" list="bulkCatList" placeholder="Ej: Cervezas" autofocus>
+      <datalist id="bulkCatList">${S.categorias.map(c=>`<option value="${c}">`).join('')}</datalist>
+      <div class="bg-slate-50 rounded-lg p-3 max-h-48 overflow-auto my-3 border border-slate-200">
+        <ul class="space-y-0.5">${muestra}${resto}</ul>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="__ejecutarCambiarCategoriaBulk()">✓ Cambiar categoría</button>
+      </div>
+    </div>
+  `);
+}
+
+async function __ejecutarCambiarCategoriaBulk(){
+  const ids = Array.from(S.invSel);
+  if(!ids.length) return;
+  const nueva = String($('#inpBulkCat')?.value || '').trim();
+  if(!nueva){ return toast('Debes ingresar una categoría','err'); }
+  closeModal();
+  toast('Actualizando…','ok');
+  try{
+    const r = await api('cambiarCategoriaProductosBulk', { ids, categoria: nueva });
+    let msg = `${r.actualizados} producto(s) actualizado(s)`;
+    if(r.sin_cambios) msg += ` · ${r.sin_cambios} sin cambios`;
+    if(r.no_encontrados) msg += ` · ${r.no_encontrados} no encontrados`;
+    toast(msg,'ok');
+    S.invSel.clear();
+    await cargarInventario();
+  }catch(err){ toast(err.message,'err'); }
 }
 
 /* Ordena el array de productos del inventario según la opción seleccionada.
@@ -2028,6 +2115,26 @@ function scanMermaCamara(){
       toast('Código '+code+' no encontrado en inventario','err');
     }
   }, { title: '📷 Escanear para merma', hint: 'Enfoca el código del producto a mermar. Se abrirá el formulario automáticamente.' });
+}
+
+/* Escanea con cámara y filtra el listado de Inventario por ese código. Si el
+   producto existe, además salta a su detalle (historial). Si no existe, deja
+   el código en el input de búsqueda y muestra un toast. */
+function scanInventarioCamara(){
+  openScannerCamara((code) => {
+    const input = document.getElementById('invSearch');
+    if(input){ input.value = code; }
+    renderInventario();
+    const p = S.productos.find(x => String(x.codigo_barra||'').trim() === String(code).trim());
+    if(p){
+      toast('Producto encontrado: '+p.nombre,'ok');
+      if(typeof verHistorialProducto === 'function'){
+        setTimeout(()=> verHistorialProducto(p.id), 80);
+      }
+    } else {
+      toast('Código '+code+' no está en el inventario','err');
+    }
+  }, { title: '📷 Escanear en Inventario', hint: 'Enfoca el código del producto. Se filtrará la tabla automáticamente.' });
 }
 
 async function openMovimientos(){
@@ -2919,6 +3026,142 @@ function _cargoCigarrillosPagos(pagos, totalBase, activo){
   return Math.round(cantCig * RECARGO_CIGARRILLO * fraccion);
 }
 
+/* Tuu — panel selector de terminal + DTE dentro del modal de cobro.
+   Se muestra sólo si: hay terminales configurados Y hay un pago con tarjeta. */
+function _tuuEsTarjeta(medio){ return medio === 'debito' || medio === 'credito'; }
+function _tuuHayCard(pago1, pago2){
+  return _tuuEsTarjeta(pago1.medio) || (pago2 && _tuuEsTarjeta(pago2.medio));
+}
+function _tuuPanelHtml(pago1, pago2, totalFinal){
+  if(!S.terminalesTuu || !S.terminalesTuu.length) return '';
+  if(!_tuuHayCard(pago1, pago2)) return '';
+  // Si hay pago2 mixto, Tuu cobra sólo la parte en tarjeta; mostramos el monto que se enviará.
+  const cardMonto = _tuuEsTarjeta(pago1.medio) ? (Number(pago1.monto)||0)
+                  : (pago2 ? (Number(pago2.monto)||0) : 0);
+  const terminales = S.terminalesTuu;
+  const serialSel = S.tuuLastSerial && terminales.find(t=>t.serial===S.tuuLastSerial)
+                    ? S.tuuLastSerial : (terminales[0]?.serial || '');
+  const dteSel = Number(S.tuuLastDte) || 39;
+  return `
+    <div class="mb-3 p-3 rounded-lg border border-blue-200 bg-blue-50">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-base">📡</span>
+        <b class="text-blue-900">Cobrar con máquina Tuu</b>
+        <span class="text-xs text-blue-700 ml-auto">${fmt(cardMonto)}</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label class="label">Terminal</label>
+          <select class="input" id="tuuSerial" onchange="__setTuuSerial(this.value)">
+            ${terminales.map(t => `
+              <option value="${t.serial}" ${t.serial===serialSel?'selected':''}>
+                ${t.nombre || 'Terminal'}${t.ubicacion?(' — '+t.ubicacion):''}
+              </option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="label">Documento tributario</label>
+          <select class="input" id="tuuDte" onchange="__setTuuDte(this.value)">
+            <option value="39" ${dteSel===39?'selected':''}>Boleta afecta (39)</option>
+            <option value="41" ${dteSel===41?'selected':''}>Boleta exenta (41)</option>
+            <option value="33" ${dteSel===33?'selected':''}>Factura (33)</option>
+            <option value="34" ${dteSel===34?'selected':''}>Factura exenta (34)</option>
+            <option value="0"  ${dteSel===0 ?'selected':''}>Sin DTE (voucher)</option>
+          </select>
+        </div>
+      </div>
+      <div class="text-xs text-blue-800 mt-2">
+        Al enviar, la máquina pedirá al cliente <b>débito o crédito</b>. La venta se registrará
+        automáticamente cuando la transacción sea aprobada.
+      </div>
+    </div>`;
+}
+function _tuuBotonEnviarHtml(pago1, pago2){
+  if(!S.terminalesTuu || !S.terminalesTuu.length) return '';
+  if(!_tuuHayCard(pago1, pago2)) return '';
+  return `<button class="btn" style="background:#1E88E5;color:#fff"
+            onclick="__enviarATuu()">📡 Enviar a Tuu</button>`;
+}
+
+/* Estado del polling en curso — permite cancelar desde el overlay. */
+let _tuuPoll = { timer: null, startedAt: 0, idempotencyKey: null, cancelled: false };
+
+function _tuuStopPoll(){
+  if(_tuuPoll.timer){ clearTimeout(_tuuPoll.timer); _tuuPoll.timer = null; }
+  _tuuPoll.cancelled = true;
+  _tuuPoll.idempotencyKey = null;
+}
+
+/* Overlay con spinner, mostrando estado del cobro en curso.
+   Se monta como segundo nivel encima del modal de pago. data-persistent para
+   que el backdrop no lo cierre accidentalmente. */
+function _tuuRenderOverlay(estado, extra){
+  const mensajes = {
+    enviando: '📡 Enviando orden a la máquina…',
+    esperando: '⏳ Esperando al cliente en la máquina…',
+    procesando: '💳 Procesando en la máquina…',
+    registrando: '📝 Registrando venta…',
+    aprobado: '✅ Pago aprobado',
+    rechazado: '❌ Pago rechazado',
+    error: '⚠️ Error',
+    timeout: '⌛ Tiempo de espera agotado'
+  };
+  const titulo = mensajes[estado] || 'Procesando…';
+  const cuerpo = extra || '';
+  const isFinal = estado === 'aprobado' || estado === 'rechazado' || estado === 'error' || estado === 'timeout';
+  const root = $('#tuuOverlayRoot');
+  if(!root) return;
+  root.innerHTML = `
+    <div data-persistent="1" style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;">
+      <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:1.5rem;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+        ${isFinal ? '' : `<div class="tuu-spinner" style="margin:0 auto 1rem;"></div>`}
+        <h3 class="text-lg font-bold mb-2" style="color:var(--brand-dark)">${titulo}</h3>
+        <div class="text-sm text-slate-600 mb-4" id="tuuOverlayExtra">${cuerpo}</div>
+        <div class="flex gap-2 justify-center flex-wrap">
+          ${isFinal
+            ? `<button class="btn btn-success" onclick="__tuuCerrarOverlay(true)">Cerrar</button>`
+            : `<button class="btn btn-ghost" onclick="__tuuCancelar()">Cancelar</button>`}
+        </div>
+        <div class="text-xs text-slate-400 mt-3" id="tuuOverlayTimer"></div>
+      </div>
+    </div>`;
+}
+function _tuuAsegurarOverlayRoot(){
+  if(!$('#tuuOverlayRoot')){
+    const d = document.createElement('div');
+    d.id = 'tuuOverlayRoot';
+    document.body.appendChild(d);
+  }
+}
+window.__tuuCerrarOverlay = (recargar) => {
+  _tuuStopPoll();
+  const root = $('#tuuOverlayRoot');
+  if(root) root.innerHTML = '';
+  if(recargar){
+    S.cart = []; S.descuentoVenta = { tipo:'pct', valor:0 };
+    closeModal();
+    cargarInventario();
+    cargarCajaAbierta();
+  }
+};
+window.__tuuCancelar = async () => {
+  const key = _tuuPoll.idempotencyKey;
+  _tuuStopPoll();
+  _tuuRenderOverlay('error',
+    'Cobro cancelado desde el POS. Si el cliente alcanzó a pagar en la máquina, registra la venta manualmente con el voucher.');
+  if(key){
+    try { await api('tuuCancelarCobro', { idempotencyKey: key }); } catch(e){}
+  }
+};
+window.__setTuuSerial = v => {
+  S.tuuLastSerial = String(v || '');
+  if(S.tuuLastSerial) localStorage.setItem('bi_tuu_last_serial', S.tuuLastSerial);
+};
+window.__setTuuDte = v => {
+  S.tuuLastDte = Number(v) || 39;
+  localStorage.setItem('bi_tuu_last_dte', String(S.tuuLastDte));
+};
+
 function openPago(){
   if(!S.cart.length) return toast('Carrito vacío','err');
   const totalBase = _cartTotal();    // total previo al recargo cigarrillos
@@ -3028,8 +3271,10 @@ function openPago(){
       <div class="bg-slate-50 rounded p-2 text-sm mb-3">
         Total pagado: <b>${fmt((Number(pago1.monto)||0) + (pago2?Number(pago2.monto)||0:0))}</b> de <b>${fmt(totalFinal)}</b>
       </div>
-      <div class="flex gap-2 justify-end">
+      ${_tuuPanelHtml(pago1, pago2, totalFinal)}
+      <div class="flex gap-2 justify-end flex-wrap">
         <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        ${_tuuBotonEnviarHtml(pago1, pago2)}
         <button class="btn btn-success" onclick="__confirmarVenta()">Confirmar venta</button>
       </div>
     </div>`;
@@ -3123,6 +3368,150 @@ function openPago(){
       await cargarCajaAbierta();
     } catch(err){ toast(err.message, 'err'); }
   };
+
+  /* Construye el venta_data que el backend usará para registrar la venta
+     automáticamente cuando Tuu apruebe el cobro. Idéntico a lo que envía
+     __confirmarVenta a registrarVenta. */
+  function _buildVentaData(){
+    const { recargo, totalFinal } = recalc();
+    const pagos = [pago1]; if(pago2 && pago2.monto>0) pagos.push(pago2);
+    const totalPagado = pagos.reduce((a,p)=>a + (Number(p.monto)||0), 0);
+    if(Math.abs(totalPagado - totalFinal) > 1){
+      throw new Error(`Los pagos (${fmt(totalPagado)}) no cuadran con el total (${fmt(totalFinal)})`);
+    }
+    const sub = _cartSubtotalNeto();
+    let pctVenta = 0;
+    if(S.descuentoVenta.valor > 0){
+      if(S.descuentoVenta.tipo === 'pct') pctVenta = Number(S.descuentoVenta.valor)||0;
+      else if(sub > 0) pctVenta = Math.min(100, (Number(S.descuentoVenta.valor)||0) * 100 / sub);
+    }
+    const items = S.cart.map(c => {
+      const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
+      let pct = 0;
+      if(c.descValor > 0){
+        if(c.descTipo === 'pct') pct = Number(c.descValor)||0;
+        else if(bruto > 0) pct = Math.min(100, (Number(c.descValor)||0) * 100 / bruto);
+      }
+      return { producto_id: c.producto.id, cantidad: c.cantidad, descuento_pct_item: pct };
+    });
+    return {
+      venta_data: {
+        caja_id: S.caja ? S.caja.id : null,
+        descuento_pct_venta: pctVenta,
+        recargo_cigarrillos: recargo,
+        items, pagos, cliente_fiado
+      },
+      totalFinal
+    };
+  }
+
+  window.__enviarATuu = async () => {
+    // Validar que haya al menos un pago con tarjeta
+    if(!_tuuHayCard(pago1, pago2)){
+      toast('Selecciona débito o crédito para enviar a Tuu','err'); return;
+    }
+    // Calcular monto a enviar = la porción con tarjeta
+    const cardMonto = _tuuEsTarjeta(pago1.medio) ? (Number(pago1.monto)||0)
+                    : (pago2 ? (Number(pago2.monto)||0) : 0);
+    if(cardMonto < 100){
+      toast('El monto mínimo de cobro con Tuu es $100','err'); return;
+    }
+    // Leer selección del DOM (por si el usuario cambió sin blur)
+    const serial = $('#tuuSerial')?.value || S.tuuLastSerial;
+    const dteType = Number($('#tuuDte')?.value || S.tuuLastDte || 39);
+    if(!serial){ toast('Selecciona un terminal Tuu','err'); return; }
+    S.tuuLastSerial = serial;
+    S.tuuLastDte = dteType;
+    localStorage.setItem('bi_tuu_last_serial', serial);
+    localStorage.setItem('bi_tuu_last_dte', String(dteType));
+
+    // Construir venta_data ahora (mismos cálculos que __confirmarVenta)
+    let vd;
+    try { vd = _buildVentaData(); }
+    catch(err){ toast(err.message, 'err'); return; }
+
+    // Mostrar overlay + iniciar cobro
+    _tuuAsegurarOverlayRoot();
+    _tuuRenderOverlay('enviando',
+      `Monto: <b>${fmt(cardMonto)}</b> · Terminal: <b>${
+        (S.terminalesTuu.find(t=>t.serial===serial)?.nombre) || serial
+      }</b>`);
+    let resp;
+    try{
+      resp = await api('tuuIniciarCobro', {
+        amount: cardMonto, serial, dteType,
+        venta_data: vd.venta_data
+      });
+    } catch(err){
+      _tuuRenderOverlay('error', err.message || 'No se pudo iniciar el cobro en Tuu');
+      return;
+    }
+    const idempotencyKey = resp.idempotencyKey;
+    if(!idempotencyKey){
+      _tuuRenderOverlay('error', 'El backend no devolvió idempotencyKey');
+      return;
+    }
+    // Iniciar polling
+    _tuuPoll = { timer: null, startedAt: Date.now(), idempotencyKey, cancelled: false };
+    _tuuRenderOverlay('esperando',
+      `El cliente debe tocar/insertar la tarjeta en <b>${
+        (S.terminalesTuu.find(t=>t.serial===serial)?.nombre) || serial
+      }</b> y elegir <b>débito o crédito</b>.<br><span class="text-slate-500">Monto: ${fmt(cardMonto)}</span>`);
+    _tuuIniciarPolling(idempotencyKey);
+  };
+
+  function _tuuIniciarPolling(key){
+    const TIMEOUT_MS = 120000;  // 2 minutos máximo esperando
+    const INTERVALO_MS = 2500;
+    const paso = async () => {
+      if(_tuuPoll.cancelled || _tuuPoll.idempotencyKey !== key) return;
+      const elapsed = Date.now() - _tuuPoll.startedAt;
+      // Actualizar contador
+      const timerEl = $('#tuuOverlayTimer');
+      if(timerEl){
+        const s = Math.floor(elapsed/1000);
+        timerEl.textContent = `Esperando hace ${s}s…`;
+      }
+      if(elapsed > TIMEOUT_MS){
+        _tuuStopPoll();
+        _tuuRenderOverlay('timeout',
+          'La máquina no confirmó en 2 minutos. Si el cliente pagó igual, regístralo manualmente con el voucher.');
+        try { await api('tuuCancelarCobro', { idempotencyKey: key }); } catch(e){}
+        return;
+      }
+      let r;
+      try{
+        r = await api('tuuConsultarCobro', { idempotencyKey: key });
+      } catch(err){
+        // Error transitorio del proxy → seguimos intentando
+        _tuuPoll.timer = setTimeout(paso, INTERVALO_MS);
+        return;
+      }
+      if(_tuuPoll.cancelled || _tuuPoll.idempotencyKey !== key) return;
+      if(r.status === 'approved'){
+        _tuuStopPoll();
+        if(r.register_failed){
+          _tuuRenderOverlay('error',
+            `✅ Cobro aprobado en la máquina (voucher ${r.voucher || '—'}), pero <b>no se pudo registrar la venta</b>: ${r.register_error || 'error desconocido'}. Regístrala manualmente.`);
+        } else {
+          _tuuRenderOverlay('aprobado',
+            `Voucher: <b>${r.voucher || '—'}</b><br>Venta #${r.venta_id || '?'} registrada correctamente.`);
+        }
+        return;
+      }
+      if(r.status === 'rejected'){
+        _tuuStopPoll();
+        _tuuRenderOverlay('rechazado',
+          `La transacción fue rechazada${r.raw_status?` (${r.raw_status})`:''}. Puedes reintentar o elegir otro medio de pago.`);
+        return;
+      }
+      // pending → seguir
+      _tuuPoll.timer = setTimeout(paso, INTERVALO_MS);
+    };
+    // primer check con pequeño delay
+    _tuuPoll.timer = setTimeout(paso, 1200);
+  }
+
   render();
 }
 function _cartTotal(){
@@ -3232,7 +3621,9 @@ async function cargarReportes(){
     const mp = v.resumen.mediosPago || {};
     const mpLabels = MEDIOS_PAGO.filter(k => (Number(mp[k])||0) > 0).map(medioLabel);
     const mpValues = MEDIOS_PAGO.filter(k => (Number(mp[k])||0) > 0).map(k => Number(mp[k])||0);
-    _chart('chartPagos','doughnut', mpLabels, mpValues, 'Medios de pago');
+    const mpTotal  = mpValues.reduce((s,v)=>s+v,0) || 1;
+    const mpLabelsPct = mpLabels.map((l,i) => `${l} — ${((mpValues[i]/mpTotal)*100).toFixed(1)}%`);
+    _chart('chartPagos','doughnut', mpLabelsPct, mpValues, 'Medios de pago');
     _chart('chartCat','bar', c.categorias.map(x=>x.categoria), c.categorias.map(x=>x.total), 'Por categoría');
 
     $('#topProductosTbody').innerHTML = p.productos.map((x,i)=>`
@@ -3244,18 +3635,49 @@ async function cargarReportes(){
 function _chart(id, type, labels, data, label){
   const ctx = document.getElementById(id); if(!ctx) return;
   if(S.charts[id]) S.charts[id].destroy();
+
+  // Plugin: dibuja el % dentro de cada segmento del doughnut (omite los < 5%)
+  const pctInside = {
+    id: 'pctInside',
+    afterDatasetsDraw(chart){
+      if(chart.config.type !== 'doughnut') return;
+      const ds = chart.data.datasets[0];
+      const total = (ds.data||[]).reduce((s,v)=>s+(Number(v)||0),0);
+      if(!total) return;
+      const ctx2 = chart.ctx;
+      const meta = chart.getDatasetMeta(0);
+      meta.data.forEach((arc,i) => {
+        const val = Number(ds.data[i])||0;
+        const pct = (val/total)*100;
+        if(pct < 5) return;
+        const pos = arc.tooltipPosition();
+        ctx2.save();
+        ctx2.fillStyle = '#fff';
+        ctx2.font = 'bold 13px system-ui, -apple-system, sans-serif';
+        ctx2.textAlign = 'center';
+        ctx2.textBaseline = 'middle';
+        ctx2.shadowColor = 'rgba(0,0,0,.35)';
+        ctx2.shadowBlur = 3;
+        ctx2.fillText(pct.toFixed(1) + '%', pos.x, pos.y);
+        ctx2.restore();
+      });
+    }
+  };
+
   S.charts[id] = new Chart(ctx, {
     type,
     data: { labels, datasets: [{
       label, data,
       backgroundColor: type==='doughnut'
-        ? ['#1E88E5','#22c55e','#f59e0b','#ef4444','#a855f7']
+        ? ['#1E88E5','#22c55e','#f59e0b','#ef4444','#a855f7','#14b8a6','#ec4899']
         : 'rgba(30,136,229,0.5)',
       borderColor: '#1E88E5',
       borderWidth: 2, tension: 0.3, fill: type==='line'
     }]},
-    options: { responsive:true, plugins:{ legend:{ display: type==='doughnut' } },
-      scales: type==='doughnut' ? {} : { y:{ beginAtZero:true } } }
+    options: { responsive:true, maintainAspectRatio: type!=='doughnut',
+      plugins:{ legend:{ display: type==='doughnut', position: 'bottom' } },
+      scales: type==='doughnut' ? {} : { y:{ beginAtZero:true } } },
+    plugins: type==='doughnut' ? [pctInside] : []
   });
 }
 
