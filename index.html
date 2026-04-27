@@ -760,7 +760,23 @@ const S = {
      terminales configurados, el flujo Tuu queda oculto silenciosamente. */
   terminalesTuu: [],
   tuuLastSerial: localStorage.getItem('bi_tuu_last_serial') || '',
-  tuuLastDte: Number(localStorage.getItem('bi_tuu_last_dte')) || 48
+  /* Tipo de documento elegido. Se guarda como string lógico — al enviar a
+     Tuu se traduce a la combinación (dteType, exemptAmount) que la API
+     entiende. Ver TUU_DOC_TYPES más abajo. */
+  tuuLastDocType: localStorage.getItem('bi_tuu_last_doctype') || 'boleta_afecta'
+};
+
+/* Mapeo de tipos de documento que muestra el selector → combinación
+   (dteType, exemptRatio) que envía la API.
+   exemptRatio: 0 = todo afecto a IVA · 1 = todo exento.
+   La API de Tuu solo acepta dteType 0, 33 o 48 — la distinción
+   afecta/exenta se hace por exemptAmount (0 vs igual al monto). */
+const TUU_DOC_TYPES = {
+  boleta_afecta:  { label: 'Boleta afecta',   dteType: 48, exemptRatio: 0, color: '#f59e0b' },
+  boleta_exenta:  { label: 'Boleta exenta',   dteType: 48, exemptRatio: 1, color: '#f97316' },
+  factura_afecta: { label: 'Factura afecta',  dteType: 33, exemptRatio: 0, color: '#ef4444' },
+  factura_exenta: { label: 'Factura exenta',  dteType: 33, exemptRatio: 1, color: '#dc2626' },
+  sin_documento:  { label: 'Sin documento',   dteType: 0,  exemptRatio: 0, color: '#14b8a6' }
 };
 
 /* Helpers ───────────────────────────────────────────────────────── */
@@ -3041,7 +3057,7 @@ function _tuuPanelHtml(pago1, pago2, totalFinal){
   const terminales = S.terminalesTuu;
   const serialSel = S.tuuLastSerial && terminales.find(t=>t.serial===S.tuuLastSerial)
                     ? S.tuuLastSerial : (terminales[0]?.serial || '');
-  const dteSel = Number(S.tuuLastDte) || 48;
+  const docSel = TUU_DOC_TYPES[S.tuuLastDocType] ? S.tuuLastDocType : 'boleta_afecta';
   return `
     <div class="mb-3 p-3 rounded-lg border border-blue-200 bg-blue-50">
       <div class="flex items-center gap-2 mb-2">
@@ -3061,10 +3077,9 @@ function _tuuPanelHtml(pago1, pago2, totalFinal){
         </div>
         <div>
           <label class="label">Documento tributario</label>
-          <select class="input" id="tuuDte" onchange="__setTuuDte(this.value)">
-            <option value="48" ${dteSel===48?'selected':''}>Boleta / Comprobante (48)</option>
-            <option value="33" ${dteSel===33?'selected':''}>Factura (33)</option>
-            <option value="0"  ${dteSel===0 ?'selected':''}>Sin DTE (voucher)</option>
+          <select class="input" id="tuuDocType" onchange="__setTuuDocType(this.value)">
+            ${Object.keys(TUU_DOC_TYPES).map(k => `
+              <option value="${k}" ${k===docSel?'selected':''}>${TUU_DOC_TYPES[k].label}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -3155,9 +3170,10 @@ window.__setTuuSerial = v => {
   S.tuuLastSerial = String(v || '');
   if(S.tuuLastSerial) localStorage.setItem('bi_tuu_last_serial', S.tuuLastSerial);
 };
-window.__setTuuDte = v => {
-  S.tuuLastDte = Number(v) || 39;
-  localStorage.setItem('bi_tuu_last_dte', String(S.tuuLastDte));
+window.__setTuuDocType = v => {
+  if(!TUU_DOC_TYPES[v]) v = 'boleta_afecta';
+  S.tuuLastDocType = v;
+  localStorage.setItem('bi_tuu_last_doctype', v);
 };
 
 function openPago(){
@@ -3416,12 +3432,16 @@ function openPago(){
     }
     // Leer selección del DOM (por si el usuario cambió sin blur)
     const serial = $('#tuuSerial')?.value || S.tuuLastSerial;
-    const dteType = Number($('#tuuDte')?.value || S.tuuLastDte || 48);
+    const docKey = $('#tuuDocType')?.value || S.tuuLastDocType || 'boleta_afecta';
+    const docCfg = TUU_DOC_TYPES[docKey] || TUU_DOC_TYPES.boleta_afecta;
     if(!serial){ toast('Selecciona un terminal Tuu','err'); return; }
     S.tuuLastSerial = serial;
-    S.tuuLastDte = dteType;
+    S.tuuLastDocType = docKey;
     localStorage.setItem('bi_tuu_last_serial', serial);
-    localStorage.setItem('bi_tuu_last_dte', String(dteType));
+    localStorage.setItem('bi_tuu_last_doctype', docKey);
+    const dteType = docCfg.dteType;
+    // exemptAmount: si el doc es "exenta", todo el monto es exento; si no, 0.
+    const exemptAmount = docCfg.exemptRatio === 1 ? cardMonto : 0;
 
     // Construir venta_data ahora (mismos cálculos que __confirmarVenta)
     let vd;
@@ -3437,7 +3457,7 @@ function openPago(){
     let resp;
     try{
       resp = await api('tuuIniciarCobro', {
-        amount: cardMonto, serial, dteType,
+        amount: cardMonto, serial, dteType, exemptAmount,
         venta_data: vd.venta_data
       });
     } catch(err){
