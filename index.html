@@ -760,7 +760,7 @@ const S = {
      terminales configurados, el flujo Tuu queda oculto silenciosamente. */
   terminalesTuu: [],
   tuuLastSerial: localStorage.getItem('bi_tuu_last_serial') || '',
-  tuuLastDte: Number(localStorage.getItem('bi_tuu_last_dte')) || 39
+  tuuLastDte: Number(localStorage.getItem('bi_tuu_last_dte')) || 48
 };
 
 /* Helpers ───────────────────────────────────────────────────────── */
@@ -3041,7 +3041,7 @@ function _tuuPanelHtml(pago1, pago2, totalFinal){
   const terminales = S.terminalesTuu;
   const serialSel = S.tuuLastSerial && terminales.find(t=>t.serial===S.tuuLastSerial)
                     ? S.tuuLastSerial : (terminales[0]?.serial || '');
-  const dteSel = Number(S.tuuLastDte) || 39;
+  const dteSel = Number(S.tuuLastDte) || 48;
   return `
     <div class="mb-3 p-3 rounded-lg border border-blue-200 bg-blue-50">
       <div class="flex items-center gap-2 mb-2">
@@ -3062,10 +3062,8 @@ function _tuuPanelHtml(pago1, pago2, totalFinal){
         <div>
           <label class="label">Documento tributario</label>
           <select class="input" id="tuuDte" onchange="__setTuuDte(this.value)">
-            <option value="39" ${dteSel===39?'selected':''}>Boleta afecta (39)</option>
-            <option value="41" ${dteSel===41?'selected':''}>Boleta exenta (41)</option>
+            <option value="48" ${dteSel===48?'selected':''}>Boleta / Comprobante (48)</option>
             <option value="33" ${dteSel===33?'selected':''}>Factura (33)</option>
-            <option value="34" ${dteSel===34?'selected':''}>Factura exenta (34)</option>
             <option value="0"  ${dteSel===0 ?'selected':''}>Sin DTE (voucher)</option>
           </select>
         </div>
@@ -3418,7 +3416,7 @@ function openPago(){
     }
     // Leer selección del DOM (por si el usuario cambió sin blur)
     const serial = $('#tuuSerial')?.value || S.tuuLastSerial;
-    const dteType = Number($('#tuuDte')?.value || S.tuuLastDte || 39);
+    const dteType = Number($('#tuuDte')?.value || S.tuuLastDte || 48);
     if(!serial){ toast('Selecciona un terminal Tuu','err'); return; }
     S.tuuLastSerial = serial;
     S.tuuLastDte = dteType;
