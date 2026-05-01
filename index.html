@@ -763,21 +763,27 @@ const S = {
   /* Tipo de documento elegido. Se guarda como string lógico — al enviar a
      Tuu se traduce a la combinación (dteType, exemptAmount) que la API
      entiende. Ver TUU_DOC_TYPES más abajo. */
-  tuuLastDocType: localStorage.getItem('bi_tuu_last_doctype') || 'boleta_afecta'
+  tuuLastDocType: localStorage.getItem('bi_tuu_last_doctype') || 'boleta'
 };
 
-/* Mapeo de tipos de documento que muestra el selector → combinación
-   (dteType, exemptRatio) que envía la API.
-   exemptRatio: 0 = todo afecto a IVA · 1 = todo exento.
-   La API de Tuu solo acepta dteType 0, 33 o 48 — la distinción
-   afecta/exenta se hace por exemptAmount (0 vs igual al monto). */
+/* Mapeo de tipos de documento.
+   La API de Tuu solo acepta dteType 0, 33 o 48. La distinción afecta/exenta
+   se resuelve enviando `exemptAmount` (suma de los items marcados como
+   exentos en el modal de cobro). El SII reconoce un DTE 48 con la parte
+   exenta declarada como tributariamente equivalente a la Boleta Exenta.
+   `useExemptItems` indica si el panel debe mostrar el listado de items
+   con checkboxes para marcar cuáles son exentos. */
 const TUU_DOC_TYPES = {
-  boleta_afecta:  { label: 'Boleta afecta',   dteType: 48, exemptRatio: 0, color: '#f59e0b' },
-  boleta_exenta:  { label: 'Boleta exenta',   dteType: 48, exemptRatio: 1, color: '#f97316' },
-  factura_afecta: { label: 'Factura afecta',  dteType: 33, exemptRatio: 0, color: '#ef4444' },
-  factura_exenta: { label: 'Factura exenta',  dteType: 33, exemptRatio: 1, color: '#dc2626' },
-  sin_documento:  { label: 'Sin documento',   dteType: 0,  exemptRatio: 0, color: '#14b8a6' }
+  boleta:        { label: 'Boleta',         dteType: 48, useExemptItems: true,  color: '#f59e0b' },
+  factura:       { label: 'Factura',        dteType: 33, useExemptItems: true,  color: '#ef4444' },
+  sin_documento: { label: 'Sin documento',  dteType: 0,  useExemptItems: false, color: '#14b8a6' }
 };
+/* Migración silenciosa de claves antiguas guardadas en localStorage */
+function _tuuDocKeyMigrate(k){
+  if(k === 'boleta_afecta' || k === 'boleta_exenta') return 'boleta';
+  if(k === 'factura_afecta' || k === 'factura_exenta') return 'factura';
+  return TUU_DOC_TYPES[k] ? k : 'boleta';
+}
 
 /* Helpers ───────────────────────────────────────────────────────── */
 const $ = s => document.querySelector(s);
@@ -3048,7 +3054,25 @@ function _tuuEsTarjeta(medio){ return medio === 'debito' || medio === 'credito';
 function _tuuHayCard(pago1, pago2){
   return _tuuEsTarjeta(pago1.medio) || (pago2 && _tuuEsTarjeta(pago2.medio));
 }
-function _tuuPanelHtml(pago1, pago2, totalFinal){
+/* Suma neta (después de descuentos por item Y descuento de venta) de los
+   items marcados como exentos. Devuelve pesos enteros. */
+function _tuuExentoNeto(exemptSet){
+  if(!exemptSet || !exemptSet.size) return 0;
+  let exentoBruto = 0;
+  S.cart.forEach((c, idx) => {
+    if(!exemptSet.has(idx)) return;
+    const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
+    exentoBruto += Math.max(0, bruto - _itemDescMonto(c));
+  });
+  // Aplicar descuento de venta proporcionalmente
+  const sub = _cartSubtotalNeto();
+  if(!sub) return Math.round(exentoBruto);
+  const descMonto = _ventaDescMonto();
+  const factor = Math.max(0, Math.min(1, 1 - (descMonto / sub)));
+  return Math.round(exentoBruto * factor);
+}
+
+function _tuuPanelHtml(pago1, pago2, totalFinal, exemptSet, docKey){
   if(!S.terminalesTuu || !S.terminalesTuu.length) return '';
   if(!_tuuHayCard(pago1, pago2)) return '';
   // Si hay pago2 mixto, Tuu cobra sólo la parte en tarjeta; mostramos el monto que se enviará.
@@ -3057,7 +3081,50 @@ function _tuuPanelHtml(pago1, pago2, totalFinal){
   const terminales = S.terminalesTuu;
   const serialSel = S.tuuLastSerial && terminales.find(t=>t.serial===S.tuuLastSerial)
                     ? S.tuuLastSerial : (terminales[0]?.serial || '');
-  const docSel = TUU_DOC_TYPES[S.tuuLastDocType] ? S.tuuLastDocType : 'boleta_afecta';
+  const docSel = TUU_DOC_TYPES[docKey] ? docKey : 'boleta';
+  const docCfg = TUU_DOC_TYPES[docSel];
+  // Cálculo de exento (desde items marcados) y exento efectivo enviado a Tuu
+  // (acotado al monto en tarjeta, ya que Tuu solo cobra esa porción).
+  const exentoNeto = docCfg.useExemptItems ? _tuuExentoNeto(exemptSet) : 0;
+  const exentoEnviado = Math.min(exentoNeto, cardMonto);
+  const afectoEnviado = Math.max(0, cardMonto - exentoEnviado);
+  const hayItems = S.cart && S.cart.length;
+  // Lista de items con checkboxes (solo si el doc soporta exento por item).
+  const itemsHtml = (docCfg.useExemptItems && hayItems) ? `
+    <div class="mt-2">
+      <div class="text-xs font-semibold text-blue-900 mb-1">
+        Marca los items <b>exentos de IVA</b> (cigarros, libros, etc.):
+      </div>
+      <div class="rounded border border-blue-200 bg-white" style="max-height:160px;overflow:auto">
+        ${S.cart.map((c, idx) => {
+          const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
+          const neto = Math.max(0, bruto - _itemDescMonto(c));
+          const checked = exemptSet && exemptSet.has(idx);
+          return `
+            <label class="flex items-center gap-2 px-2 py-1 text-xs border-b border-blue-100 last:border-b-0 cursor-pointer ${checked?'bg-orange-50':''}">
+              <input type="checkbox" ${checked?'checked':''} onchange="__toggleTuuExento(${idx})">
+              <span class="flex-1 truncate"><b>${c.cantidad}×</b> ${c.producto.nombre}</span>
+              <span class="text-slate-600">${fmt(neto)}</span>
+            </label>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+  // Línea de desglose
+  const desgloseHtml = docCfg.useExemptItems ? `
+    <div class="text-xs mt-2 p-2 rounded bg-white border border-blue-200">
+      <div class="flex justify-between"><span>Afecto (con IVA):</span><b>${fmt(afectoEnviado)}</b></div>
+      <div class="flex justify-between ${exentoEnviado>0?'text-orange-700':''}">
+        <span>Exento:</span><b>${fmt(exentoEnviado)}</b>
+      </div>
+      <div class="flex justify-between border-t border-blue-100 mt-1 pt-1">
+        <span>Total a cobrar:</span><b>${fmt(cardMonto)}</b>
+      </div>
+      ${exentoNeto > cardMonto ? `
+        <div class="text-amber-700 mt-1 text-[11px]">
+          ⚠ Marcaste ${fmt(exentoNeto)} como exento pero el monto en tarjeta es ${fmt(cardMonto)}.
+          Solo se enviará ${fmt(cardMonto)} como exento.
+        </div>` : ''}
+    </div>` : '';
   return `
     <div class="mb-3 p-3 rounded-lg border border-blue-200 bg-blue-50">
       <div class="flex items-center gap-2 mb-2">
@@ -3083,6 +3150,8 @@ function _tuuPanelHtml(pago1, pago2, totalFinal){
           </select>
         </div>
       </div>
+      ${itemsHtml}
+      ${desgloseHtml}
       <div class="text-xs text-blue-800 mt-2">
         Al enviar, la máquina pedirá al cliente <b>débito o crédito</b>. La venta se registrará
         automáticamente cuando la transacción sea aprobada.
@@ -3171,7 +3240,7 @@ window.__setTuuSerial = v => {
   if(S.tuuLastSerial) localStorage.setItem('bi_tuu_last_serial', S.tuuLastSerial);
 };
 window.__setTuuDocType = v => {
-  if(!TUU_DOC_TYPES[v]) v = 'boleta_afecta';
+  v = _tuuDocKeyMigrate(v);
   S.tuuLastDocType = v;
   localStorage.setItem('bi_tuu_last_doctype', v);
 };
@@ -3184,6 +3253,10 @@ function openPago(){
   let recargoActivo = true;   // el cajero puede destildarlo
   let pagaCon1 = 0;           // vuelto: monto con que paga el cliente (efectivo) — pago 1
   let pagaCon2 = 0;           // vuelto: monto con que paga el cliente (efectivo) — pago 2
+  /* Tuu: estado local del modal — qué items se marcaron como exentos (Set
+     de índices del carrito) y qué tipo de documento eligió el cajero. */
+  let tuuExemptItems = new Set();
+  let tuuDocKey = _tuuDocKeyMigrate(S.tuuLastDocType);
 
   /* Recalcula recargo + ajusta monto pago 2 para cuadrar al total con recargo */
   function recalc(){
@@ -3285,7 +3358,7 @@ function openPago(){
       <div class="bg-slate-50 rounded p-2 text-sm mb-3">
         Total pagado: <b>${fmt((Number(pago1.monto)||0) + (pago2?Number(pago2.monto)||0:0))}</b> de <b>${fmt(totalFinal)}</b>
       </div>
-      ${_tuuPanelHtml(pago1, pago2, totalFinal)}
+      ${_tuuPanelHtml(pago1, pago2, totalFinal, tuuExemptItems, tuuDocKey)}
       <div class="flex gap-2 justify-end flex-wrap">
         <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
         ${_tuuBotonEnviarHtml(pago1, pago2)}
@@ -3343,6 +3416,24 @@ function openPago(){
   window.__setPagaCon1 = v => { pagaCon1 = Number(v)||0; render(); };
   window.__setPagaCon2 = v => { pagaCon2 = Number(v)||0; render(); };
   window.__setCliente = v => { cliente_fiado = v; };
+  /* Sobrescritura local de __setTuuDocType: actualiza la variable local del
+     modal (para re-render) y persiste la elección. Si el documento elegido
+     no soporta exento por item, limpia las marcas. */
+  window.__setTuuDocType = v => {
+    v = _tuuDocKeyMigrate(v);
+    tuuDocKey = v;
+    S.tuuLastDocType = v;
+    localStorage.setItem('bi_tuu_last_doctype', v);
+    if(!TUU_DOC_TYPES[v].useExemptItems) tuuExemptItems.clear();
+    render();
+  };
+  /* Marca/desmarca un item del carrito como exento de IVA. */
+  window.__toggleTuuExento = idx => {
+    idx = Number(idx);
+    if(tuuExemptItems.has(idx)) tuuExemptItems.delete(idx);
+    else tuuExemptItems.add(idx);
+    render();
+  };
   window.__confirmarVenta = async () => {
     const { recargo, totalFinal } = recalc();
     const pagos = [pago1]; if(pago2 && pago2.monto>0) pagos.push(pago2);
@@ -3432,16 +3523,18 @@ function openPago(){
     }
     // Leer selección del DOM (por si el usuario cambió sin blur)
     const serial = $('#tuuSerial')?.value || S.tuuLastSerial;
-    const docKey = $('#tuuDocType')?.value || S.tuuLastDocType || 'boleta_afecta';
-    const docCfg = TUU_DOC_TYPES[docKey] || TUU_DOC_TYPES.boleta_afecta;
+    const docKey = _tuuDocKeyMigrate($('#tuuDocType')?.value || tuuDocKey);
+    const docCfg = TUU_DOC_TYPES[docKey];
     if(!serial){ toast('Selecciona un terminal Tuu','err'); return; }
     S.tuuLastSerial = serial;
     S.tuuLastDocType = docKey;
     localStorage.setItem('bi_tuu_last_serial', serial);
     localStorage.setItem('bi_tuu_last_doctype', docKey);
     const dteType = docCfg.dteType;
-    // exemptAmount: si el doc es "exenta", todo el monto es exento; si no, 0.
-    const exemptAmount = docCfg.exemptRatio === 1 ? cardMonto : 0;
+    // exemptAmount: suma neta de los items marcados como exentos, acotada
+    // al monto que se cobra por tarjeta (Tuu solo cobra esa porción).
+    const exentoNeto = docCfg.useExemptItems ? _tuuExentoNeto(tuuExemptItems) : 0;
+    const exemptAmount = Math.min(exentoNeto, cardMonto);
 
     // Construir venta_data ahora (mismos cálculos que __confirmarVenta)
     let vd;
