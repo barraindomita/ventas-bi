@@ -545,6 +545,12 @@
                 <span>🚬 Recargo cigarrillos (tarjeta)</span>
                 <span id="cargoCigarroMonto">+$0</span>
               </div>
+              <div id="cartPromosRow" class="hidden text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1.5 space-y-0.5">
+                <div class="flex items-center justify-between font-semibold">
+                  <span>🎉 Promociones aplicadas</span><span id="cartPromosTotal">-$0</span>
+                </div>
+                <div id="cartPromosLista" class="text-emerald-600 leading-tight"></div>
+              </div>
               <div class="flex items-center justify-between text-sm text-red-500">
                 <span>Descuento</span><span id="cartDescuento">-$0</span>
               </div>
@@ -711,6 +717,33 @@
           </table>
         </div>
 
+        <!-- PROMOCIONES -->
+        <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🎉 Promociones</h3>
+              <p class="text-xs text-slate-500 mt-1 max-w-xl">Las promociones se aplican <b>automáticamente</b> al armar el carrito si están activas, dentro de su vigencia y dentro del día/horario configurado. El cajero las ve antes de cobrar.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openNuevaPromocion()">+ Nueva promoción</button>
+          </div>
+          <div class="overflow-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-slate-500 text-xs">
+                  <th class="py-1 px-2">Nombre</th>
+                  <th class="py-1 px-2">Tipo</th>
+                  <th class="py-1 px-2">Aplica a</th>
+                  <th class="py-1 px-2">Días/Horario</th>
+                  <th class="py-1 px-2">Vigencia</th>
+                  <th class="py-1 px-2 text-center">Activa</th>
+                  <th class="py-1 px-2 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="promocionesTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- IMPORT MASIVO DE INVENTARIO -->
         <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
           <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
@@ -763,7 +796,10 @@ const S = {
   /* Tipo de documento elegido. Se guarda como string lógico — al enviar a
      Tuu se traduce a la combinación (dteType, exemptAmount) que la API
      entiende. Ver TUU_DOC_TYPES más abajo. */
-  tuuLastDocType: localStorage.getItem('bi_tuu_last_doctype') || 'boleta'
+  tuuLastDocType: localStorage.getItem('bi_tuu_last_doctype') || 'boleta',
+  /* Promociones activas (cargadas al login). Se evalúan en el cliente
+     contra el carrito en cada render para descontar automáticamente. */
+  promocionesActivas: []
 };
 
 /* Mapeo de tipos de documento.
@@ -1058,6 +1094,20 @@ function enterApp(){
   cargarCajaAbierta();
   cargarNotificaciones();
   cargarTerminalesTuu();
+  cargarPromocionesActivas();
+}
+
+/* Carga las promociones activas. Se llaman al login y se refrescan cuando
+   el admin guarda/elimina/togglea promos. El engine evaluador las consume
+   desde S.promocionesActivas. */
+async function cargarPromocionesActivas(){
+  try{
+    const d = await api('listarPromocionesActivas');
+    S.promocionesActivas = Array.isArray(d.promociones) ? d.promociones : [];
+  } catch(e){
+    // Silencioso — no debe bloquear el resto del POS si falla
+    S.promocionesActivas = [];
+  }
 }
 
 /* Carga la lista de terminales Tuu configurados en el backend.
@@ -1107,7 +1157,7 @@ function go(view){
   if(view==='ventas'){ renderVentas(); cargarTopVendidos(); }
   if(view==='caja') renderCajaStatus();
   if(view==='reportes'){ initRangoReportes(); cargarReportes(); }
-  if(view==='configurar') cargarUsuarios();
+  if(view==='configurar') { cargarUsuarios(); cargarPromocionesAdmin(); }
   if(view==='dashboard') cargarStatsDashboard();
 }
 
@@ -2864,6 +2914,208 @@ function _ventaDescLabel(){
   return d.tipo === 'monto' ? `-${fmt(d.valor)}` : `-${Number(d.valor)}%`;
 }
 
+/* ───────── Engine de Promociones ─────────
+   Evalúa S.promocionesActivas contra el carrito. Reglas:
+   - Una promo se "consume" unidades del carrito. Cada unidad solo puede
+     ser cubierta por UNA promo (no stacking entre promos).
+   - Si el item tiene descuento manual aplicado, las promos no lo tocan.
+   - Procesa primero packs (más restrictivos) y al final los % sueltos,
+     para maximizar el descuento total. */
+
+function _promoVigente(promo, ahora){
+  ahora = ahora || new Date();
+  // Vigencia por fecha (vacío = sin restricción)
+  if(promo.fecha_inicio){
+    const ini = new Date(promo.fecha_inicio);
+    if(!isNaN(ini) && ini > ahora) return false;
+  }
+  if(promo.fecha_fin){
+    const fin = new Date(promo.fecha_fin);
+    if(!isNaN(fin)){
+      fin.setHours(23, 59, 59, 999);
+      if(fin < ahora) return false;
+    }
+  }
+  // Día de la semana (0=Dom, 6=Sáb). Vacío = todos los días.
+  if(Array.isArray(promo.dias_semana) && promo.dias_semana.length > 0){
+    if(promo.dias_semana.indexOf(ahora.getDay()) < 0) return false;
+  }
+  // Hora (vacío = 24h). Soporta cruzar medianoche.
+  if(promo.hora_inicio && promo.hora_fin){
+    const parse = h => {
+      const m = String(h).match(/^(\d{1,2}):(\d{2})/);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+    const ini = parse(promo.hora_inicio);
+    const fin = parse(promo.hora_fin);
+    if(ini != null && fin != null){
+      const ahoraMin = ahora.getHours() * 60 + ahora.getMinutes();
+      if(ini <= fin){
+        if(ahoraMin < ini || ahoraMin > fin) return false;
+      } else {
+        // Cruza medianoche (ej. 22:00 → 02:00)
+        if(ahoraMin < ini && ahoraMin > fin) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function _promoAplicaA(promo, productoId, categoria){
+  // Producto específico tiene prioridad
+  if(Array.isArray(promo.productos) && promo.productos.length > 0){
+    if(promo.productos.indexOf(Number(productoId)) >= 0) return true;
+  }
+  // Categoría
+  if(Array.isArray(promo.categorias) && promo.categorias.length > 0){
+    const cat = String(categoria || '').trim().toLowerCase();
+    return promo.categorias.some(c => String(c).trim().toLowerCase() === cat);
+  }
+  return false;
+}
+
+/* Devuelve { promosAplicadas:[{id,nombre,tipo,descMonto,unidades}],
+              descPorItem:{idx:descMonto},
+              totalDescuentoPromos:number }
+   El descuento por item se descuenta del subtotal en renderCart antes del
+   descuento de venta global. */
+function _evaluarPromociones(){
+  const ahora = new Date();
+  const activas = (S.promocionesActivas || []).filter(p => p.activo && _promoVigente(p, ahora));
+  if(!activas.length || !S.cart.length){
+    return { promosAplicadas: [], descPorItem: {}, totalDescuentoPromos: 0 };
+  }
+
+  // Construir el "stock" de unidades disponibles para promo, excluyendo
+  // items con descuento manual.
+  const unidades = [];
+  S.cart.forEach((c, idx) => {
+    if(c.descValor && Number(c.descValor) > 0) return;
+    const cant = Number(c.cantidad) || 0;
+    const precio = Number(c.producto.valor_venta) || 0;
+    for(let i = 0; i < cant; i++){
+      unidades.push({
+        itemIdx: idx,
+        precio,
+        productoId: c.producto.id,
+        categoria: c.producto.categoria,
+        consumida: false,
+        descPromo: 0
+      });
+    }
+  });
+  if(!unidades.length){
+    return { promosAplicadas: [], descPorItem: {}, totalDescuentoPromos: 0 };
+  }
+
+  // Orden de procesamiento: packs primero (más restrictivos), luego pct general.
+  const peso = t => ({ pack_precio: 1, pack_pct: 2, nxm: 3, pct: 4 })[t] || 99;
+  const ordenadas = activas.slice().sort((a, b) => peso(a.tipo) - peso(b.tipo));
+
+  const aplicadas = [];
+
+  ordenadas.forEach(promo => {
+    const eligibles = unidades.filter(u => !u.consumida && _promoAplicaA(promo, u.productoId, u.categoria));
+    if(!eligibles.length) return;
+
+    if(promo.tipo === 'pct'){
+      // Aplica a cada unidad disponible: descMonto = precio * pct/100
+      let descTotal = 0;
+      eligibles.forEach(u => {
+        const d = u.precio * (Number(promo.pct) || 0) / 100;
+        u.consumida = true; u.descPromo = d; descTotal += d;
+      });
+      if(descTotal > 0) aplicadas.push({
+        id: promo.id, nombre: promo.nombre, tipo: promo.tipo,
+        descMonto: Math.round(descTotal), unidades: eligibles.length
+      });
+
+    } else if(promo.tipo === 'pack_pct'){
+      const n = Number(promo.cant_n) || 0;
+      if(n < 2) return;
+      const packs = Math.floor(eligibles.length / n);
+      if(packs < 1) return;
+      // Las más caras primero (más descuento al cliente)
+      const ord = eligibles.slice().sort((a, b) => b.precio - a.precio);
+      const usadas = ord.slice(0, packs * n);
+      let descTotal = 0;
+      usadas.forEach(u => {
+        const d = u.precio * (Number(promo.pct) || 0) / 100;
+        u.consumida = true; u.descPromo = d; descTotal += d;
+      });
+      if(descTotal > 0) aplicadas.push({
+        id: promo.id, nombre: promo.nombre, tipo: promo.tipo,
+        descMonto: Math.round(descTotal), unidades: usadas.length
+      });
+
+    } else if(promo.tipo === 'pack_precio'){
+      const n = Number(promo.cant_n) || 0;
+      const precioPack = Number(promo.precio_pack) || 0;
+      if(n < 2 || precioPack <= 0) return;
+      const packs = Math.floor(eligibles.length / n);
+      if(packs < 1) return;
+      const ord = eligibles.slice().sort((a, b) => b.precio - a.precio);
+      let descTotal = 0;
+      let usadasTotales = 0;
+      for(let p = 0; p < packs; p++){
+        const usadas = ord.slice(p * n, (p + 1) * n);
+        const precioOrig = usadas.reduce((s, u) => s + u.precio, 0);
+        if(precioOrig <= precioPack) continue;  // no conviene este pack
+        const desc = precioOrig - precioPack;
+        usadas.forEach(u => {
+          const fraccion = u.precio / precioOrig;
+          u.consumida = true; u.descPromo = desc * fraccion;
+        });
+        descTotal += desc;
+        usadasTotales += n;
+      }
+      if(descTotal > 0) aplicadas.push({
+        id: promo.id, nombre: promo.nombre, tipo: promo.tipo,
+        descMonto: Math.round(descTotal), unidades: usadasTotales
+      });
+
+    } else if(promo.tipo === 'nxm'){
+      const n = Number(promo.cant_n) || 0;
+      const m = Number(promo.cant_m) || 0;
+      if(n < 2 || m < 1 || m >= n) return;
+      const gratisPorPack = n - m;
+      const packs = Math.floor(eligibles.length / n);
+      if(packs < 1) return;
+      const ord = eligibles.slice().sort((a, b) => b.precio - a.precio);
+      let descTotal = 0;
+      let usadasTotales = 0;
+      for(let p = 0; p < packs; p++){
+        const usadas = ord.slice(p * n, (p + 1) * n);
+        // Las (gratisPorPack) MÁS BARATAS van gratis
+        const baratas = usadas.slice(-gratisPorPack);
+        baratas.forEach(u => {
+          u.consumida = true; u.descPromo = u.precio; descTotal += u.precio;
+        });
+        // Las (m) caras se cobran normal pero quedan consumidas para que
+        // otra promo no las use otra vez
+        usadas.slice(0, m).forEach(u => {
+          u.consumida = true; u.descPromo = 0;
+        });
+        usadasTotales += n;
+      }
+      if(descTotal > 0) aplicadas.push({
+        id: promo.id, nombre: promo.nombre, tipo: promo.tipo,
+        descMonto: Math.round(descTotal), unidades: usadasTotales
+      });
+    }
+  });
+
+  // Sumar descuento por item del carrito
+  const descPorItem = {};
+  unidades.forEach(u => {
+    if(!u.descPromo) return;
+    descPorItem[u.itemIdx] = (descPorItem[u.itemIdx] || 0) + u.descPromo;
+  });
+  Object.keys(descPorItem).forEach(k => descPorItem[k] = Math.round(descPorItem[k]));
+  const totalDescuentoPromos = aplicadas.reduce((s, p) => s + p.descMonto, 0);
+  return { promosAplicadas: aplicadas, descPorItem, totalDescuentoPromos };
+}
+
 /* Cigarrillos: detectar por marca en el nombre del producto.
    Se considera cigarrillo sólo si el nombre contiene una de estas marcas
    (case-insensitive): Pall Mall / PallMall, Lucky Strike, Kent, Marlboro. */
@@ -2913,10 +3165,26 @@ function renderCart(){
   }
   const sub = _cartSubtotalNeto();
   const descMonto = _ventaDescMonto();
-  const total = Math.max(0, Math.round(sub - descMonto));
+  // Evaluar promociones para mostrarlas + descontarlas del total
+  const promoEval = _evaluarPromociones();
+  const totalPromos = Math.round(promoEval.totalDescuentoPromos || 0);
+  const total = Math.max(0, Math.round(sub - descMonto - totalPromos));
   $('#cartSubtotal').textContent = fmt(sub);
   $('#cartDescuento').textContent = '-'+fmt(descMonto);
   $('#cartTotal').textContent = fmt(total);
+  // Render fila de promociones
+  const promosRow = $('#cartPromosRow');
+  if(promosRow){
+    if(totalPromos > 0 && promoEval.promosAplicadas.length){
+      promosRow.classList.remove('hidden');
+      $('#cartPromosTotal').textContent = '-'+fmt(totalPromos);
+      $('#cartPromosLista').innerHTML = promoEval.promosAplicadas.map(p =>
+        `• ${p.nombre} <span class="text-emerald-700">(-${fmt(p.descMonto)})</span>`
+      ).join('<br>');
+    } else {
+      promosRow.classList.add('hidden');
+    }
+  }
   const lblBtn = $('#descTotalLabel'); if(lblBtn) lblBtn.textContent = _ventaDescLabel();
   // Ocultar fila de recargo cigarrillos en el resumen del carrito: se aplica al
   // elegir medio de pago (mostraremos el aviso recién en openPago).
@@ -3355,6 +3623,24 @@ function openPago(){
       ${(pago1.medio==='fiado'||(pago2&&pago2.medio==='fiado')) ? `
         <div class="mb-3"><label class="label">Cliente (fiado)</label>
           <input class="input" value="${cliente_fiado}" oninput="__setCliente(this.value)"></div>` : ''}
+      ${(() => {
+        const pe = _evaluarPromociones();
+        if(!pe.promosAplicadas.length) return '';
+        return `
+        <div class="mb-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50">
+          <div class="flex items-center justify-between mb-1">
+            <b class="text-emerald-900">🎉 Promociones aplicadas</b>
+            <span class="text-emerald-900 font-bold">-${fmt(Math.round(pe.totalDescuentoPromos))}</span>
+          </div>
+          <ul class="text-xs text-emerald-800 space-y-0.5">
+            ${pe.promosAplicadas.map(p => `
+              <li class="flex justify-between">
+                <span>• ${p.nombre}</span>
+                <span class="font-semibold">-${fmt(p.descMonto)}</span>
+              </li>`).join('')}
+          </ul>
+        </div>`;
+      })()}
       <div class="bg-slate-50 rounded p-2 text-sm mb-3">
         Total pagado: <b>${fmt((Number(pago1.monto)||0) + (pago2?Number(pago2.monto)||0:0))}</b> de <b>${fmt(totalFinal)}</b>
       </div>
@@ -3434,6 +3720,38 @@ function openPago(){
     else tuuExemptItems.add(idx);
     render();
   };
+  /* Helper interno: arma el payload que se envía a registrarVenta con los
+     descuentos manuales por item, descuento de venta global, recargo de
+     cigarrillos y descuentos por promociones automáticas. */
+  function _buildPayloadVenta(recargo){
+    const sub = _cartSubtotalNeto();
+    let pctVenta = 0;
+    if(S.descuentoVenta.valor > 0){
+      if(S.descuentoVenta.tipo === 'pct') pctVenta = Number(S.descuentoVenta.valor)||0;
+      else if(sub > 0) pctVenta = Math.min(100, (Number(S.descuentoVenta.valor)||0) * 100 / sub);
+    }
+    const items = S.cart.map(c => {
+      const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
+      let pct = 0;
+      if(c.descValor > 0){
+        if(c.descTipo === 'pct') pct = Number(c.descValor)||0;
+        else if(bruto > 0) pct = Math.min(100, (Number(c.descValor)||0) * 100 / bruto);
+      }
+      return { producto_id: c.producto.id, cantidad: c.cantidad, descuento_pct_item: pct };
+    });
+    const promoEval = _evaluarPromociones();
+    return {
+      caja_id: S.caja ? S.caja.id : null,
+      descuento_pct_venta: pctVenta,
+      recargo_cigarrillos: recargo,
+      descuento_promos: Math.round(promoEval.totalDescuentoPromos || 0),
+      promociones_aplicadas: promoEval.promosAplicadas.map(p => ({
+        id: p.id, nombre: p.nombre, tipo: p.tipo, descMonto: p.descMonto
+      })),
+      items, cliente_fiado
+    };
+  }
+
   window.__confirmarVenta = async () => {
     const { recargo, totalFinal } = recalc();
     const pagos = [pago1]; if(pago2 && pago2.monto>0) pagos.push(pago2);
@@ -3443,29 +3761,9 @@ function openPago(){
       return;
     }
     try{
-      // El backend espera descuento_pct_venta y descuento_pct_item; convertimos
-      // los descuentos por monto a porcentaje sobre el bruto correspondiente.
-      const sub = _cartSubtotalNeto();
-      let pctVenta = 0;
-      if(S.descuentoVenta.valor > 0){
-        if(S.descuentoVenta.tipo === 'pct') pctVenta = Number(S.descuentoVenta.valor)||0;
-        else if(sub > 0) pctVenta = Math.min(100, (Number(S.descuentoVenta.valor)||0) * 100 / sub);
-      }
-      const items = S.cart.map(c => {
-        const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
-        let pct = 0;
-        if(c.descValor > 0){
-          if(c.descTipo === 'pct') pct = Number(c.descValor)||0;
-          else if(bruto > 0) pct = Math.min(100, (Number(c.descValor)||0) * 100 / bruto);
-        }
-        return { producto_id: c.producto.id, cantidad: c.cantidad, descuento_pct_item: pct };
-      });
-      await api('registrarVenta', {
-        caja_id: S.caja ? S.caja.id : null,
-        descuento_pct_venta: pctVenta,
-        recargo_cigarrillos: recargo,
-        items, pagos, cliente_fiado
-      });
+      const payload = _buildPayloadVenta(recargo);
+      payload.pagos = pagos;
+      await api('registrarVenta', payload);
       toast('Venta registrada','ok');
       S.cart = []; S.descuentoVenta = { tipo:'pct', valor:0 };
       closeModal();
@@ -3484,30 +3782,9 @@ function openPago(){
     if(Math.abs(totalPagado - totalFinal) > 1){
       throw new Error(`Los pagos (${fmt(totalPagado)}) no cuadran con el total (${fmt(totalFinal)})`);
     }
-    const sub = _cartSubtotalNeto();
-    let pctVenta = 0;
-    if(S.descuentoVenta.valor > 0){
-      if(S.descuentoVenta.tipo === 'pct') pctVenta = Number(S.descuentoVenta.valor)||0;
-      else if(sub > 0) pctVenta = Math.min(100, (Number(S.descuentoVenta.valor)||0) * 100 / sub);
-    }
-    const items = S.cart.map(c => {
-      const bruto = (Number(c.producto.valor_venta)||0) * (Number(c.cantidad)||0);
-      let pct = 0;
-      if(c.descValor > 0){
-        if(c.descTipo === 'pct') pct = Number(c.descValor)||0;
-        else if(bruto > 0) pct = Math.min(100, (Number(c.descValor)||0) * 100 / bruto);
-      }
-      return { producto_id: c.producto.id, cantidad: c.cantidad, descuento_pct_item: pct };
-    });
-    return {
-      venta_data: {
-        caja_id: S.caja ? S.caja.id : null,
-        descuento_pct_venta: pctVenta,
-        recargo_cigarrillos: recargo,
-        items, pagos, cliente_fiado
-      },
-      totalFinal
-    };
+    const payload = _buildPayloadVenta(recargo);
+    payload.pagos = pagos;
+    return { venta_data: payload, totalFinal };
   }
 
   window.__enviarATuu = async () => {
@@ -3625,11 +3902,19 @@ function openPago(){
 
   render();
 }
+/* Descuento total por promociones aplicadas al carrito actual.
+   Se evalúa en cada llamada (las promos cambian con día/hora y carrito). */
+function _cartDescuentoPromos(){
+  const r = _evaluarPromociones();
+  return Math.round(r.totalDescuentoPromos || 0);
+}
 function _cartTotal(){
-  // Total base previo al recargo por cigarrillos (se suma al confirmar pago)
+  // Total base previo al recargo por cigarrillos (se suma al confirmar pago).
+  // Las promos y el descuento de venta se restan ambos del subtotal neto.
   const sub = _cartSubtotalNeto();
   const desc = _ventaDescMonto();
-  return Math.max(0, Math.round(sub - desc));
+  const promos = _cartDescuentoPromos();
+  return Math.max(0, Math.round(sub - desc - promos));
 }
 
 /* ÚLTIMA VENTA ─────────────────────────────────────────────────── */
@@ -4103,6 +4388,342 @@ function descargarSabanaExcel(){
   const file = `Ventas_BarraIndomita_${stamp}.xlsx`;
   XLSX.writeFile(wb, file);
   toast('Excel descargado','ok');
+}
+
+/* PROMOCIONES (admin) ─────────────────────────────────────────── */
+
+const PROMO_TIPO_LABEL = {
+  pct:         '% sobre productos',
+  pack_precio: 'Pack N x precio fijo',
+  pack_pct:    'Pack N x % descuento',
+  nxm:         'Lleva N · paga M'
+};
+
+const DIAS_SEMANA = [
+  { n: 1, abrev: 'Lun', nombre: 'Lunes' },
+  { n: 2, abrev: 'Mar', nombre: 'Martes' },
+  { n: 3, abrev: 'Mié', nombre: 'Miércoles' },
+  { n: 4, abrev: 'Jue', nombre: 'Jueves' },
+  { n: 5, abrev: 'Vie', nombre: 'Viernes' },
+  { n: 6, abrev: 'Sáb', nombre: 'Sábado' },
+  { n: 0, abrev: 'Dom', nombre: 'Domingo' }
+];
+
+function _promoDescripcionCorta(p){
+  if(p.tipo === 'pct') return `${p.pct}% off`;
+  if(p.tipo === 'pack_precio') return `${p.cant_n} x $${(p.precio_pack||0).toLocaleString('es-CL')}`;
+  if(p.tipo === 'pack_pct') return `${p.cant_n} x ${p.pct}% off`;
+  if(p.tipo === 'nxm') return `Lleva ${p.cant_n}, paga ${p.cant_m}`;
+  return p.tipo;
+}
+
+function _promoAlcanceTexto(p){
+  const partes = [];
+  if(p.categorias && p.categorias.length) partes.push(p.categorias.join(', '));
+  if(p.productos && p.productos.length){
+    const noms = p.productos.map(id => {
+      const prod = (S.productos || []).find(x => Number(x.id) === Number(id));
+      return prod ? prod.nombre : `#${id}`;
+    });
+    partes.push(noms.join(', '));
+  }
+  return partes.join(' · ') || '—';
+}
+
+function _promoDiasTexto(p){
+  if(!p.dias_semana || !p.dias_semana.length) return 'Todos los días';
+  const ds = p.dias_semana.map(n => DIAS_SEMANA.find(d => d.n === n)?.abrev || '?').join('·');
+  const horas = (p.hora_inicio && p.hora_fin) ? ` ${p.hora_inicio}–${p.hora_fin}` : '';
+  return ds + horas;
+}
+
+function _promoVigenciaTexto(p){
+  const f = s => s ? new Date(s).toLocaleDateString('es-CL') : '';
+  if(!p.fecha_inicio && !p.fecha_fin) return 'Sin límite';
+  return `${f(p.fecha_inicio) || '…'} → ${f(p.fecha_fin) || '…'}`;
+}
+
+async function cargarPromocionesAdmin(){
+  const tb = $('#promocionesTbody');
+  if(!tb) return;
+  if(S.usuario.rol !== 'admin'){
+    tb.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">Requiere perfil administrador</td></tr>';
+    return;
+  }
+  tb.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">Cargando…</td></tr>';
+  try{
+    const d = await api('listarPromociones');
+    const promos = Array.isArray(d.promociones) ? d.promociones : [];
+    if(!promos.length){
+      tb.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">Sin promociones configuradas. Toca <b>+ Nueva promoción</b>.</td></tr>';
+      return;
+    }
+    tb.innerHTML = promos.map(p => `
+      <tr class="border-t border-slate-100">
+        <td class="py-2 px-2 font-semibold">${p.nombre}</td>
+        <td class="py-2 px-2 text-xs">
+          <div>${PROMO_TIPO_LABEL[p.tipo] || p.tipo}</div>
+          <div class="text-slate-500">${_promoDescripcionCorta(p)}</div>
+        </td>
+        <td class="py-2 px-2 text-xs text-slate-700 max-w-xs truncate" title="${_promoAlcanceTexto(p)}">${_promoAlcanceTexto(p)}</td>
+        <td class="py-2 px-2 text-xs">${_promoDiasTexto(p)}</td>
+        <td class="py-2 px-2 text-xs">${_promoVigenciaTexto(p)}</td>
+        <td class="py-2 px-2 text-center">
+          <label class="inline-flex items-center cursor-pointer">
+            <input type="checkbox" ${p.activo?'checked':''} onchange="__togglePromocion(${p.id})">
+          </label>
+        </td>
+        <td class="py-2 px-2 text-right whitespace-nowrap">
+          <button class="btn btn-ghost text-xs py-1 px-2" onclick="openEditarPromocion(${p.id})">✏️</button>
+          <button class="btn btn-ghost text-xs py-1 px-2 text-red-500" onclick="__eliminarPromocion(${p.id})">🗑</button>
+        </td>
+      </tr>`).join('');
+  } catch(err){
+    tb.innerHTML = `<tr><td colspan="7" class="text-center text-red-500 py-6">${err.message}</td></tr>`;
+  }
+}
+
+window.__togglePromocion = async (id) => {
+  try {
+    await api('togglePromocion', { id });
+    await cargarPromocionesAdmin();
+    await cargarPromocionesActivas();
+  } catch(e){ toast(e.message, 'err'); }
+};
+
+window.__eliminarPromocion = (id) => {
+  confirmar('¿Eliminar esta promoción?', async () => {
+    try {
+      await api('eliminarPromocion', { id });
+      toast('Promoción eliminada','ok');
+      await cargarPromocionesAdmin();
+      await cargarPromocionesActivas();
+    } catch(e){ toast(e.message, 'err'); }
+  });
+};
+
+function openNuevaPromocion(){ _openPromoForm(null); }
+function openEditarPromocion(id){
+  // Re-cargamos fresca por si cambió desde otra pestaña
+  api('listarPromociones').then(d => {
+    const promo = (d.promociones || []).find(p => Number(p.id) === Number(id));
+    if(!promo){ toast('Promoción no encontrada','err'); return; }
+    _openPromoForm(promo);
+  }).catch(e => toast(e.message,'err'));
+}
+
+/* Form modal de promoción. promo=null → crear; promo=obj → editar.
+   El form re-renderiza al cambiar el tipo para mostrar solo los campos
+   relevantes (% / N+precio / N+pct / N+M). */
+function _openPromoForm(promo){
+  const isEdit = !!promo;
+  // Estado local del form (mutable)
+  const F = {
+    id:           promo ? promo.id : null,
+    nombre:       promo ? promo.nombre : '',
+    tipo:         promo ? promo.tipo : 'pct',
+    fecha_inicio: promo && promo.fecha_inicio ? promo.fecha_inicio.slice(0,10) : '',
+    fecha_fin:    promo && promo.fecha_fin    ? promo.fecha_fin.slice(0,10)    : '',
+    dias_semana:  new Set((promo && promo.dias_semana) || []),
+    hora_inicio:  promo ? promo.hora_inicio : '',
+    hora_fin:     promo ? promo.hora_fin : '',
+    categorias:   new Set((promo && promo.categorias) || []),
+    productos:    new Set(((promo && promo.productos) || []).map(Number)),
+    pct:          promo ? promo.pct : 10,
+    precio_pack:  promo ? promo.precio_pack : 0,
+    cant_n:       promo ? promo.cant_n : 3,
+    cant_m:       promo ? promo.cant_m : 2,
+    activo:       promo ? promo.activo : true,
+    _busquedaProd: ''
+  };
+
+  function camposPorTipo(){
+    if(F.tipo === 'pct') return `
+      <div>
+        <label class="label">% de descuento</label>
+        <input type="number" min="1" max="100" class="input" value="${F.pct}" onchange="__promoSet('pct', this.value)">
+      </div>`;
+    if(F.tipo === 'pack_precio') return `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="label">Cantidad N (lleva)</label>
+          <input type="number" min="2" class="input" value="${F.cant_n}" onchange="__promoSet('cant_n', this.value)"></div>
+        <div><label class="label">Precio del pack</label>
+          <input type="text" inputmode="numeric" class="input" value="${fmtMoney(F.precio_pack)}"
+            oninput="this.value=fmtMoney(parseMoney(this.value))"
+            onchange="__promoSet('precio_pack', parseMoney(this.value))"></div>
+      </div>`;
+    if(F.tipo === 'pack_pct') return `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="label">Cantidad N (lleva)</label>
+          <input type="number" min="2" class="input" value="${F.cant_n}" onchange="__promoSet('cant_n', this.value)"></div>
+        <div><label class="label">% de descuento</label>
+          <input type="number" min="1" max="100" class="input" value="${F.pct}" onchange="__promoSet('pct', this.value)"></div>
+      </div>`;
+    if(F.tipo === 'nxm') return `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="label">Lleva N</label>
+          <input type="number" min="2" class="input" value="${F.cant_n}" onchange="__promoSet('cant_n', this.value)"></div>
+        <div><label class="label">Paga M</label>
+          <input type="number" min="1" class="input" value="${F.cant_m}" onchange="__promoSet('cant_m', this.value)"></div>
+      </div>
+      <div class="text-xs text-slate-500 mt-1">Ej: <b>2x1</b> → N=2, M=1 (las más baratas van gratis).</div>`;
+    return '';
+  }
+
+  function render(){
+    const cats = (S.categorias || []).slice().sort();
+    const prods = (S.productos || []).filter(p => !_truthyJs(p.es_pack));
+    const filtroProd = String(F._busquedaProd || '').trim().toLowerCase();
+    const prodsFiltrados = filtroProd
+      ? prods.filter(p => String(p.nombre||'').toLowerCase().includes(filtroProd) || String(p.codigo_barra||'').includes(filtroProd))
+      : [];
+    const prodsSel = Array.from(F.productos);
+    const html = `
+    <div class="p-6 max-w-3xl mx-auto">
+      <h3 class="text-lg font-bold mb-4" style="color:var(--brand-dark)">${isEdit ? 'Editar' : 'Nueva'} promoción</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="label">Nombre</label>
+          <input class="input" value="${F.nombre}" oninput="__promoSet('nombre', this.value)" placeholder="Ej: 10% off vinos Lun-Mié">
+        </div>
+        <div>
+          <label class="label">Tipo de promoción</label>
+          <select class="input" onchange="__promoSet('tipo', this.value)">
+            ${Object.keys(PROMO_TIPO_LABEL).map(k => `
+              <option value="${k}" ${F.tipo===k?'selected':''}>${PROMO_TIPO_LABEL[k]}</option>`).join('')}
+          </select>
+        </div>
+        <div class="bg-slate-50 rounded p-3 border border-slate-200">
+          ${camposPorTipo()}
+        </div>
+
+        <div>
+          <label class="label">Aplica a — Categorías</label>
+          <div class="flex flex-wrap gap-2 max-h-32 overflow-auto p-2 border border-slate-200 rounded bg-white">
+            ${cats.length ? cats.map(c => `
+              <label class="text-xs flex items-center gap-1 cursor-pointer px-2 py-1 rounded ${F.categorias.has(c)?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700'}">
+                <input type="checkbox" ${F.categorias.has(c)?'checked':''} onchange="__promoToggleCat('${c.replace(/'/g,'&#39;')}')">
+                <span>${c}</span>
+              </label>`).join('') : '<span class="text-xs text-slate-400">No hay categorías cargadas</span>'}
+          </div>
+        </div>
+
+        <div>
+          <label class="label">Aplica a — Productos específicos (opcional)</label>
+          ${prodsSel.length ? `
+            <div class="flex flex-wrap gap-1 mb-2">
+              ${prodsSel.map(id => {
+                const p = prods.find(x => Number(x.id) === Number(id));
+                return `<span class="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800">
+                  ${p ? p.nombre : `#${id}`}
+                  <button type="button" class="ml-1 text-emerald-700 hover:text-red-500" onclick="__promoToggleProd(${id})">✕</button>
+                </span>`;
+              }).join('')}
+            </div>` : ''}
+          <input class="input" placeholder="Buscar producto por nombre o código de barra…"
+            value="${F._busquedaProd}" oninput="__promoSet('_busquedaProd', this.value)">
+          ${filtroProd ? `
+            <div class="mt-2 max-h-40 overflow-auto border border-slate-200 rounded bg-white">
+              ${prodsFiltrados.slice(0, 40).map(p => `
+                <label class="flex items-center gap-2 px-2 py-1 text-xs border-b border-slate-100 cursor-pointer ${F.productos.has(Number(p.id))?'bg-emerald-50':''}">
+                  <input type="checkbox" ${F.productos.has(Number(p.id))?'checked':''} onchange="__promoToggleProd(${p.id})">
+                  <span class="flex-1">${p.nombre}</span>
+                  <span class="text-slate-400">${p.codigo_barra||''}</span>
+                </label>`).join('') || '<div class="p-2 text-xs text-slate-400">Sin resultados</div>'}
+            </div>` : ''}
+        </div>
+
+        <div>
+          <label class="label">Días de la semana <span class="text-xs text-slate-400">(vacío = todos los días)</span></label>
+          <div class="flex flex-wrap gap-1">
+            ${DIAS_SEMANA.map(d => `
+              <button type="button" class="btn ${F.dias_semana.has(d.n)?'btn-success':'btn-ghost'} text-xs py-1 px-3"
+                onclick="__promoToggleDia(${d.n})">${d.abrev}</button>`).join('')}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="label">Hora inicio <span class="text-xs text-slate-400">(opcional)</span></label>
+            <input type="time" class="input" value="${F.hora_inicio}" onchange="__promoSet('hora_inicio', this.value)"></div>
+          <div><label class="label">Hora fin</label>
+            <input type="time" class="input" value="${F.hora_fin}" onchange="__promoSet('hora_fin', this.value)"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="label">Vigente desde <span class="text-xs text-slate-400">(opcional)</span></label>
+            <input type="date" class="input" value="${F.fecha_inicio}" onchange="__promoSet('fecha_inicio', this.value)"></div>
+          <div><label class="label">Vigente hasta</label>
+            <input type="date" class="input" value="${F.fecha_fin}" onchange="__promoSet('fecha_fin', this.value)"></div>
+        </div>
+
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" ${F.activo?'checked':''} onchange="__promoSet('activo', this.checked)">
+          <span>Promoción activa</span>
+        </label>
+      </div>
+
+      <div class="flex gap-2 justify-end mt-6">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-success" onclick="__guardarPromocion()">${isEdit ? 'Guardar cambios' : 'Crear promoción'}</button>
+      </div>
+    </div>`;
+    $('#modalRoot').innerHTML = `<div class="modal-bg"><div class="modal" style="max-width:48rem">${html}</div></div>`;
+  }
+
+  window.__promoSet = (k, v) => { F[k] = v; render(); };
+  window.__promoToggleDia = n => {
+    n = Number(n);
+    if(F.dias_semana.has(n)) F.dias_semana.delete(n); else F.dias_semana.add(n);
+    render();
+  };
+  window.__promoToggleCat = c => {
+    if(F.categorias.has(c)) F.categorias.delete(c); else F.categorias.add(c);
+    render();
+  };
+  window.__promoToggleProd = id => {
+    id = Number(id);
+    if(F.productos.has(id)) F.productos.delete(id); else F.productos.add(id);
+    render();
+  };
+  window.__guardarPromocion = async () => {
+    const payload = {
+      nombre: F.nombre,
+      tipo: F.tipo,
+      fecha_inicio: F.fecha_inicio || '',
+      fecha_fin: F.fecha_fin || '',
+      dias_semana: Array.from(F.dias_semana),
+      hora_inicio: F.hora_inicio || '',
+      hora_fin: F.hora_fin || '',
+      categorias: Array.from(F.categorias),
+      productos: Array.from(F.productos),
+      pct: Number(F.pct) || 0,
+      precio_pack: Number(F.precio_pack) || 0,
+      cant_n: Number(F.cant_n) || 0,
+      cant_m: Number(F.cant_m) || 0,
+      activo: !!F.activo
+    };
+    try {
+      if(isEdit){
+        payload.id = F.id;
+        await api('actualizarPromocion', payload);
+      } else {
+        await api('crearPromocion', payload);
+      }
+      toast('Promoción guardada', 'ok');
+      closeModal();
+      await cargarPromocionesAdmin();
+      await cargarPromocionesActivas();
+    } catch(e){ toast(e.message, 'err'); }
+  };
+
+  render();
+}
+
+// Helper truthy en JS (los strings "true"/"false" llegan así desde Sheets via JSON)
+function _truthyJs(v){
+  if(v === true) return true;
+  if(typeof v === 'string') return v.toLowerCase() === 'true' || v === '1';
+  return !!v;
 }
 
 /* USUARIOS ──────────────────────────────────────────────────────── */
