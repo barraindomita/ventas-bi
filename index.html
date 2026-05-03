@@ -364,6 +364,10 @@
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="M3 17l6-6 4 4 8-8M14 7h7v7"/></svg>
           Reportes
         </a>
+        <a class="nav-item" data-view="promociones" onclick="go('promociones')">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01"/></svg>
+          Promos
+        </a>
         <a class="nav-item" data-view="configurar" onclick="go('configurar')">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="M12 15a3 3 0 100-6 3 3 0 000 6zm7-3a7 7 0 01-.2 1.7l2 1.6-2 3.4-2.3-1a7 7 0 01-3 1.7L13 22h-4l-.5-2.6a7 7 0 01-3-1.7l-2.3 1-2-3.4 2-1.6A7 7 0 013 12c0-.6.1-1.2.2-1.7l-2-1.6 2-3.4 2.3 1a7 7 0 013-1.7L9 2h4l.5 2.6a7 7 0 013 1.7l2.3-1 2 3.4-2 1.6c.1.5.2 1.1.2 1.7z"/></svg>
           Config
@@ -704,6 +708,33 @@
         </div>
       </section>
 
+      <!-- ═══════ PROMOCIONES ═══════ -->
+      <section id="pagePromociones" class="page hidden">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🎉 Promociones</h3>
+            <p class="text-xs text-slate-500 mt-1 max-w-xl">Las promociones se aplican <b>automáticamente</b> al armar el carrito si están activas, dentro de su vigencia y dentro del día/horario configurado. El cajero las ve antes de cobrar.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openNuevaPromocion()">+ Nueva promoción</button>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 overflow-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-slate-500 text-xs bg-slate-50">
+                <th class="py-2 px-3">Nombre</th>
+                <th class="py-2 px-3">Tipo</th>
+                <th class="py-2 px-3">Aplica a</th>
+                <th class="py-2 px-3">Días/Horario</th>
+                <th class="py-2 px-3">Vigencia</th>
+                <th class="py-2 px-3 text-center">Activa</th>
+                <th class="py-2 px-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="promocionesTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ═══════ CONFIGURAR ═══════ -->
       <section id="pageConfigurar" class="page hidden">
         <div class="flex items-center justify-between mb-4">
@@ -715,33 +746,6 @@
             <thead><tr><th>Nombre</th><th>RUT</th><th>Email</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead>
             <tbody id="usuariosTbody"></tbody>
           </table>
-        </div>
-
-        <!-- PROMOCIONES -->
-        <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
-          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-            <div>
-              <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🎉 Promociones</h3>
-              <p class="text-xs text-slate-500 mt-1 max-w-xl">Las promociones se aplican <b>automáticamente</b> al armar el carrito si están activas, dentro de su vigencia y dentro del día/horario configurado. El cajero las ve antes de cobrar.</p>
-            </div>
-            <button class="btn btn-primary" onclick="openNuevaPromocion()">+ Nueva promoción</button>
-          </div>
-          <div class="overflow-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-slate-500 text-xs">
-                  <th class="py-1 px-2">Nombre</th>
-                  <th class="py-1 px-2">Tipo</th>
-                  <th class="py-1 px-2">Aplica a</th>
-                  <th class="py-1 px-2">Días/Horario</th>
-                  <th class="py-1 px-2">Vigencia</th>
-                  <th class="py-1 px-2 text-center">Activa</th>
-                  <th class="py-1 px-2 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="promocionesTbody"></tbody>
-            </table>
-          </div>
         </div>
 
         <!-- IMPORT MASIVO DE INVENTARIO -->
@@ -1082,11 +1086,13 @@ function enterApp(){
   if(S.usuario.rol !== 'admin'){
     $('#btnNuevoProd')?.remove();
     $('#btnNuevoPack')?.remove();
-    // Ocultar del menú los items Reportes y Configuración para perfil vendedor.
+    // Ocultar del menú los items Reportes, Promociones y Configuración para perfil vendedor.
     $$('.nav-item[data-view="reportes"]').forEach(el => el.classList.add('hidden'));
+    $$('.nav-item[data-view="promociones"]').forEach(el => el.classList.add('hidden'));
     $$('.nav-item[data-view="configurar"]').forEach(el => el.classList.add('hidden'));
   } else {
     $$('.nav-item[data-view="reportes"]').forEach(el => el.classList.remove('hidden'));
+    $$('.nav-item[data-view="promociones"]').forEach(el => el.classList.remove('hidden'));
     $$('.nav-item[data-view="configurar"]').forEach(el => el.classList.remove('hidden'));
   }
   go('dashboard');
@@ -1138,7 +1144,8 @@ function go(view){
   S.view = view;
   $$('.page').forEach(p=>p.classList.add('hidden'));
   const ids = { dashboard:'pageDashboard', inventario:'pageInventario', ventas:'pageVentas',
-                caja:'pageCaja', reportes:'pageReportes', configurar:'pageConfigurar' };
+                caja:'pageCaja', reportes:'pageReportes', promociones:'pagePromociones',
+                configurar:'pageConfigurar' };
   $('#'+ids[view]).classList.remove('hidden');
   $$('.nav-item[data-view]').forEach(a=>a.classList.toggle('active', a.dataset.view===view));
   const titles = {
@@ -1147,6 +1154,7 @@ function go(view){
     ventas:['Venta','Registro de ventas'],
     caja:['Caja','Estado de la caja activa'],
     reportes:['Reportes','Analítica de ventas y márgenes'],
+    promociones:['Promociones','Descuentos automáticos al cobrar'],
     configurar:['Configurar','Usuarios y parámetros']
   };
   const [t,s] = titles[view] || ['',''];
@@ -1157,7 +1165,8 @@ function go(view){
   if(view==='ventas'){ renderVentas(); cargarTopVendidos(); }
   if(view==='caja') renderCajaStatus();
   if(view==='reportes'){ initRangoReportes(); cargarReportes(); }
-  if(view==='configurar') { cargarUsuarios(); cargarPromocionesAdmin(); }
+  if(view==='configurar') cargarUsuarios();
+  if(view==='promociones') cargarPromocionesAdmin();
   if(view==='dashboard') cargarStatsDashboard();
 }
 
@@ -4491,15 +4500,14 @@ window.__togglePromocion = async (id) => {
   } catch(e){ toast(e.message, 'err'); }
 };
 
-window.__eliminarPromocion = (id) => {
-  confirmar('¿Eliminar esta promoción?', async () => {
-    try {
-      await api('eliminarPromocion', { id });
-      toast('Promoción eliminada','ok');
-      await cargarPromocionesAdmin();
-      await cargarPromocionesActivas();
-    } catch(e){ toast(e.message, 'err'); }
-  });
+window.__eliminarPromocion = async (id) => {
+  if(!confirm('¿Eliminar esta promoción?\n\nEsta acción no se puede deshacer.')) return;
+  try {
+    await api('eliminarPromocion', { id });
+    toast('Promoción eliminada','ok');
+    await cargarPromocionesAdmin();
+    await cargarPromocionesActivas();
+  } catch(e){ toast(e.message, 'err'); }
 };
 
 function openNuevaPromocion(){ _openPromoForm(null); }
@@ -4588,7 +4596,7 @@ function _openPromoForm(promo){
         </div>
         <div>
           <label class="label">Tipo de promoción</label>
-          <select class="input" onchange="__promoSet('tipo', this.value)">
+          <select class="input" onchange="__promoSetRender('tipo', this.value)">
             ${Object.keys(PROMO_TIPO_LABEL).map(k => `
               <option value="${k}" ${F.tipo===k?'selected':''}>${PROMO_TIPO_LABEL[k]}</option>`).join('')}
           </select>
@@ -4620,8 +4628,8 @@ function _openPromoForm(promo){
                 </span>`;
               }).join('')}
             </div>` : ''}
-          <input class="input" placeholder="Buscar producto por nombre o código de barra…"
-            value="${F._busquedaProd}" oninput="__promoSet('_busquedaProd', this.value)">
+          <input id="promoBuscarProd" class="input" placeholder="Buscar producto por nombre o código de barra…"
+            value="${F._busquedaProd}" oninput="__promoSetRender('_busquedaProd', this.value)">
           ${filtroProd ? `
             <div class="mt-2 max-h-40 overflow-auto border border-slate-200 rounded bg-white">
               ${prodsFiltrados.slice(0, 40).map(p => `
@@ -4668,9 +4676,24 @@ function _openPromoForm(promo){
       </div>
     </div>`;
     $('#modalRoot').innerHTML = `<div class="modal-bg"><div class="modal" style="max-width:48rem">${html}</div></div>`;
+    // Re-foco el input de búsqueda de productos: es el único campo del form
+    // que dispara re-render al tipear, así que sin esto se perdería el foco.
+    if(F._busquedaProd){
+      const inp = document.getElementById('promoBuscarProd');
+      if(inp){
+        inp.focus();
+        const len = inp.value.length;
+        try { inp.setSelectionRange(len, len); } catch(e){}
+      }
+    }
   }
 
-  window.__promoSet = (k, v) => { F[k] = v; render(); };
+  /* Setter SIN rerender: para inputs de texto/numéricos donde el render
+     completo mataría el foco del input mientras el usuario tipea. */
+  window.__promoSet = (k, v) => { F[k] = v; };
+  /* Setter CON rerender: solo para cambios que afectan los campos visibles
+     (cambio de tipo de promo, búsqueda de productos). */
+  window.__promoSetRender = (k, v) => { F[k] = v; render(); };
   window.__promoToggleDia = n => {
     n = Number(n);
     if(F.dias_semana.has(n)) F.dias_semana.delete(n); else F.dias_semana.add(n);
