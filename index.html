@@ -826,6 +826,25 @@ function _tuuDocKeyMigrate(k){
 }
 
 /* Helpers ───────────────────────────────────────────────────────── */
+
+/**
+ * Escapa caracteres HTML peligrosos para que un valor que viene del backend
+ * o de input de usuario pueda inyectarse en innerHTML sin riesgo de XSS.
+ * Usar SIEMPRE antes de interpolar nombres de productos, observaciones,
+ * RUT, nombres de cliente fiado, etc. Convierte: & < > " '  → entidades.
+ */
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+/** Variante para insertar dentro de un atributo HTML (acepta el fallback) */
+function escAttr(s){ return esc(s); }
+
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 const fmt = n => {
@@ -1232,10 +1251,10 @@ function renderInventario(){
     return `
     <tr class="${esBajoStock(p)?'stock-low':''} ${selected?'bg-blue-50':''}">
       ${selTd}
-      <td>${p.foto_url ? `<img class="prod-thumb" src="${p.foto_url}" onerror="this.style.display='none'">` : `<span class="prod-thumb placeholder">Sin foto</span>`}</td>
-      <td class="font-mono text-xs text-slate-500">${p.codigo_barra||'—'}</td>
-      <td class="font-semibold">${p.nombre}${pack?' <span class="chip chip-info" style="font-size:10px">PACK</span>':''}</td>
-      <td>${p.categoria||''}</td>
+      <td>${p.foto_url ? `<img class="prod-thumb" src="${esc(p.foto_url)}" onerror="this.style.display='none'">` : `<span class="prod-thumb placeholder">Sin foto</span>`}</td>
+      <td class="font-mono text-xs text-slate-500">${esc(p.codigo_barra)||'—'}</td>
+      <td class="font-semibold">${esc(p.nombre)}${pack?' <span class="chip chip-info" style="font-size:10px">PACK</span>':''}</td>
+      <td>${esc(p.categoria)||''}</td>
       <td class="text-right">${fmt(p.valor_compra)}</td>
       <td class="text-right">${fmt(p.valor_venta)}</td>
       <td class="text-right">${(Number(p.margen_pct)||0).toFixed(1)}%</td>
@@ -3153,9 +3172,9 @@ function renderCart(){
         : '';
       return `
       <div class="cart-item">
-        ${c.producto.foto_url ? `<img src="${c.producto.foto_url}" class="w-10 h-10 rounded object-cover">` : `<div class="w-10 h-10 bg-slate-200 rounded flex items-center justify-center text-xs">🍾</div>`}
+        ${c.producto.foto_url ? `<img src="${esc(c.producto.foto_url)}" class="w-10 h-10 rounded object-cover">` : `<div class="w-10 h-10 bg-slate-200 rounded flex items-center justify-center text-xs">🍾</div>`}
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-semibold truncate">${c.producto.nombre}${chipCig}</div>
+          <div class="text-sm font-semibold truncate">${esc(c.producto.nombre)}${chipCig}</div>
           <div class="text-xs text-slate-500">${fmt(c.producto.valor_venta)} c/u</div>
           <div class="flex items-center gap-1 text-xs mt-1">
             <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="openDescuentoItem(${i})" title="Aplicar descuento">
@@ -3188,7 +3207,7 @@ function renderCart(){
       promosRow.classList.remove('hidden');
       $('#cartPromosTotal').textContent = '-'+fmt(totalPromos);
       $('#cartPromosLista').innerHTML = promoEval.promosAplicadas.map(p =>
-        `• ${p.nombre} <span class="text-emerald-700">(-${fmt(p.descMonto)})</span>`
+        `• ${esc(p.nombre)} <span class="text-emerald-700">(-${fmt(p.descMonto)})</span>`
       ).join('<br>');
     } else {
       promosRow.classList.add('hidden');
@@ -3380,7 +3399,7 @@ function _tuuPanelHtml(pago1, pago2, totalFinal, exemptSet, docKey){
           return `
             <label class="flex items-center gap-2 px-2 py-1 text-xs border-b border-blue-100 last:border-b-0 cursor-pointer ${checked?'bg-orange-50':''}">
               <input type="checkbox" ${checked?'checked':''} onchange="__toggleTuuExento(${idx})">
-              <span class="flex-1 truncate"><b>${c.cantidad}×</b> ${c.producto.nombre}</span>
+              <span class="flex-1 truncate"><b>${c.cantidad}×</b> ${esc(c.producto.nombre)}</span>
               <span class="text-slate-600">${fmt(neto)}</span>
             </label>`;
         }).join('')}
@@ -3644,7 +3663,7 @@ function openPago(){
           <ul class="text-xs text-emerald-800 space-y-0.5">
             ${pe.promosAplicadas.map(p => `
               <li class="flex justify-between">
-                <span>• ${p.nombre}</span>
+                <span>• ${esc(p.nombre)}</span>
                 <span class="font-semibold">-${fmt(p.descMonto)}</span>
               </li>`).join('')}
           </ul>
@@ -4469,14 +4488,14 @@ async function cargarPromocionesAdmin(){
     }
     tb.innerHTML = promos.map(p => `
       <tr class="border-t border-slate-100">
-        <td class="py-2 px-2 font-semibold">${p.nombre}</td>
+        <td class="py-2 px-2 font-semibold">${esc(p.nombre)}</td>
         <td class="py-2 px-2 text-xs">
-          <div>${PROMO_TIPO_LABEL[p.tipo] || p.tipo}</div>
-          <div class="text-slate-500">${_promoDescripcionCorta(p)}</div>
+          <div>${esc(PROMO_TIPO_LABEL[p.tipo] || p.tipo)}</div>
+          <div class="text-slate-500">${esc(_promoDescripcionCorta(p))}</div>
         </td>
-        <td class="py-2 px-2 text-xs text-slate-700 max-w-xs truncate" title="${_promoAlcanceTexto(p)}">${_promoAlcanceTexto(p)}</td>
-        <td class="py-2 px-2 text-xs">${_promoDiasTexto(p)}</td>
-        <td class="py-2 px-2 text-xs">${_promoVigenciaTexto(p)}</td>
+        <td class="py-2 px-2 text-xs text-slate-700 max-w-xs truncate" title="${esc(_promoAlcanceTexto(p))}">${esc(_promoAlcanceTexto(p))}</td>
+        <td class="py-2 px-2 text-xs">${esc(_promoDiasTexto(p))}</td>
+        <td class="py-2 px-2 text-xs">${esc(_promoVigenciaTexto(p))}</td>
         <td class="py-2 px-2 text-center">
           <label class="inline-flex items-center cursor-pointer">
             <input type="checkbox" ${p.activo?'checked':''} onchange="__togglePromocion(${p.id})">
@@ -4806,7 +4825,7 @@ function openNuevoUsuario(){
       <div>
         <label class="label">Clave</label>
         <div class="relative">
-          <input id="nuUsrPw" name="password" type="password" class="input pr-10" required minlength="4">
+          <input id="nuUsrPw" name="password" type="password" class="input pr-10" required minlength="8">
           <button type="button" class="pw-toggle" onclick="_togglePw('nuUsrPw', this)" title="Mostrar">👁</button>
         </div>
       </div>
@@ -4911,14 +4930,14 @@ function openCambiarMiClave(){
       <div>
         <label class="label">Clave nueva</label>
         <div class="relative">
-          <input id="pwNueva" name="password_nueva" type="password" class="input pr-10" required minlength="4">
+          <input id="pwNueva" name="password_nueva" type="password" class="input pr-10" required minlength="8">
           <button type="button" class="pw-toggle" onclick="_togglePw('pwNueva', this)" title="Mostrar">👁</button>
         </div>
       </div>
       <div>
         <label class="label">Repetir clave nueva</label>
         <div class="relative">
-          <input id="pwNueva2" name="password_nueva2" type="password" class="input pr-10" required minlength="4">
+          <input id="pwNueva2" name="password_nueva2" type="password" class="input pr-10" required minlength="8">
           <button type="button" class="pw-toggle" onclick="_togglePw('pwNueva2', this)" title="Mostrar">👁</button>
         </div>
       </div>
