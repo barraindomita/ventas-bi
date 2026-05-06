@@ -872,6 +872,40 @@ if(!document.getElementById('_lockBtnStyle')){
 }
 
 /**
+ * Convierte URLs de Google Drive al formato "thumbnail" que SÍ funciona
+ * como <img src="...">. Las URLs típicas que la gente comparte desde Drive
+ * (drive.google.com/file/d/ID/view?usp=sharing) son páginas HTML con un
+ * visor, no archivos de imagen — el navegador no puede mostrarlas en <img>.
+ *
+ * Reconoce y normaliza:
+ *   https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+ *   https://drive.google.com/file/d/FILE_ID/view?usp=drive_link
+ *   https://drive.google.com/open?id=FILE_ID
+ *   https://drive.google.com/uc?export=view&id=FILE_ID
+ *   https://drive.google.com/uc?id=FILE_ID
+ *   https://docs.google.com/.../d/FILE_ID/...
+ *
+ * URLs que no son de Drive (Imgur, CDNs, IMG_URLs directas) pasan sin tocar.
+ * El archivo en Drive debe estar compartido como "Cualquiera con el enlace".
+ */
+function _normalizarFotoUrl(url, sizePx){
+  if(!url) return '';
+  const s = String(url).trim();
+  if(!/(?:drive|docs)\.google\.com/.test(s)) return s;
+  // Extraer FILE_ID en cualquiera de los formatos
+  let id = '';
+  let m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
+  if(m) id = m[1];
+  if(!id){
+    m = s.match(/[?&]id=([a-zA-Z0-9_-]{20,})/);
+    if(m) id = m[1];
+  }
+  if(!id) return s;  // No pudimos extraer; devolvemos tal cual
+  const sz = Number(sizePx) > 0 ? Number(sizePx) : 800;
+  return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + sz;
+}
+
+/**
  * Escapa caracteres HTML peligrosos para que un valor que viene del backend
  * o de input de usuario pueda inyectarse en innerHTML sin riesgo de XSS.
  * Usar SIEMPRE antes de interpolar nombres de productos, observaciones,
@@ -1298,7 +1332,7 @@ function renderInventario(){
     return `
     <tr class="${esBajoStock(p)?'stock-low':''} ${selected?'bg-blue-50':''}">
       ${selTd}
-      <td>${p.foto_url ? `<img class="prod-thumb" src="${esc(p.foto_url)}" onerror="this.style.display='none'">` : `<span class="prod-thumb placeholder">Sin foto</span>`}</td>
+      <td>${p.foto_url ? `<img class="prod-thumb" src="${esc(_normalizarFotoUrl(p.foto_url, 200))}" onerror="this.style.display='none'">` : `<span class="prod-thumb placeholder">Sin foto</span>`}</td>
       <td class="font-mono text-xs text-slate-500">${esc(p.codigo_barra)||'—'}</td>
       <td class="font-semibold">${esc(p.nombre)}${pack?' <span class="chip chip-info" style="font-size:10px">PACK</span>':''}</td>
       <td>${esc(p.categoria)||''}</td>
@@ -1769,7 +1803,10 @@ function openNuevoProducto(){
         <div class="md:col-span-2"><label class="label">Nombre *</label><input name="nombre" class="input" required></div>
         <div><label class="label">Categoría</label><input name="categoria" class="input" list="catList">
           <datalist id="catList">${S.categorias.map(c=>`<option value="${c}">`).join('')}</datalist></div>
-        <div><label class="label">Foto URL (Drive thumbnail)</label><input name="foto_url" class="input" placeholder="https://drive.google.com/thumbnail?id=…"></div>
+        <div><label class="label">Foto URL (opcional)</label>
+          <input name="foto_url" class="input" placeholder="Pegá el link compartido de Drive o cualquier URL de imagen">
+          <div class="text-xs text-slate-500 mt-1">💡 Acepta links de Google Drive directos (auto-convertidos al thumbnail). El archivo debe estar compartido como <b>"Cualquiera con el enlace"</b>.</div>
+        </div>
         <div><label class="label">Valor compra ($)</label><input name="valor_compra" type="number" min="0" class="input" oninput="_calcMargen()"></div>
         <div><label class="label">Valor venta ($)</label><input name="valor_venta" type="number" min="0" class="input" oninput="_calcMargen('venta')"></div>
         <div><label class="label">Margen % (calculado)</label><input name="margen" type="number" step="0.1" class="input" oninput="_calcMargen('margen')"></div>
@@ -1929,7 +1966,9 @@ function _packFormHtml({ nuevo, p }){
           <input name="categoria" class="input" value="${val('categoria') || 'Packs'}" list="catListPack">
           <datalist id="catListPack">${S.categorias.map(c=>`<option value="${c}">`).join('')}</datalist></div>
         <div class="md:col-span-2"><label class="label">Foto URL (opcional)</label>
-          <input name="foto_url" class="input" value="${val('foto_url')}"></div>
+          <input name="foto_url" class="input" value="${val('foto_url')}" placeholder="Pegá el link compartido de Drive o cualquier URL de imagen">
+          <div class="text-xs text-slate-500 mt-1">💡 Acepta links de Google Drive directos. El archivo debe estar compartido como <b>"Cualquiera con el enlace"</b>.</div>
+        </div>
 
         <div class="md:col-span-2 border-t border-slate-200 pt-3">
           <div class="font-semibold mb-2" style="color:var(--brand-dark)">Componentes</div>
@@ -2107,7 +2146,10 @@ function openEditarProducto(id){
         <div class="md:col-span-2"><label class="label">Nombre *</label><input name="nombre" class="input" required value="${p.nombre}"></div>
         <div><label class="label">Categoría</label><input name="categoria" class="input" value="${p.categoria||''}" list="catList2">
           <datalist id="catList2">${S.categorias.map(c=>`<option value="${c}">`).join('')}</datalist></div>
-        <div><label class="label">Foto URL</label><input name="foto_url" class="input" value="${p.foto_url||''}"></div>
+        <div><label class="label">Foto URL</label>
+          <input name="foto_url" class="input" value="${p.foto_url||''}" placeholder="Pegá el link compartido de Drive o cualquier URL de imagen">
+          <div class="text-xs text-slate-500 mt-1">💡 Acepta links de Google Drive directos. El archivo debe estar compartido como <b>"Cualquiera con el enlace"</b>.</div>
+        </div>
         <div><label class="label">Valor compra ($)</label><input name="valor_compra" type="number" class="input" value="${p.valor_compra}"></div>
         <div><label class="label">Valor venta ($)</label><input name="valor_venta" type="number" class="input" value="${p.valor_venta}"></div>
         <div class="md:col-span-2 flex flex-wrap gap-2 justify-between items-center mt-2">
@@ -2806,7 +2848,7 @@ function renderCatalogo(){
       ${topBadge}
       <div class="w-full bg-slate-50 rounded-lg mb-2 overflow-hidden flex items-center justify-center" style="aspect-ratio:1/1;">
         ${p.foto_url
-          ? `<img src="${p.foto_url}" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='';this.style.display='none';this.parentNode.innerHTML='<div class=&quot;text-5xl text-slate-300&quot;>${esPack(p)?'📦':'🍾'}</div>';">`
+          ? `<img src="${esc(_normalizarFotoUrl(p.foto_url, 600))}" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='';this.style.display='none';this.parentNode.innerHTML='<div class=&quot;text-5xl text-slate-300&quot;>${esPack(p)?'📦':'🍾'}</div>';">`
           : `<div class="text-5xl text-slate-300">${esPack(p)?'📦':'🍾'}</div>`}
       </div>
       <div class="text-sm font-semibold line-clamp-2" style="color:var(--brand-dark)">${p.nombre}${esPack(p)?' <span class="chip chip-info" style="font-size:9px">PACK</span>':''}</div>
@@ -3280,7 +3322,7 @@ function renderCart(){
         : '';
       return `
       <div class="cart-item">
-        ${c.producto.foto_url ? `<img src="${esc(c.producto.foto_url)}" class="w-10 h-10 rounded object-cover">` : `<div class="w-10 h-10 bg-slate-200 rounded flex items-center justify-center text-xs">🍾</div>`}
+        ${c.producto.foto_url ? `<img src="${esc(_normalizarFotoUrl(c.producto.foto_url, 200))}" class="w-10 h-10 rounded object-cover">` : `<div class="w-10 h-10 bg-slate-200 rounded flex items-center justify-center text-xs">🍾</div>`}
         <div class="flex-1 min-w-0">
           <div class="text-sm font-semibold truncate">${esc(c.producto.nombre)}${chipCig}</div>
           <div class="text-xs text-slate-500">${fmt(c.producto.valor_venta)} c/u</div>
