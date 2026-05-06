@@ -509,6 +509,8 @@
           <span class="text-sm whitespace-nowrap"><b id="invBulkCount">0</b> seleccionado(s)</span>
           <button class="btn btn-ghost text-xs" onclick="__limpiarInvSel()">Limpiar</button>
           <button class="btn text-xs" style="background:var(--brand);color:#fff" onclick="__openCambiarCategoriaBulk()">🏷️ Cambiar categoría</button>
+          <button class="btn text-xs" style="background:#94a3b8;color:#fff" onclick="__cambiarActivoBulk(false, this)" title="Marcar como inactivos">⏸️ Inactivar</button>
+          <button class="btn text-xs" style="background:#10b981;color:#fff" onclick="__cambiarActivoBulk(true, this)" title="Marcar como activos">✅ Reactivar</button>
           <button class="btn text-xs" style="background:var(--err);color:#fff" onclick="__openEliminarBulk()">🗑️ Eliminar</button>
         </div>
       </section>
@@ -872,6 +874,26 @@ if(!document.getElementById('_lockBtnStyle')){
 }
 
 /**
+ * Helper para form submits: extrae automáticamente el botón submitter (el
+ * que disparó el submit, ya sea por click o por Enter), lo bloquea durante
+ * la operación con _lockBtn, y previene el comportamiento por defecto.
+ *
+ *   $('#formMio').addEventListener('submit', e => _lockSubmit(e, async () => {
+ *     await api('miAccion', data);
+ *     ...
+ *   }, 'Guardando…'));
+ */
+async function _lockSubmit(e, work, label){
+  if(e && e.preventDefault) e.preventDefault();
+  const form = e && e.target;
+  const btn = (e && e.submitter)
+    || (form && form.querySelector && form.querySelector('button[type="submit"]'))
+    || (form && form.querySelector && form.querySelector('button:not([type="button"])'));
+  if(btn) return _lockBtn(btn, work, label);
+  return work();
+}
+
+/**
  * Convierte URLs de Google Drive al formato "thumbnail" que SÍ funciona
  * como <img src="...">. Las URLs típicas que la gente comparte desde Drive
  * (drive.google.com/file/d/ID/view?usp=sharing) son páginas HTML con un
@@ -1116,9 +1138,8 @@ function pickLoginUser(u){
   setTimeout(()=>{ const pw = $('#loginPassword'); if(pw) pw.focus(); }, 80);
 }
 
-$('#loginPwForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  if(!_loginUserPicked){ toast('Selecciona un usuario', 'err'); return; }
+$('#loginPwForm').addEventListener('submit', e => _lockSubmit(e, async () => {
+  if(!_loginUserPicked){ toast('Selecciona un usuario', 'err'); throw new Error('user'); }
   try{
     const d = await api('login', {
       usuario_id: _loginUserPicked.id,
@@ -1128,8 +1149,8 @@ $('#loginPwForm').addEventListener('submit', async e => {
     localStorage.setItem('bi_token', d.token);
     localStorage.setItem('bi_user', JSON.stringify(d.usuario));
     enterApp();
-  }catch(err){ toast(err.message, 'err'); }
-});
+  }catch(err){ toast(err.message, 'err'); throw err; }
+}, 'Verificando…'));
 
 /* RECUPERACIÓN DE CLAVE ─────────────────────────────────────────── */
 function openRecuperarClave(){
@@ -1152,17 +1173,16 @@ function openRecuperarClave(){
       </div>
     </form>
   `);
-  document.getElementById('formRecuperar').addEventListener('submit', async e=>{
-    e.preventDefault();
+  document.getElementById('formRecuperar').addEventListener('submit', e => _lockSubmit(e, async () => {
     const rut = document.getElementById('recRut').value.trim();
     const email = document.getElementById('recEmail').value.trim();
-    if(!_validarRut(rut)){ toast('RUT inválido', 'err'); return; }
+    if(!_validarRut(rut)){ toast('RUT inválido', 'err'); throw new Error('rut'); }
     try{
       await api('recuperarClave', { rut: _formatRut(rut), email });
       closeModal();
       toast('Clave temporal enviada a tu correo', 'ok');
-    }catch(err){ toast(err.message, 'err'); }
-  });
+    }catch(err){ toast(err.message, 'err'); throw err; }
+  }, 'Enviando…'));
 }
 
 async function doLogout(){
@@ -1438,24 +1458,25 @@ function __openEliminarBulk(){
       </label>
       <div class="flex justify-end gap-2">
         <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-        <button class="btn" style="background:var(--err);color:#fff" onclick="__ejecutarEliminarBulk()">✓ Eliminar ${productos.length}</button>
+        <button class="btn" style="background:var(--err);color:#fff" onclick="__ejecutarEliminarBulk(this)">✓ Eliminar ${productos.length}</button>
       </div>
     </div>
   `);
 }
 
-async function __ejecutarEliminarBulk(){
+async function __ejecutarEliminarBulk(btn){
   const ids = Array.from(S.invSel);
   if(!ids.length) return;
   const obs = $('#inpMotivoBulkDel')?.value || '';
-  closeModal();
-  toast('Eliminando…','ok');
   try{
-    const r = await api('eliminarProductosBulk', { ids, observaciones: obs });
-    toast(`${r.eliminados} producto(s) eliminado(s)${r.no_encontrados?' · '+r.no_encontrados+' no encontrados':''}`,'ok');
-    S.invSel.clear();
-    await cargarInventario();
-  }catch(err){ toast(err.message,'err'); }
+    await _lockBtn(btn, async () => {
+      const r = await api('eliminarProductosBulk', { ids, observaciones: obs });
+      toast(`${r.eliminados} producto(s) eliminado(s)${r.no_encontrados?' · '+r.no_encontrados+' no encontrados':''}`,'ok');
+      S.invSel.clear();
+      closeModal();
+      await cargarInventario();
+    }, 'Eliminando…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message,'err'); }
 }
 
 function esPack(p){
@@ -1493,28 +1514,52 @@ function __openCambiarCategoriaBulk(){
       </div>
       <div class="flex justify-end gap-2">
         <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="__ejecutarCambiarCategoriaBulk()">✓ Cambiar categoría</button>
+        <button class="btn btn-primary" onclick="__ejecutarCambiarCategoriaBulk(this)">✓ Cambiar categoría</button>
       </div>
     </div>
   `);
 }
 
-async function __ejecutarCambiarCategoriaBulk(){
+/* Inactivar / Reactivar bulk: muestra confirm con conteo y dispara el
+   endpoint cambiarActivoProductosBulk. Usa _lockBtn para evitar doble click. */
+async function __cambiarActivoBulk(activar, btn){
+  const ids = Array.from(S.invSel);
+  if(!ids.length) return;
+  const verbo = activar ? 'reactivar' : 'inactivar';
+  if(!confirm(`¿${verbo === 'reactivar' ? 'Reactivar' : 'Inactivar'} ${ids.length} producto(s)?` +
+              (activar
+                ? '\n\nVolverán a aparecer en venta, inventario y alertas.'
+                : '\n\nDejarán de aparecer en venta, inventario y alertas de stock. Se conserva el historial. Podés reactivarlos cuando quieras.'))) return;
+  try{
+    await _lockBtn(btn, async () => {
+      const r = await api('cambiarActivoProductosBulk', { ids, activo: activar });
+      let msg = `${r.actualizados} producto(s) ${activar ? 'reactivado(s)' : 'inactivado(s)'}`;
+      if(r.sin_cambios) msg += ` · ${r.sin_cambios} sin cambios`;
+      if(r.no_encontrados) msg += ` · ${r.no_encontrados} no encontrados`;
+      toast(msg, 'ok');
+      S.invSel.clear();
+      await cargarInventario();
+    }, activar ? 'Reactivando…' : 'Inactivando…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message, 'err'); }
+}
+
+async function __ejecutarCambiarCategoriaBulk(btn){
   const ids = Array.from(S.invSel);
   if(!ids.length) return;
   const nueva = String($('#inpBulkCat')?.value || '').trim();
   if(!nueva){ return toast('Debes ingresar una categoría','err'); }
-  closeModal();
-  toast('Actualizando…','ok');
   try{
-    const r = await api('cambiarCategoriaProductosBulk', { ids, categoria: nueva });
-    let msg = `${r.actualizados} producto(s) actualizado(s)`;
-    if(r.sin_cambios) msg += ` · ${r.sin_cambios} sin cambios`;
-    if(r.no_encontrados) msg += ` · ${r.no_encontrados} no encontrados`;
-    toast(msg,'ok');
-    S.invSel.clear();
-    await cargarInventario();
-  }catch(err){ toast(err.message,'err'); }
+    await _lockBtn(btn, async () => {
+      const r = await api('cambiarCategoriaProductosBulk', { ids, categoria: nueva });
+      let msg = `${r.actualizados} producto(s) actualizado(s)`;
+      if(r.sin_cambios) msg += ` · ${r.sin_cambios} sin cambios`;
+      if(r.no_encontrados) msg += ` · ${r.no_encontrados} no encontrados`;
+      toast(msg,'ok');
+      S.invSel.clear();
+      closeModal();
+      await cargarInventario();
+    }, 'Actualizando…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message,'err'); }
 }
 
 /* Ordena el array de productos del inventario según la opción seleccionada.
@@ -1817,29 +1862,26 @@ function openNuevoProducto(){
         </div>
       </form>
     </div>`);
-  $('#formProd').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formProd').addEventListener('submit', e => _lockSubmit(e, async () => {
     const f = new FormData(e.target);
     const data = Object.fromEntries(f.entries());
     const cod = String(data.codigo_barra||'').trim();
-    if(!cod){
-      return toast('Código de barra / SKU es obligatorio','err');
-    }
-    // No permitir el prefijo "P-" reservado para packs
+    if(!cod){ toast('Código de barra / SKU es obligatorio','err'); throw new Error('cod'); }
     if(cod.toUpperCase().startsWith('P-')){
-      return toast('El prefijo "P-" está reservado para packs. Usa otro código para este producto.','err');
+      toast('El prefijo "P-" está reservado para packs. Usa otro código para este producto.','err');
+      throw new Error('p-');
     }
-    // Validar unicidad contra inventario
     const duplicado = S.productos.find(p => String(p.codigo_barra||'').trim() === cod);
     if(duplicado){
-      return toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err');
+      toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err');
+      throw new Error('dup');
     }
     data.codigo_barra = cod;
     try{
       await api('crearProducto', data);
       toast('Producto creado','ok'); closeModal(); cargarInventario();
-    }catch(err){ toast(err.message,'err'); }
-  });
+    }catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Guardando producto…'));
 }
 
 /* Genera un código de barra numérico único: prefijo 27022026 + 4+ dígitos aleatorios.
@@ -2024,28 +2066,26 @@ function _wirePackForm({ nuevo, p }){
       }
     });
   }
-  $('#formPack').addEventListener('submit', async e=>{
-    e.preventDefault();
-    if(!__packDraft.length) return toast('Agrega al menos un componente','err');
+  $('#formPack').addEventListener('submit', e => _lockSubmit(e, async () => {
+    if(!__packDraft.length){ toast('Agrega al menos un componente','err'); throw new Error('comp'); }
     const fd = new FormData(e.target);
     const data = Object.fromEntries(fd.entries());
     data.componentes = __packDraft;
-    // Validar código de pack
     let cod = String(data.codigo_barra || '').trim();
-    if(!cod) return toast('El código del pack es obligatorio','err');
+    if(!cod){ toast('El código del pack es obligatorio','err'); throw new Error('cod'); }
     if(!cod.toUpperCase().startsWith('P-')){
       cod = 'P-' + cod.replace(/^-+/,'');
     } else {
       cod = 'P-' + cod.slice(2);
     }
-    if(cod.length <= 2) return toast('Ingresa un código después del prefijo P-','err');
-    // Verificar unicidad (excluir el pack actual si estamos editando)
+    if(cod.length <= 2){ toast('Ingresa un código después del prefijo P-','err'); throw new Error('cod-len'); }
     const duplicado = S.productos.find(x =>
       String(x.codigo_barra || '').trim() === cod &&
       (!p || Number(x.id) !== Number(p.id))
     );
     if(duplicado){
-      return toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err');
+      toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err');
+      throw new Error('dup');
     }
     data.codigo_barra = cod;
     try{
@@ -2059,8 +2099,8 @@ function _wirePackForm({ nuevo, p }){
       }
       closeModal();
       cargarInventario();
-    }catch(err){ toast(err.message,'err'); }
-  });
+    }catch(err){ toast(err.message,'err'); throw err; }
+  }, nuevo ? 'Creando pack…' : 'Guardando pack…'));
 }
 
 function _renderPackPicker(){
@@ -2152,8 +2192,17 @@ function openEditarProducto(id){
         </div>
         <div><label class="label">Valor compra ($)</label><input name="valor_compra" type="number" class="input" value="${p.valor_compra}"></div>
         <div><label class="label">Valor venta ($)</label><input name="valor_venta" type="number" class="input" value="${p.valor_venta}"></div>
+        <div class="md:col-span-2 mt-1 p-3 rounded-lg border ${_truthyJs(p.activo)?'border-emerald-200 bg-emerald-50':'border-slate-300 bg-slate-100'}">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="activo" value="true" ${_truthyJs(p.activo)?'checked':''}>
+            <div>
+              <div class="font-semibold text-sm ${_truthyJs(p.activo)?'text-emerald-800':'text-slate-700'}">Producto activo</div>
+              <div class="text-xs text-slate-500">Si lo desactivás, no aparece en venta, inventario, ni en alertas de bajo/sin stock. Su historial se conserva. Podés reactivarlo cuando quieras.</div>
+            </div>
+          </label>
+        </div>
         <div class="md:col-span-2 flex flex-wrap gap-2 justify-between items-center mt-2">
-          <button type="button" class="btn btn-danger" onclick="eliminarProductoConfirm(${id})" title="Eliminar este producto">🗑️ Eliminar producto</button>
+          <button type="button" class="btn btn-danger" onclick="eliminarProductoConfirm(${id}, this)" title="Eliminar este producto">🗑️ Eliminar producto</button>
           <div class="flex gap-2">
             <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
             <button class="btn btn-primary">Guardar</button>
@@ -2161,39 +2210,41 @@ function openEditarProducto(id){
         </div>
       </form>
     </div>`);
-  $('#formProdEdit').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formProdEdit').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.id = id;
+    // Checkbox: si no está marcado, FormData omite el campo. Convertimos
+    // explícitamente para que el backend reciba siempre true/false.
+    data.activo = e.target.querySelector('input[name="activo"]')?.checked === true;
     const cod = String(data.codigo_barra||'').trim();
     if(cod){
-      // Reservar "P-" para packs
       if(cod.toUpperCase().startsWith('P-')){
-        return toast('El prefijo "P-" está reservado para packs.','err');
+        toast('El prefijo "P-" está reservado para packs.','err'); throw new Error('p-');
       }
-      // Unicidad (excluir el producto actual)
       const duplicado = S.productos.find(x =>
         String(x.codigo_barra||'').trim() === cod && Number(x.id) !== Number(id)
       );
       if(duplicado){
-        return toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err');
+        toast(`El código "${cod}" ya está en uso por: ${duplicado.nombre}`,'err'); throw new Error('dup');
       }
       data.codigo_barra = cod;
     }
     try{ await api('actualizarProducto', data); toast('Actualizado','ok'); closeModal(); cargarInventario(); }
-    catch(err){ toast(err.message,'err'); }
-  });
+    catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Guardando…'));
 }
 
-async function eliminarProductoConfirm(id){
+async function eliminarProductoConfirm(id, btn){
   const p = S.productos.find(x=>Number(x.id)===id); if(!p) return;
   if(!confirm(`¿Eliminar el producto "${p.nombre}"?\n\nSe marcará como inactivo y dejará de aparecer en el inventario y el catálogo. El historial de movimientos se conserva.`)) return;
   try{
-    await api('eliminarProducto', { id });
-    toast('Producto eliminado','ok');
-    closeModal();
-    cargarInventario();
-  }catch(err){ toast(err.message,'err'); }
+    await _lockBtn(btn, async () => {
+      await api('eliminarProducto', { id });
+      toast('Producto eliminado','ok');
+      closeModal();
+      cargarInventario();
+    }, 'Eliminando…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message,'err'); }
 }
 
 function openActualizarStock(id){
@@ -2213,25 +2264,23 @@ function openActualizarStock(id){
         </div>
       </form>
     </div>`);
-  $('#formStk').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formStk').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.producto_id = id;
     try{ await api('actualizarStock', data); toast('Stock actualizado','ok'); closeModal(); cargarInventario(); }
-    catch(err){ toast(err.message,'err'); }
-  });
+    catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Actualizando stock…'));
 }
 
 function openMermarProducto(id){
   const p = S.productos.find(x=>Number(x.id)===id); if(!p) return;
   openModal(_mermaForm(p));
-  $('#formMerma').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formMerma').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.producto_id = id;
     try{ await api('registrarMerma', data); toast('Merma registrada','ok'); closeModal(); cargarInventario(); }
-    catch(err){ toast(err.message,'err'); }
-  });
+    catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Registrando merma…'));
 }
 function _mermaForm(p){
   return `
@@ -2465,64 +2514,168 @@ async function openSinStock(){
 }
 
 /* Modal combinado: muestra ambos estados (bajo stock y sin stock) en
-   pestañas. Es el endpoint del card "Bajo / Sin Stock" del dashboard. */
+   pestañas. Incluye filtros (búsqueda, categoría, cantidad máxima) y
+   descarga Excel. Es el endpoint del card "Bajo / Sin Stock" del dashboard. */
 async function openBajoSinStock(){
-  openModal(`<div class="p-6 max-w-3xl mx-auto">
-    <h3 class="text-lg font-bold mb-2" style="color:var(--brand-dark)">📊 Stock crítico</h3>
+  openModal(`<div class="p-6 max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+      <h3 class="text-lg font-bold" style="color:var(--brand-dark)">📊 Stock crítico</h3>
+      <button class="btn btn-success text-xs" onclick="__bsDescargarExcel()">📥 Descargar Excel</button>
+    </div>
     <div class="flex gap-2 mb-3 border-b border-slate-200">
       <button id="bsTabBajo" class="px-4 py-2 text-sm font-semibold border-b-2 border-amber-500 text-amber-700"
-        onclick="__bsTab('bajo')">⚠️ Bajo Stock</button>
+        onclick="__bsTab('bajo')">⚠️ Bajo Stock <span id="bsCntBajo" class="text-xs">(0)</span></button>
       <button id="bsTabSin" class="px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-rose-700"
-        onclick="__bsTab('sin')">🚫 Sin Stock</button>
+        onclick="__bsTab('sin')">🚫 Sin Stock <span id="bsCntSin" class="text-xs">(0)</span></button>
     </div>
-    <div id="bsContenido" class="max-h-[60vh] overflow-auto">Cargando…</div>
-    <div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Cerrar</button></div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+      <input id="bsFiltroBusq" class="input text-sm" placeholder="🔍 Buscar nombre o código…" oninput="__bsAplicarFiltros()">
+      <select id="bsFiltroCat" class="input text-sm" onchange="__bsAplicarFiltros()">
+        <option value="">Todas las categorías</option>
+      </select>
+      <input id="bsFiltroQty" type="number" min="0" class="input text-sm" placeholder="Stock máx (ej: 5)" oninput="__bsAplicarFiltros()">
+    </div>
+    <div id="bsContenido" class="max-h-[55vh] overflow-auto">Cargando…</div>
+    <div class="flex justify-between items-center mt-3 text-xs text-slate-500">
+      <span id="bsResumen">—</span>
+      <button class="btn btn-ghost" onclick="closeModal()">Cerrar</button>
+    </div>
   </div>`);
 
   // Cargar ambas listas en paralelo
   const [resBajo, resSin] = await Promise.allSettled([
     api('productosBajoStock'),
-    api('productosSinStock').catch(() => ({ productos: (S.productos||[]).filter(p => Number(p.stock_actual) <= 0 && !esPack(p)) }))
+    api('productosSinStock').catch(() => ({ productos: (S.productos||[]).filter(p =>
+      Number(p.stock_actual) <= 0 && !esPack(p) && _truthyJs(p.activo)
+    ) }))
   ]);
   const bajos = resBajo.status === 'fulfilled' ? (resBajo.value.productos||[]) : [];
   const sins  = resSin.status  === 'fulfilled' ? (resSin.value.productos||[])  : [];
 
+  // Conteos en pestañas
+  $('#bsCntBajo').textContent = '(' + bajos.length + ')';
+  $('#bsCntSin').textContent  = '(' + sins.length + ')';
+
+  // Poblar select de categorías con la unión de ambas listas
+  const setCats = new Set();
+  bajos.forEach(p => p.categoria && setCats.add(String(p.categoria).trim()));
+  sins.forEach(p => p.categoria && setCats.add(String(p.categoria).trim()));
+  const cats = Array.from(setCats).sort();
+  $('#bsFiltroCat').innerHTML =
+    '<option value="">Todas las categorías</option>' +
+    cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+  // Estado del modal: pestaña activa + cache de las listas para Excel
+  let _bsTabActiva = sins.length > bajos.length ? 'sin' : 'bajo';
+  let _bsFiltrados = [];
+
+  function _aplicarFiltros(lista){
+    const q = ($('#bsFiltroBusq')?.value || '').toLowerCase().trim();
+    const cat = $('#bsFiltroCat')?.value || '';
+    const qtyMax = $('#bsFiltroQty')?.value;
+    const qtyN = qtyMax === '' || qtyMax == null ? null : Number(qtyMax);
+    return lista.filter(p => {
+      if(q){
+        const nom = String(p.nombre||'').toLowerCase();
+        const cod = String(p.codigo_barra||'').toLowerCase();
+        if(!nom.includes(q) && !cod.includes(q)) return false;
+      }
+      if(cat && String(p.categoria||'').trim() !== cat) return false;
+      if(qtyN != null && !isNaN(qtyN)){
+        if((Number(p.stock_actual)||0) > qtyN) return false;
+      }
+      return true;
+    });
+  }
+
   function renderBajo(){
-    if(!bajos.length) return '<div class="text-slate-400 py-6 text-center">✔️ Todo en orden</div>';
-    return `<table><thead><tr><th>Producto</th><th class="text-right">Stock actual</th><th class="text-right">Stock inicial</th><th class="text-right">%</th></tr></thead>
-      <tbody>${bajos.map(p=>{
+    const f = _aplicarFiltros(bajos);
+    _bsFiltrados = f;
+    if(!f.length) return '<div class="text-slate-400 py-6 text-center">✔️ Sin resultados con los filtros actuales</div>';
+    return `<table>
+      <thead><tr><th>Código</th><th>Producto</th><th>Categoría</th><th class="text-right">Stock</th><th class="text-right">Inicial</th><th class="text-right">%</th><th class="text-right">P. venta</th></tr></thead>
+      <tbody>${f.map(p=>{
         const pct = p.stock_inicial>0 ? Math.round((p.stock_actual/p.stock_inicial)*100) : 0;
-        return `<tr class="stock-low"><td>${esc(p.nombre)}</td><td class="text-right">${p.stock_actual}</td><td class="text-right">${p.stock_inicial}</td><td class="text-right">${pct}%</td></tr>`;
+        return `<tr class="stock-low">
+          <td class="font-mono text-xs text-slate-500">${esc(p.codigo_barra)||'—'}</td>
+          <td class="font-semibold">${esc(p.nombre)}</td>
+          <td class="text-xs">${esc(p.categoria)||''}</td>
+          <td class="text-right">${p.stock_actual}</td>
+          <td class="text-right text-xs text-slate-500">${p.stock_inicial||0}</td>
+          <td class="text-right text-xs">${pct}%</td>
+          <td class="text-right">${fmt(p.valor_venta)}</td>
+        </tr>`;
       }).join('')}</tbody></table>`;
   }
   function renderSin(){
-    if(!sins.length) return '<div class="text-slate-400 py-6 text-center">✔️ Todos los productos tienen stock.</div>';
+    const f = _aplicarFiltros(sins);
+    _bsFiltrados = f;
+    if(!f.length) return '<div class="text-slate-400 py-6 text-center">✔️ Sin resultados con los filtros actuales</div>';
     return `<table>
       <thead><tr><th>Código</th><th>Producto</th><th>Categoría</th><th class="text-right">Stock</th><th class="text-right">P. venta</th></tr></thead>
-      <tbody>${sins.map(p=>`
+      <tbody>${f.map(p=>`
         <tr class="stock-low">
           <td class="font-mono text-xs text-slate-500">${esc(p.codigo_barra)||'—'}</td>
           <td class="font-semibold">${esc(p.nombre)}</td>
-          <td>${esc(p.categoria)||''}</td>
+          <td class="text-xs">${esc(p.categoria)||''}</td>
           <td class="text-right ${Number(p.stock_actual)<0?'text-red-600 font-bold':''}">${p.stock_actual}</td>
           <td class="text-right">${fmt(p.valor_venta)}</td>
         </tr>`).join('')}</tbody></table>`;
   }
-  window.__bsTab = (tab) => {
-    const tBajo = $('#bsTabBajo'), tSin = $('#bsTabSin'), cont = $('#bsContenido');
+
+  function _renderTabActual(){
+    const cont = $('#bsContenido');
     if(!cont) return;
+    cont.innerHTML = _bsTabActiva === 'bajo' ? renderBajo() : renderSin();
+    const total = _bsTabActiva === 'bajo' ? bajos.length : sins.length;
+    $('#bsResumen').textContent = `Mostrando ${_bsFiltrados.length} de ${total} producto(s)`;
+  }
+
+  window.__bsTab = (tab) => {
+    _bsTabActiva = tab;
+    const tBajo = $('#bsTabBajo'), tSin = $('#bsTabSin');
+    if(!tBajo || !tSin) return;
     if(tab === 'bajo'){
       tBajo.className = 'px-4 py-2 text-sm font-semibold border-b-2 border-amber-500 text-amber-700';
       tSin.className  = 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-rose-700';
-      cont.innerHTML = renderBajo();
     } else {
       tBajo.className = 'px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-amber-700';
       tSin.className  = 'px-4 py-2 text-sm font-semibold border-b-2 border-rose-500 text-rose-700';
-      cont.innerHTML = renderSin();
     }
+    _renderTabActual();
   };
-  // Default: mostrar la pestaña con más resultados
-  __bsTab(sins.length > bajos.length ? 'sin' : 'bajo');
+  window.__bsAplicarFiltros = () => _renderTabActual();
+  window.__bsDescargarExcel = () => {
+    if(typeof XLSX === 'undefined'){
+      toast('Librería de Excel no cargada','err'); return;
+    }
+    const wb = XLSX.utils.book_new();
+    // Hoja 1: Bajo Stock (siempre exporta TODOS, no los filtrados, por
+    // claridad — un reporte parcial sería confuso si abrís el Excel después)
+    const datBajo = bajos.map(p => ({
+      'Código': p.codigo_barra || '',
+      'Producto': p.nombre || '',
+      'Categoría': p.categoria || '',
+      'Stock actual': Number(p.stock_actual)||0,
+      'Stock inicial': Number(p.stock_inicial)||0,
+      '% restante': p.stock_inicial>0 ? Math.round((p.stock_actual/p.stock_inicial)*100) : 0,
+      'Precio venta': Number(p.valor_venta)||0
+    }));
+    const datSin = sins.map(p => ({
+      'Código': p.codigo_barra || '',
+      'Producto': p.nombre || '',
+      'Categoría': p.categoria || '',
+      'Stock actual': Number(p.stock_actual)||0,
+      'Precio venta': Number(p.valor_venta)||0
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datBajo), 'Bajo Stock');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datSin),  'Sin Stock');
+    const stamp = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, `StockCritico_BarraIndomita_${stamp}.xlsx`);
+    toast('Excel descargado','ok');
+  };
+  // Render inicial — pestaña con más datos
+  __bsTab(_bsTabActiva);
 }
 
 /* CAJA ──────────────────────────────────────────────────────────── */
@@ -2600,16 +2753,15 @@ function openAbrirCaja(){
         </div>
       </form>
     </div>`);
-  $('#formCaja').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formCaja').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     try{
       const d = await api('abrirCaja', data);
       S.caja = d.caja; toast('Caja abierta','ok'); closeModal();
       renderVentas(); renderCajaStatus();
       go('ventas');
-    }catch(err){ toast(err.message,'err'); }
-  });
+    }catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Abriendo caja…'));
 }
 
 function confirmCerrarCaja(){
@@ -2717,22 +2869,16 @@ function confirmCerrarCaja(){
     }
   };
 
-  $('#formCerrar').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formCerrar').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.caja_id = S.caja.id;
     data.no_coincide = chk.checked;
     if(chk.checked){
       const monto = parseMoney(String(data.monto_real || ''));
-      if(!Number.isFinite(monto)){
-        return toast('Ingresa un monto real válido', 'err');
-      }
-      if(!String(data.nota_diferencia || '').trim()){
-        return toast('La nota explicando la diferencia es obligatoria', 'err');
-      }
+      if(!Number.isFinite(monto)) throw new Error('Ingresa un monto real válido');
+      if(!String(data.nota_diferencia || '').trim()) throw new Error('La nota explicando la diferencia es obligatoria');
       data.monto_real = monto;
     } else {
-      // Aseguramos que no se envíen restos del form
       delete data.monto_real;
       delete data.nota_diferencia;
     }
@@ -2742,10 +2888,9 @@ function confirmCerrarCaja(){
       toast(chk.checked ? 'Caja cerrada — se notificó al administrador' : 'Caja cerrada', 'ok');
       closeModal();
       renderVentas(); renderCajaStatus();
-      // Refrescar notificaciones por si el admin está logueado en otra pestaña
       cargarNotificaciones();
-    }catch(err){ toast(err.message,'err'); }
-  });
+    }catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Cerrando caja…'));
 }
 
 function renderCajaStatus(){
@@ -4685,7 +4830,7 @@ async function cargarPromocionesAdmin(){
         </td>
         <td class="py-2 px-2 text-right whitespace-nowrap">
           <button class="btn btn-ghost text-xs py-1 px-2" onclick="openEditarPromocion(${p.id})">✏️</button>
-          <button class="btn btn-ghost text-xs py-1 px-2 text-red-500" onclick="__eliminarPromocion(${p.id})">🗑</button>
+          <button class="btn btn-ghost text-xs py-1 px-2 text-red-500" onclick="__eliminarPromocion(${p.id}, this)">🗑</button>
         </td>
       </tr>`).join('');
   } catch(err){
@@ -4693,7 +4838,10 @@ async function cargarPromocionesAdmin(){
   }
 }
 
-window.__togglePromocion = async (id) => {
+window.__togglePromocion = async (id, btn) => {
+  // El parámetro btn es opcional (lo pasa el checkbox via inline handler).
+  // El toggle va sin lock visual (ya cambia el estado del checkbox), pero
+  // protegemos contra re-disparos por re-render.
   try {
     await api('togglePromocion', { id });
     await cargarPromocionesAdmin();
@@ -4701,14 +4849,16 @@ window.__togglePromocion = async (id) => {
   } catch(e){ toast(e.message, 'err'); }
 };
 
-window.__eliminarPromocion = async (id) => {
+window.__eliminarPromocion = async (id, btn) => {
   if(!confirm('¿Eliminar esta promoción?\n\nEsta acción no se puede deshacer.')) return;
   try {
-    await api('eliminarPromocion', { id });
-    toast('Promoción eliminada','ok');
-    await cargarPromocionesAdmin();
-    await cargarPromocionesActivas();
-  } catch(e){ toast(e.message, 'err'); }
+    await _lockBtn(btn, async () => {
+      await api('eliminarPromocion', { id });
+      toast('Promoción eliminada','ok');
+      await cargarPromocionesAdmin();
+      await cargarPromocionesActivas();
+    }, 'Eliminando…');
+  } catch(e){ if(e && e.message !== 'busy') toast(e.message, 'err'); }
 };
 
 function openNuevaPromocion(){ _openPromoForm(null); }
@@ -4873,7 +5023,7 @@ function _openPromoForm(promo){
 
       <div class="flex gap-2 justify-end mt-6">
         <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-success" onclick="__guardarPromocion()">${isEdit ? 'Guardar cambios' : 'Crear promoción'}</button>
+        <button class="btn btn-success" onclick="__guardarPromocion(this)">${isEdit ? 'Guardar cambios' : 'Crear promoción'}</button>
       </div>
     </div>`;
     $('#modalRoot').innerHTML = `<div class="modal-bg"><div class="modal" style="max-width:48rem">${html}</div></div>`;
@@ -4909,7 +5059,7 @@ function _openPromoForm(promo){
     if(F.productos.has(id)) F.productos.delete(id); else F.productos.add(id);
     render();
   };
-  window.__guardarPromocion = async () => {
+  window.__guardarPromocion = async (btn) => {
     const payload = {
       nombre: F.nombre,
       tipo: F.tipo,
@@ -4927,17 +5077,19 @@ function _openPromoForm(promo){
       activo: !!F.activo
     };
     try {
-      if(isEdit){
-        payload.id = F.id;
-        await api('actualizarPromocion', payload);
-      } else {
-        await api('crearPromocion', payload);
-      }
-      toast('Promoción guardada', 'ok');
-      closeModal();
-      await cargarPromocionesAdmin();
-      await cargarPromocionesActivas();
-    } catch(e){ toast(e.message, 'err'); }
+      await _lockBtn(btn, async () => {
+        if(isEdit){
+          payload.id = F.id;
+          await api('actualizarPromocion', payload);
+        } else {
+          await api('crearPromocion', payload);
+        }
+        toast('Promoción guardada', 'ok');
+        closeModal();
+        await cargarPromocionesAdmin();
+        await cargarPromocionesActivas();
+      }, isEdit ? 'Guardando…' : 'Creando…');
+    } catch(e){ if(e && e.message !== 'busy') toast(e.message, 'err'); }
   };
 
   render();
@@ -4970,11 +5122,11 @@ async function cargarUsuarios(){
       const btnInactivar = esYo
         ? ''
         : (activo
-           ? `<button class="text-xs text-amber-600 hover:underline mr-3" onclick='inactivarUsuario(${JSON.stringify(u)})'>Inactivar</button>`
-           : `<button class="text-xs text-emerald-600 hover:underline mr-3" onclick='reactivarUsuario(${JSON.stringify(u)})'>Reactivar</button>`);
+           ? `<button class="text-xs text-amber-600 hover:underline mr-3" onclick='inactivarUsuario(${JSON.stringify(u)}, this)'>Inactivar</button>`
+           : `<button class="text-xs text-emerald-600 hover:underline mr-3" onclick='reactivarUsuario(${JSON.stringify(u)}, this)'>Reactivar</button>`);
       const btnEliminar = esYo
         ? '<span class="text-xs text-slate-400" title="No puedes eliminar tu propio usuario">—</span>'
-        : `<button class="text-xs text-red-600 hover:underline" onclick='eliminarUsuarioConfirm(${JSON.stringify(u)})'>Eliminar</button>`;
+        : `<button class="text-xs text-red-600 hover:underline" onclick='eliminarUsuarioConfirm(${JSON.stringify(u)}, this)'>Eliminar</button>`;
       return `
       <tr>
         <td class="font-semibold">${u.nombre || ''}</td>
@@ -5014,14 +5166,13 @@ function openNuevoUsuario(){
       <div><label class="label">Rol</label><select name="rol" class="input"><option value="vendedor">vendedor</option><option value="admin">admin</option></select></div>
       <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear</button></div>
     </form></div>`);
-  $('#formUsr').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formUsr').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.rut = _formatRut(data.rut);
-    if(!_validarRut(data.rut)){ toast('RUT inválido','err'); return; }
+    if(!_validarRut(data.rut)){ toast('RUT inválido','err'); throw new Error('rut'); }
     try{ await api('crearUsuario', data); toast('Usuario creado','ok'); closeModal(); cargarUsuarios(); }
-    catch(err){ toast(err.message,'err'); }
-  });
+    catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Creando usuario…'));
 }
 
 function openEditarUsuario(u){
@@ -5049,39 +5200,42 @@ function openEditarUsuario(u){
       </div>
       <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar</button></div>
     </form></div>`);
-  $('#formUsrE').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formUsrE').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.id = u.id; data.activo = data.activo==='true';
     if(data.rut){
       data.rut = _formatRut(data.rut);
-      if(!_validarRut(data.rut)){ toast('RUT inválido','err'); return; }
+      if(!_validarRut(data.rut)){ toast('RUT inválido','err'); throw new Error('rut'); }
     }
     if(!data.password) delete data.password;
     try{ await api('actualizarUsuario', data); toast('Actualizado','ok'); closeModal(); cargarUsuarios(); }
-    catch(err){ toast(err.message,'err'); }
-  });
+    catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Guardando…'));
 }
 
-async function inactivarUsuario(u){
+async function inactivarUsuario(u, btn){
   if(Number(u.id) === Number(S.usuario.id)) return toast('No puedes inactivarte','err');
   if(!confirm(`¿Inactivar el usuario "${u.nombre}"?\nNo podrá acceder, pero permanecerá en el listado y podrá reactivarse.`)) return;
   try{
-    await api('actualizarUsuario', { id: u.id, activo: false });
-    toast('Usuario inactivado','ok');
-    cargarUsuarios();
-  }catch(err){ toast(err.message,'err'); }
+    await _lockBtn(btn, async () => {
+      await api('actualizarUsuario', { id: u.id, activo: false });
+      toast('Usuario inactivado','ok');
+      cargarUsuarios();
+    }, 'Procesando…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message,'err'); }
 }
-async function reactivarUsuario(u){
+async function reactivarUsuario(u, btn){
   if(!confirm(`¿Reactivar el usuario "${u.nombre}"?`)) return;
   try{
-    await api('actualizarUsuario', { id: u.id, activo: true });
-    toast('Usuario reactivado','ok');
-    cargarUsuarios();
-  }catch(err){ toast(err.message,'err'); }
+    await _lockBtn(btn, async () => {
+      await api('actualizarUsuario', { id: u.id, activo: true });
+      toast('Usuario reactivado','ok');
+      cargarUsuarios();
+    }, 'Procesando…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message,'err'); }
 }
 
-async function eliminarUsuarioConfirm(u){
+async function eliminarUsuarioConfirm(u, btn){
   if(Number(u.id) === Number(S.usuario.id)){
     return toast('No puedes eliminar tu propio usuario','err');
   }
@@ -5091,10 +5245,12 @@ async function eliminarUsuarioConfirm(u){
               `Si sólo deseas bloquearlo temporalmente, usa "Inactivar".`;
   if(!confirm(msg)) return;
   try{
-    await api('eliminarUsuario', { id: u.id });
-    toast('Usuario eliminado','ok');
-    cargarUsuarios();
-  }catch(err){ toast(err.message,'err'); }
+    await _lockBtn(btn, async () => {
+      await api('eliminarUsuario', { id: u.id });
+      toast('Usuario eliminado','ok');
+      cargarUsuarios();
+    }, 'Eliminando…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message,'err'); }
 }
 
 /* CAMBIAR MI PROPIA CLAVE (con verificación de clave actual) ───── */
@@ -5128,20 +5284,19 @@ function openCambiarMiClave(){
         <button class="btn btn-primary">Actualizar</button>
       </div>
     </form></div>`);
-  $('#formCambiarPw').addEventListener('submit', async e=>{
-    e.preventDefault();
+  $('#formCambiarPw').addEventListener('submit', e => _lockSubmit(e, async () => {
     const f = e.target;
     const actual = f.password_actual.value;
     const nueva  = f.password_nueva.value;
     const nueva2 = f.password_nueva2.value;
-    if(nueva !== nueva2){ toast('Las claves nuevas no coinciden','err'); return; }
-    if(nueva.length < 4){ toast('Mínimo 4 caracteres','err'); return; }
+    if(nueva !== nueva2){ toast('Las claves nuevas no coinciden','err'); throw new Error('match'); }
+    if(nueva.length < 8){ toast('Mínimo 8 caracteres','err'); throw new Error('len'); }
     try{
       await api('cambiarPassword', { password_actual: actual, password_nueva: nueva });
       toast('Clave actualizada','ok');
       closeModal();
-    }catch(err){ toast(err.message,'err'); }
-  });
+    }catch(err){ toast(err.message,'err'); throw err; }
+  }, 'Actualizando…'));
 }
 
 /* NOTIFICACIONES + STATS ───────────────────────────────────────── */
