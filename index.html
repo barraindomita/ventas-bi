@@ -768,6 +768,10 @@
               <p class="text-xs text-slate-500 mt-1 max-w-xl">Verifica qué productos tienen URLs de foto que <b>no cargan</b> (link roto, archivo borrado de Drive, permisos cambiados, etc.). Después podés editarlas una por una.</p>
             </div>
             <div class="flex gap-2 flex-wrap">
+              <label class="btn btn-ghost cursor-pointer" title="Sube un Excel/CSV con columnas 'Código de Barra' y 'Link Foto'. El sistema busca cada código en tu inventario y reemplaza la URL de la foto.">
+                📁 Restaurar desde Excel
+                <input id="restaurarFotosFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="__onRestaurarFotosFile(event)">
+              </label>
               <button class="btn btn-ghost" onclick="__repararFotosUrl(this)" title="Convierte todas las URLs de Drive guardadas (formatos viejos thumbnail/uc) al formato canónico /file/d/ID/view?usp=sharing. No re-sube nada, solo cambia el texto del link.">🔧 Reparar URLs guardadas</button>
               <button class="btn btn-primary" onclick="__auditarFotos(this)">🔍 Iniciar revisión</button>
             </div>
@@ -776,6 +780,7 @@
             <div id="auditFotosResumen" class="text-sm mb-3"></div>
             <div id="auditFotosLista" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[60vh] overflow-auto"></div>
           </div>
+          <div id="restaurarFotosPreview" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg"></div>
         </div>
 
         <!-- IMPORT MASIVO DE INVENTARIO -->
@@ -1544,6 +1549,133 @@ function __openCambiarCategoriaBulk(){
     </div>
   `);
 }
+
+/* Restauración de fotos desde un Excel/CSV externo.
+   El usuario sube un archivo histórico que tiene los links originales de Drive.
+   El frontend parsea (Código de Barra + Link Foto), muestra preview con el
+   matching contra el inventario actual, y al confirmar dispara restaurarFotosBulk.
+   Es el caso típico cuando una migración rompió las URLs y el usuario tiene
+   un backup del inventario anterior. */
+let _restaurarFotosPayload = null;  // se llena al subir; se consume al confirmar
+
+async function __onRestaurarFotosFile(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  ev.target.value = '';  // limpiar para que el mismo archivo pueda re-subirse
+  const previewEl = $('#restaurarFotosPreview');
+  if(!previewEl) return;
+  previewEl.classList.remove('hidden');
+  previewEl.innerHTML = `<div class="text-sm text-slate-500">📂 Leyendo "${esc(file.name)}"…</div>`;
+
+  try{
+    if(typeof XLSX === 'undefined') throw new Error('Librería de Excel no cargada');
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    // Buscar la primera hoja que tenga las columnas que necesitamos
+    let filas = [];
+    for(const shName of wb.SheetNames){
+      const sh = wb.Sheets[shName];
+      const arr = XLSX.utils.sheet_to_json(sh, { defval: '' });
+      if(!arr.length) continue;
+      // Encontrar headers — admitimos varios alias
+      const aliasCod = ['Código de Barra','Codigo de Barra','codigo_barra','Código','Codigo','SKU'];
+      const aliasFoto = ['Link Foto','Foto URL','foto_url','URL Foto','Foto','Imagen','Link'];
+      const sample = arr[0];
+      const claves = Object.keys(sample);
+      const colCod = claves.find(k => aliasCod.some(a => a.toLowerCase() === k.toLowerCase()));
+      const colFoto = claves.find(k => aliasFoto.some(a => a.toLowerCase() === k.toLowerCase()));
+      if(!colCod || !colFoto) continue;
+      filas = arr.map(r => ({
+        codigo_barra: String(r[colCod] || '').trim(),
+        foto_url: String(r[colFoto] || '').trim()
+      })).filter(r => r.codigo_barra && r.foto_url);
+      if(filas.length) break;
+    }
+    if(!filas.length){
+      previewEl.innerHTML = `<div class="text-sm text-red-600">⚠️ No se encontraron columnas con código de barra y URL de foto. El archivo debe tener columnas "Código de Barra" y "Link Foto".</div>`;
+      return;
+    }
+
+    // Matching contra inventario actual
+    const byCodigo = {};
+    (S.productos || []).forEach(p => {
+      const c = String(p.codigo_barra||'').trim();
+      if(c) byCodigo[c] = p;
+    });
+    let conMatch = 0, sinMatch = 0, sinCambio = 0, conFotoActual = 0;
+    filas.forEach(f => {
+      const p = byCodigo[f.codigo_barra];
+      if(!p){ sinMatch++; return; }
+      conMatch++;
+      const actual = String(p.foto_url||'').trim();
+      if(actual === f.foto_url) sinCambio++;
+      else if(actual) conFotoActual++;
+    });
+
+    _restaurarFotosPayload = filas;
+    previewEl.innerHTML = `
+      <div class="text-sm font-semibold mb-2">📋 Vista previa de restauración</div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
+        <div class="bg-white rounded p-2 border border-blue-200">
+          <div class="text-slate-500">En el archivo</div>
+          <div class="text-lg font-bold">${filas.length}</div>
+        </div>
+        <div class="bg-white rounded p-2 border border-emerald-200">
+          <div class="text-slate-500">Match en inventario</div>
+          <div class="text-lg font-bold text-emerald-700">${conMatch}</div>
+        </div>
+        <div class="bg-white rounded p-2 border border-amber-200">
+          <div class="text-slate-500">Pisarán foto actual</div>
+          <div class="text-lg font-bold text-amber-700">${conFotoActual}</div>
+        </div>
+        <div class="bg-white rounded p-2 border border-slate-300">
+          <div class="text-slate-500">Sin código en inventario</div>
+          <div class="text-lg font-bold text-slate-600">${sinMatch}</div>
+        </div>
+      </div>
+      <label class="flex items-center gap-2 text-xs mb-3 cursor-pointer">
+        <input type="checkbox" id="rfSoloFaltantes" checked>
+        <span>Solo restaurar fotos a productos que <b>no tienen foto</b> actualmente (recomendado para no pisar las que sí cargan)</span>
+      </label>
+      <div class="flex gap-2 justify-end flex-wrap">
+        <button class="btn btn-ghost" onclick="__cancelarRestaurarFotos()">Cancelar</button>
+        <button class="btn btn-success" onclick="__aplicarRestaurarFotos(this)">✅ Aplicar restauración</button>
+      </div>`;
+
+  }catch(err){
+    previewEl.innerHTML = `<div class="text-sm text-red-600">⚠️ Error leyendo el archivo: ${esc(err.message)}</div>`;
+  }
+}
+
+window.__cancelarRestaurarFotos = () => {
+  _restaurarFotosPayload = null;
+  const el = $('#restaurarFotosPreview');
+  if(el){ el.classList.add('hidden'); el.innerHTML = ''; }
+};
+
+window.__aplicarRestaurarFotos = async (btn) => {
+  if(!_restaurarFotosPayload || !_restaurarFotosPayload.length){
+    toast('No hay datos para aplicar', 'err'); return;
+  }
+  const soloFaltantes = $('#rfSoloFaltantes')?.checked === true;
+  try{
+    await _lockBtn(btn, async () => {
+      const r = await api('restaurarFotosBulk', {
+        mapeo: _restaurarFotosPayload,
+        soloFaltantes
+      });
+      let msg = `${r.actualizados} foto(s) restaurada(s)`;
+      if(r.sin_cambio)        msg += ` · ${r.sin_cambio} ya estaban OK`;
+      if(r.omitidos_con_foto) msg += ` · ${r.omitidos_con_foto} omitidos (ya tenían foto)`;
+      if(r.no_encontrados)    msg += ` · ${r.no_encontrados} sin match`;
+      toast(msg, 'ok');
+      _restaurarFotosPayload = null;
+      const el = $('#restaurarFotosPreview');
+      if(el){ el.classList.add('hidden'); el.innerHTML = ''; }
+      await cargarInventario();
+    }, 'Restaurando fotos…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message, 'err'); }
+};
 
 /* Reparación masiva de URLs de Drive guardadas en la planilla.
    Convierte cualquier formato viejo (thumbnail?id=…&sz=w400, uc?export=…)
