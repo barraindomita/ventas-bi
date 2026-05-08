@@ -760,6 +760,24 @@
           </table>
         </div>
 
+        <!-- AUDITOR DE FOTOS DEL INVENTARIO -->
+        <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+            <div>
+              <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🖼️ Revisar fotos del inventario</h3>
+              <p class="text-xs text-slate-500 mt-1 max-w-xl">Verifica qué productos tienen URLs de foto que <b>no cargan</b> (link roto, archivo borrado de Drive, permisos cambiados, etc.). Después podés editarlas una por una.</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button class="btn btn-ghost" onclick="__repararFotosUrl(this)" title="Convierte todas las URLs de Drive guardadas (formatos viejos thumbnail/uc) al formato canónico /file/d/ID/view?usp=sharing. No re-sube nada, solo cambia el texto del link.">🔧 Reparar URLs guardadas</button>
+              <button class="btn btn-primary" onclick="__auditarFotos(this)">🔍 Iniciar revisión</button>
+            </div>
+          </div>
+          <div id="auditFotosResult" class="hidden">
+            <div id="auditFotosResumen" class="text-sm mb-3"></div>
+            <div id="auditFotosLista" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[60vh] overflow-auto"></div>
+          </div>
+        </div>
+
         <!-- IMPORT MASIVO DE INVENTARIO -->
         <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
           <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
@@ -894,10 +912,13 @@ async function _lockSubmit(e, work, label){
 }
 
 /**
- * Convierte URLs de Google Drive al formato "thumbnail" que SÍ funciona
- * como <img src="...">. Las URLs típicas que la gente comparte desde Drive
- * (drive.google.com/file/d/ID/view?usp=sharing) son páginas HTML con un
- * visor, no archivos de imagen — el navegador no puede mostrarlas en <img>.
+ * Convierte URLs de Google Drive a un formato directo que funciona como
+ * `<img src="...">`. Reconoce TODOS los formatos típicos (incluyendo el
+ * propio thumbnail que ya guardamos en versiones anteriores) y los normaliza
+ * al formato `lh3.googleusercontent.com/d/ID=wSIZE` — es el que Google usa
+ * internamente para previews de imagen y es notablemente más estable que
+ * `drive.google.com/thumbnail?id=...` (que en algunos archivos redirige a
+ * pantalla de login y rompe el <img>).
  *
  * Reconoce y normaliza:
  *   https://drive.google.com/file/d/FILE_ID/view?usp=sharing
@@ -905,14 +926,17 @@ async function _lockSubmit(e, work, label){
  *   https://drive.google.com/open?id=FILE_ID
  *   https://drive.google.com/uc?export=view&id=FILE_ID
  *   https://drive.google.com/uc?id=FILE_ID
+ *   https://drive.google.com/thumbnail?id=FILE_ID&sz=w400  ← reformatea
  *   https://docs.google.com/.../d/FILE_ID/...
  *
- * URLs que no son de Drive (Imgur, CDNs, IMG_URLs directas) pasan sin tocar.
- * El archivo en Drive debe estar compartido como "Cualquiera con el enlace".
+ * URLs no-Drive (Imgur, CDNs, etc.) pasan sin tocar.
+ * El archivo debe estar compartido como "Cualquiera con el enlace".
  */
 function _normalizarFotoUrl(url, sizePx){
   if(!url) return '';
   const s = String(url).trim();
+  // Si ya es lh3 / googleusercontent, devolver tal cual (puede tener tamaño custom)
+  if(/lh\d\.googleusercontent\.com|googleusercontent\.com\/d\//.test(s)) return s;
   if(!/(?:drive|docs)\.google\.com/.test(s)) return s;
   // Extraer FILE_ID en cualquiera de los formatos
   let id = '';
@@ -924,7 +948,8 @@ function _normalizarFotoUrl(url, sizePx){
   }
   if(!id) return s;  // No pudimos extraer; devolvemos tal cual
   const sz = Number(sizePx) > 0 ? Number(sizePx) : 800;
-  return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w' + sz;
+  // Formato lh3: muy estable, soporta dimensiones tipo =w800 (mantiene aspecto).
+  return 'https://lh3.googleusercontent.com/d/' + encodeURIComponent(id) + '=w' + sz;
 }
 
 /**
@@ -1518,6 +1543,118 @@ function __openCambiarCategoriaBulk(){
       </div>
     </div>
   `);
+}
+
+/* Reparación masiva de URLs de Drive guardadas en la planilla.
+   Convierte cualquier formato viejo (thumbnail?id=…&sz=w400, uc?export=…)
+   al formato canónico /file/d/ID/view?usp=sharing. Es una operación segura:
+   no re-sube fotos, solo reescribe el texto del link en cada celda. Pide
+   confirmación porque toca múltiples filas a la vez. */
+async function __repararFotosUrl(btn){
+  const conFoto = (S.productos || []).filter(p => p.foto_url);
+  const drive = conFoto.filter(p => /(?:drive|docs)\.google\.com/.test(String(p.foto_url||'')));
+  if(!conFoto.length){
+    toast('No hay productos con foto cargada', 'info'); return;
+  }
+  if(!confirm(
+    `Se revisarán ${conFoto.length} producto(s) con foto. ` +
+    `Las URLs de Google Drive (${drive.length}) se convertirán al formato ` +
+    `canónico /file/d/ID/view?usp=sharing. Las URLs externas (Imgur, etc.) ` +
+    `quedan intactas.\n\n¿Continuar?`
+  )) return;
+  try{
+    await _lockBtn(btn, async () => {
+      const r = await api('normalizarFotosUrl');
+      let msg = `${r.actualizados} URL(s) reparada(s)`;
+      if(r.sin_cambio) msg += ` · ${r.sin_cambio} ya estaban OK`;
+      if(r.no_drive) msg += ` · ${r.no_drive} no son de Drive`;
+      toast(msg, 'ok');
+      // Recargar inventario para que el frontend muestre las URLs nuevas
+      await cargarInventario();
+    }, 'Reparando URLs…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message, 'err'); }
+}
+
+/* Auditor de fotos: para cada producto activo con foto_url, intenta cargar
+   la imagen y registra cuáles fallan. Las URLs ya pasan por _normalizarFotoUrl
+   antes de testearse (así un thumbnail viejo se evalúa como lh3). Las fallidas
+   se muestran en una grilla con botón Editar para cada una. */
+async function __auditarFotos(btn){
+  const productos = (S.productos || []).filter(p => _truthyJs(p.activo) && p.foto_url);
+  if(!productos.length){
+    toast('No hay productos con foto cargada', 'info'); return;
+  }
+  const resultEl = $('#auditFotosResult');
+  const listaEl = $('#auditFotosLista');
+  const resumenEl = $('#auditFotosResumen');
+  if(!resultEl || !listaEl || !resumenEl) return;
+  resultEl.classList.remove('hidden');
+  listaEl.innerHTML = '';
+  resumenEl.innerHTML = `<span class="text-slate-500">Revisando ${productos.length} foto(s)…</span>`;
+
+  // Test de carga: por cada producto, creamos un Image() invisible y esperamos
+  // su evento load/error. Timeout de 8 seg por seguridad.
+  await _lockBtn(btn, async () => {
+    let ok = 0, fail = 0;
+    const fallidos = [];
+    let procesados = 0;
+
+    const testImg = (p) => new Promise(resolve => {
+      const url = _normalizarFotoUrl(p.foto_url, 200);
+      const img = new Image();
+      const t = setTimeout(() => {
+        img.onload = img.onerror = null;
+        resolve({ p, ok: false, url, motivo: 'timeout' });
+      }, 8000);
+      img.onload = () => {
+        clearTimeout(t);
+        // Sospechar cuando la imagen viene del placeholder de Drive (~1px)
+        if(img.naturalWidth < 8 || img.naturalHeight < 8){
+          resolve({ p, ok: false, url, motivo: 'imagen vacía' });
+        } else {
+          resolve({ p, ok: true, url });
+        }
+      };
+      img.onerror = () => {
+        clearTimeout(t);
+        resolve({ p, ok: false, url, motivo: 'no carga' });
+      };
+      img.src = url;
+    });
+
+    // Ejecutar de a 8 en paralelo para no saturar la red
+    const concurrencia = 8;
+    for(let i = 0; i < productos.length; i += concurrencia){
+      const lote = productos.slice(i, i + concurrencia);
+      const resultados = await Promise.all(lote.map(testImg));
+      resultados.forEach(r => {
+        procesados++;
+        if(r.ok) ok++;
+        else { fail++; fallidos.push(r); }
+      });
+      resumenEl.innerHTML = `<span class="text-slate-500">Revisando… ${procesados}/${productos.length}</span>`;
+    }
+
+    // Render final
+    resumenEl.innerHTML = `
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="chip chip-ok">✔ ${ok} OK</span>
+        <span class="chip ${fail > 0 ? 'chip-err' : 'chip-info'}">⚠ ${fail} con problemas</span>
+        <span class="text-slate-500 text-xs">de ${productos.length} con foto</span>
+      </div>`;
+    if(!fallidos.length){
+      listaEl.innerHTML = '<div class="col-span-full text-center text-emerald-700 py-6 text-sm">🎉 Todas las fotos cargan correctamente.</div>';
+      return;
+    }
+    listaEl.innerHTML = fallidos.map(({p, motivo}) => `
+      <div class="border border-red-200 bg-red-50 rounded-lg p-2 flex flex-col">
+        <div class="bg-slate-100 rounded h-24 flex items-center justify-center text-3xl text-slate-300 mb-2">🍾</div>
+        <div class="text-xs font-semibold truncate" title="${esc(p.nombre)}">${esc(p.nombre)}</div>
+        <div class="text-[10px] text-slate-500 font-mono truncate">${esc(p.codigo_barra)||'—'}</div>
+        <div class="text-[10px] text-red-600 mb-2">${motivo}</div>
+        <button class="btn btn-ghost text-xs py-1" onclick="closeModal();openEditarProducto(${p.id})">✏️ Editar</button>
+      </div>`).join('');
+  }, 'Revisando fotos…');
 }
 
 /* Inactivar / Reactivar bulk: muestra confirm con conteo y dispara el
