@@ -760,6 +760,24 @@
           </table>
         </div>
 
+        <!-- REPARAR / DIAGNOSTICAR PACKS -->
+        <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+            <div>
+              <h3 class="text-lg font-bold" style="color:var(--brand-dark)">📦 Reparar packs</h3>
+              <p class="text-xs text-slate-500 mt-1 max-w-xl">
+                "Blindar" agrega a cada pack el código de barra de sus componentes (protege contra futuras renumeraciones de IDs).
+                "Diagnosticar" muestra el estado real de todos los packs con sus componentes y stock disponible.
+              </p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button class="btn btn-ghost" onclick="__diagnosticarPacks(this)">📋 Diagnosticar packs</button>
+              <button class="btn btn-primary" onclick="__repararPacks(this)">🔧 Blindar packs</button>
+            </div>
+          </div>
+          <div id="packsResult" class="hidden mt-3"></div>
+        </div>
+
         <!-- AUDITOR DE FOTOS DEL INVENTARIO -->
         <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
           <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
@@ -1391,6 +1409,9 @@ function renderInventario(){
       <td class="text-right">${(Number(p.margen_pct)||0).toFixed(1)}%</td>
       <td class="text-right">
         <span class="chip ${esBajoStock(p)?'chip-warn':'chip-ok'}">${p.stock_actual}</span>
+        ${esPack(p) && Array.isArray(p._pack_diagnostico) && p._pack_diagnostico.some(d => d.problema)
+          ? `<button type="button" class="text-amber-600 hover:text-amber-800 text-sm ml-1" title="Ver por qué este pack tiene este stock" onclick="__verDiagPack(${p.id})">⚠️</button>`
+          : ''}
       </td>
       <td>
         ${admin ? (pack
@@ -1548,6 +1569,113 @@ function __openCambiarCategoriaBulk(){
       </div>
     </div>
   `);
+}
+
+/* Blindaje masivo de packs: para cada pack, agrega a sus componentes el
+   codigo_barra correspondiente (si lo encuentra en el inventario actual).
+   Esto inmuniza al pack contra futuros re-imports que reasignen IDs. Los
+   packs cuyos componentes ya no existen ni por código quedan listados para
+   revisión manual (no se modifican). */
+async function __repararPacks(btn){
+  const r = $('#packsResult');
+  if(r){ r.classList.add('hidden'); r.innerHTML = ''; }
+  if(!confirm('Se revisarán todos los packs del inventario y se les agregará el código de barra de cada componente. Es una operación segura (no toca cantidades ni precios). ¿Continuar?')) return;
+  try{
+    await _lockBtn(btn, async () => {
+      const d = await api('repararPacksBulk');
+      const lista = Array.isArray(d.detalle_requieren_manual) ? d.detalle_requieren_manual : [];
+      let html = `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
+          <div class="bg-slate-50 rounded p-2 border border-slate-200">
+            <div class="text-slate-500">Revisados</div>
+            <div class="text-lg font-bold">${d.revisados}</div>
+          </div>
+          <div class="bg-emerald-50 rounded p-2 border border-emerald-200">
+            <div class="text-slate-500">Blindados ahora</div>
+            <div class="text-lg font-bold text-emerald-700">${d.blindados}</div>
+          </div>
+          <div class="bg-blue-50 rounded p-2 border border-blue-200">
+            <div class="text-slate-500">Ya estaban OK</div>
+            <div class="text-lg font-bold text-blue-700">${d.ya_ok}</div>
+          </div>
+          <div class="bg-red-50 rounded p-2 border border-red-200">
+            <div class="text-slate-500">Requieren revisión</div>
+            <div class="text-lg font-bold text-red-700">${d.requieren_manual}</div>
+          </div>
+        </div>`;
+      if(lista.length){
+        html += `
+          <div class="text-sm font-semibold mb-2 text-red-700">⚠️ Estos packs necesitan que los abras y los revises manualmente:</div>
+          <div class="bg-red-50 rounded p-2 border border-red-200 max-h-64 overflow-auto">
+            <ul class="space-y-1 text-xs">
+              ${lista.map(p => `
+                <li class="flex items-center justify-between gap-2 border-b border-red-100 last:border-b-0 py-1">
+                  <div class="flex-1">
+                    <div class="font-semibold">${esc(p.nombre)}</div>
+                    <div class="text-[11px] text-slate-500 font-mono">${esc(p.codigo_barra)||'—'} · ${esc(p.motivo)}</div>
+                  </div>
+                  <button class="btn btn-ghost text-xs py-1" onclick="openEditarPack(${p.id})">✏️ Editar</button>
+                </li>`).join('')}
+            </ul>
+          </div>`;
+      } else {
+        html += `<div class="text-emerald-700 text-sm py-3 text-center">🎉 Todos los packs quedaron blindados correctamente.</div>`;
+      }
+      const r2 = $('#packsResult');
+      if(r2){ r2.classList.remove('hidden'); r2.innerHTML = html; }
+      toast(`Listo: ${d.blindados} blindados, ${d.requieren_manual} requieren revisión`, 'ok');
+      await cargarInventario();
+    }, 'Reparando packs…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message, 'err'); }
+}
+
+/* Diagnóstico masivo de packs: tabla con todos los packs y su estado real.
+   Útil para ver de un vistazo cuáles tienen stock 0 por qué razón. */
+async function __diagnosticarPacks(btn){
+  try{
+    await _lockBtn(btn, async () => {
+      const d = await api('diagnosticarPacksBulk');
+      const packs = Array.isArray(d.packs) ? d.packs : [];
+      let html = `
+        <div class="text-sm mb-2"><b>${packs.length}</b> pack(s) en el inventario.</div>
+        <div class="overflow-auto max-h-[60vh]">
+          <table class="w-full text-xs">
+            <thead><tr class="bg-slate-50 text-left text-slate-500">
+              <th class="py-1 px-2">Pack</th>
+              <th class="py-1 px-2 text-right">Stock</th>
+              <th class="py-1 px-2 text-right">Componentes</th>
+              <th class="py-1 px-2">Problemas</th>
+              <th class="py-1 px-2"></th>
+            </tr></thead>
+            <tbody>
+              ${packs.map(p => {
+                const conProblemas = p.componentes_faltantes + p.componentes_sin_stock;
+                const tag = p.componentes_faltantes > 0
+                  ? `<span class="chip chip-err">⚠ ${p.componentes_faltantes} faltante(s)</span>`
+                  : (p.componentes_sin_stock > 0
+                      ? `<span class="chip chip-warn">${p.componentes_sin_stock} sin stock</span>`
+                      : `<span class="chip chip-ok">OK</span>`);
+                return `<tr class="border-t border-slate-100 ${conProblemas?'bg-amber-50':''}">
+                  <td class="py-1 px-2">
+                    <div class="font-semibold">${esc(p.nombre)}</div>
+                    <div class="text-[11px] font-mono text-slate-500">${esc(p.codigo_barra)||'—'}</div>
+                  </td>
+                  <td class="py-1 px-2 text-right">${p.stock_actual}</td>
+                  <td class="py-1 px-2 text-right">${p.total_componentes}</td>
+                  <td class="py-1 px-2">${tag}</td>
+                  <td class="py-1 px-2 text-right whitespace-nowrap">
+                    <button class="btn btn-ghost text-xs py-1" onclick="__verDiagPack(${p.id})">🔍</button>
+                    <button class="btn btn-ghost text-xs py-1" onclick="openEditarPack(${p.id})">✏️</button>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+      const r = $('#packsResult');
+      if(r){ r.classList.remove('hidden'); r.innerHTML = html; }
+    }, 'Diagnosticando…');
+  }catch(err){ if(err && err.message !== 'busy') toast(err.message, 'err'); }
 }
 
 /* Restauración de fotos desde un Excel/CSV externo.
@@ -2662,6 +2790,58 @@ async function openMovimientos(){
 }
 
 /* Historial completo de un producto: ingresos de stock, ventas, mermas, etc. */
+/* Modal diagnóstico de pack: muestra cada componente con su stock disponible
+   y cuántos packs alcanza, para entender por qué un pack tiene el stock que
+   tiene (especialmente útil cuando el stock es 0 por un componente faltante). */
+function __verDiagPack(id){
+  const p = (S.productos || []).find(x => Number(x.id) === Number(id));
+  if(!p) return toast('Pack no encontrado', 'err');
+  const diag = Array.isArray(p._pack_diagnostico) ? p._pack_diagnostico : [];
+  const stockMin = Number(p.stock_actual) || 0;
+  let body = '';
+  if(!diag.length){
+    body = '<div class="text-slate-500 text-sm py-3">Sin diagnóstico disponible.</div>';
+  } else if(diag.length === 1 && diag[0].nota){
+    body = '<div class="text-amber-700 text-sm py-3">⚠️ ' + esc(diag[0].nota) + '</div>';
+  } else {
+    body = `
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-slate-500 text-xs">
+          <th class="py-1">Componente</th>
+          <th class="text-right py-1">Requerido</th>
+          <th class="text-right py-1">Disponible</th>
+          <th class="text-right py-1">Alcanza para</th>
+        </tr></thead>
+        <tbody>
+          ${diag.map(d => `
+            <tr class="border-t border-slate-100 ${d.problema ? 'bg-red-50' : ''}">
+              <td class="py-2">
+                <div class="font-semibold ${d.problema ? 'text-red-700' : ''}">${esc(d.nombre)}</div>
+                ${d.codigo_barra ? `<div class="text-xs font-mono text-slate-500">${esc(d.codigo_barra)}</div>` : ''}
+                ${d.problema ? `<div class="text-xs text-red-600 mt-1">⚠ ${esc(d.problema)}</div>` : ''}
+                ${d.matched_via === 'codigo_barra' ? '<div class="text-xs text-blue-600 mt-1">ℹ Resuelto por código (el ID guardado no existe — recomendado editar y re-guardar este pack)</div>' : ''}
+              </td>
+              <td class="text-right">${d.cantidad_req || 0}</td>
+              <td class="text-right ${(d.stock_disponible||0) <= 0 ? 'text-red-600 font-bold' : ''}">${d.stock_disponible || 0}</td>
+              <td class="text-right font-semibold ${(d.puede_armar||0) === 0 ? 'text-red-600' : ''}">${d.puede_armar || 0}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="mt-3 p-3 bg-slate-100 rounded text-sm">
+        <b>Stock del pack:</b> ${stockMin} unidad(es) <span class="text-slate-500 text-xs">(limitado por el componente con menos disponibilidad)</span>
+      </div>`;
+  }
+  openModal(`<div class="p-6 max-w-2xl mx-auto">
+    <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">📦 Diagnóstico de pack</h3>
+    <div class="text-sm text-slate-600 mb-3">${esc(p.nombre)} <span class="font-mono text-xs text-slate-400">${esc(p.codigo_barra||'')}</span></div>
+    ${body}
+    <div class="flex justify-between mt-4 gap-2 flex-wrap">
+      <button class="btn btn-primary text-xs" onclick="closeModal();openEditarPack(${id})">✏️ Editar pack</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cerrar</button>
+    </div>
+  </div>`);
+}
+
 async function openHistorialProducto(id){
   const p = S.productos.find(x=>Number(x.id)===Number(id));
   const nombre = p ? p.nombre : ('Producto #'+id);
