@@ -48,6 +48,7 @@
   .dash-merma   { --dash-bg: linear-gradient(135deg,#ef4444 0%, #b91c1c 100%); }   /* rojo — Merma */
   .dash-bajo    { --dash-bg: linear-gradient(135deg,#f59e0b 0%, #d97706 100%); }   /* ámbar — Bajo Stock + Sin Stock */
   .dash-promo   { --dash-bg: linear-gradient(135deg,#10b981 0%, #047857 100%); }   /* verde — Promociones */
+  .dash-config  { --dash-bg: linear-gradient(135deg,#64748b 0%, #334155 100%); }   /* slate — Configuración */
   .dash-mov     { --dash-bg: linear-gradient(135deg,#0ea5e9 0%, #0369a1 100%); }   /* celeste — Movimientos */
   /* Sub-stats dentro de la card combinada Bajo/Sin Stock */
   .dash-substats{display:flex;gap:14px;margin-top:2px;font-size:13px;font-weight:600;opacity:.95;}
@@ -429,15 +430,9 @@
             <div class="ico"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" d="M19 7l-1 12a2 2 0 01-2 2H8a2 2 0 01-2-2L5 7m5 4v6m4-6v6M9 7V4h6v3m-9 0h12"/></svg></div>
             <div class="dash-body"><h3>Merma</h3></div>
           </div>
-          <div class="dash-card dash-bajo" onclick="openBajoSinStock()" title="Ver productos con bajo stock o sin stock">
-            <div class="ico"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" d="M12 9v2m0 4h0m-9 5h18L12 3 3 20z"/></svg></div>
-            <div class="dash-body">
-              <h3>Bajo / Sin Stock</h3>
-              <div class="dash-substats">
-                <span>Bajo: <b id="statBajoStock">—</b></span>
-                <span>Sin: <b id="statSinStock">—</b></span>
-              </div>
-            </div>
+          <div class="dash-card dash-config dash-admin-only" onclick="go('configurar')" title="Configuración del sistema">
+            <div class="ico"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" d="M12 15a3 3 0 100-6 3 3 0 000 6zm7-3a7 7 0 01-.2 1.7l2 1.6-2 3.4-2.3-1a7 7 0 01-3 1.7L13 22h-4l-.5-2.6a7 7 0 01-3-1.7l-2.3 1-2-3.4 2-1.6A7 7 0 013 12c0-.6.1-1.2.2-1.7l-2-1.6 2-3.4 2.3 1a7 7 0 013-1.7L9 2h4l.5 2.6a7 7 0 013 1.7l2.3-1 2 3.4-2 1.6c.1.5.2 1.1.2 1.7z"/></svg></div>
+            <div class="dash-body"><h3>Configuración</h3></div>
           </div>
           <div class="dash-card dash-promo dash-admin-only" onclick="go('promociones')" title="Ver y gestionar promociones">
             <div class="ico"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01"/></svg></div>
@@ -449,15 +444,28 @@
           </div>
         </div>
 
-        <!-- Quick stats: Productos activos + Ventas hoy -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        <!-- Stats inferiores: Productos activos · Por vencer · Bajo/Sin Stock · Ventas hoy -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
           <div class="bg-white rounded-xl p-5 border border-slate-200">
             <div class="text-xs text-slate-500 uppercase font-semibold">Productos activos</div>
             <div id="statProductos" class="text-3xl font-bold mt-1" style="color:var(--brand-dark)">—</div>
           </div>
-          <div class="bg-white rounded-xl p-5 border border-slate-200">
-            <div class="text-xs text-slate-500 uppercase font-semibold">Ventas hoy (monto)</div>
+          <div class="bg-white rounded-xl p-5 border border-slate-200 cursor-pointer hover:bg-amber-50 transition" onclick="openProductosPorVencer()" title="Ver productos por vencer">
+            <div class="text-xs text-slate-500 uppercase font-semibold">⏳ Por vencer (30 días)</div>
+            <div id="statPorVencer" class="text-3xl font-bold mt-1 text-amber-600">—</div>
+            <div id="statPorVencerSub" class="text-xs text-slate-500 mt-1"></div>
+          </div>
+          <div class="bg-white rounded-xl p-5 border border-slate-200 cursor-pointer hover:bg-rose-50 transition" onclick="openBajoSinStock()" title="Ver productos con bajo stock o sin stock">
+            <div class="text-xs text-slate-500 uppercase font-semibold">⚠️ Stock crítico</div>
+            <div class="flex items-baseline gap-3 mt-1">
+              <div><span class="text-xs text-slate-500">Bajo:</span> <b id="statBajoStock" class="text-2xl font-bold text-amber-600">—</b></div>
+              <div><span class="text-xs text-slate-500">Sin:</span> <b id="statSinStock" class="text-2xl font-bold text-rose-600">—</b></div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl p-5 border border-slate-200" title="Ventas desde las 03:30 del día turno hasta las 03:30 del día siguiente">
+            <div class="text-xs text-slate-500 uppercase font-semibold">Ventas turno de hoy</div>
             <div id="statVentasHoy" class="text-3xl font-bold mt-1" style="color:var(--ok)">—</div>
+            <div id="statVentasHoySub" class="text-xs text-slate-500 mt-1">desde 03:30</div>
           </div>
         </div>
       </section>
@@ -628,7 +636,7 @@
       <section id="pageReportes" class="page hidden">
         <div class="bg-white rounded-xl p-4 border border-slate-200 mb-4 flex gap-3 flex-wrap items-end">
           <div><label class="label">Desde</label><input id="repDesde" type="date" class="input"></div>
-          <div><label class="label">Hora desde</label><input id="repHoraDesde" type="time" class="input" value="00:00"></div>
+          <div><label class="label">Hora desde <span class="text-xs text-slate-400">(corte de turno: 03:30)</span></label><input id="repHoraDesde" type="time" class="input" value="03:30"></div>
           <div><label class="label">Hasta</label><input id="repHasta" type="date" class="input"></div>
           <div><label class="label">Hora hasta</label><input id="repHoraHasta" type="time" class="input" value="23:59"></div>
           <button class="btn btn-primary" onclick="cargarReportes()">Aplicar</button>
@@ -714,6 +722,36 @@
                 <p class="text-xs text-slate-500 mb-3">Historial de aperturas y cierres de caja — usa las fechas y horas de arriba para acotar el rango. Incluye monto inicial, totales por medio de pago y estado.</p>
                 <div id="repCajasResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
                 <div id="repCajasTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg bg-white"></div>
+              </div>
+            </div>
+          </details>
+
+          <!-- ═══ Categoría 4: Productos por vencer (solo admin) ═══ -->
+          <details id="repCatVencimientos" class="rep-cat bg-white rounded-xl border border-slate-200 hidden">
+            <summary class="cursor-pointer select-none p-4 font-bold text-base flex items-center gap-2" style="color:var(--brand-dark)">
+              <span class="rep-cat-ico">⏳</span>
+              <span>Productos por vencer</span>
+              <span class="text-xs font-normal text-slate-400 ml-2">Reporte de fechas de vencimiento + descarga Excel</span>
+            </summary>
+            <div class="p-4 border-t border-slate-100">
+              <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <p class="text-xs text-slate-500 mb-3">Lista los productos cuya fecha de vencimiento está dentro del rango elegido. Incluye productos ya vencidos. Solo se muestran productos con stock &gt; 0.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+                  <select id="repVencDias" class="input text-sm" onchange="cargarReporteVencimientos()">
+                    <option value="7">Próximos 7 días</option>
+                    <option value="15">Próximos 15 días</option>
+                    <option value="30" selected>Próximos 30 días</option>
+                    <option value="60">Próximos 60 días</option>
+                    <option value="90">Próximos 90 días</option>
+                    <option value="365">Próximo año</option>
+                  </select>
+                  <select id="repVencCat" class="input text-sm" onchange="cargarReporteVencimientos()">
+                    <option value="">Todas las categorías</option>
+                  </select>
+                  <button class="btn btn-success text-sm" onclick="__repVencDescargarExcel()">📥 Descargar Excel</button>
+                </div>
+                <div id="repVencResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
+                <div id="repVencTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg bg-white"></div>
               </div>
             </div>
           </details>
@@ -1058,18 +1096,29 @@ function _normalizarRut(rut){
 }
 
 /* Medios de pago soportados — orden fijo para la UI y los reportes */
-const MEDIOS_PAGO = ['efectivo','debito','credito','transferencia','fiado','rappi','pedidos_ya'];
+/* Medios de pago disponibles en el modal de cobro. Las apps de delivery
+   ahora distinguen entre online (lo cobra la app al cliente) y efectivo (el
+   picker paga al local; el monto puede diferir del precio del local porque
+   la app publica con margen para cubrir su comisión).
+   Los medios "rappi" y "pedidos_ya" sin sufijo se mantienen solo para
+   compatibilidad con datos antiguos — no se ofrecen como opción al cobrar. */
+const MEDIOS_PAGO = ['efectivo','debito','credito','transferencia','fiado',
+  'rappi_online','rappi_efectivo','pedidos_ya_online','pedidos_ya_efectivo'];
 const MEDIO_LABEL = {
   efectivo:'Efectivo', debito:'Débito', credito:'Crédito',
   transferencia:'Transferencia', fiado:'Fiado',
-  rappi:'Rappi', pedidos_ya:'Pedidos Ya'
+  rappi:'Rappi', pedidos_ya:'Pedidos Ya',
+  rappi_online:'Rappi online', rappi_efectivo:'Rappi efectivo',
+  pedidos_ya_online:'Pedidos Ya online', pedidos_ya_efectivo:'Pedidos Ya efectivo'
 };
 const MEDIO_ICON = {
   efectivo:'💵', debito:'💳', credito:'🏦', transferencia:'🔄',
-  fiado:'📝', rappi:'🛵', pedidos_ya:'📦'
+  fiado:'📝', rappi:'🛵', pedidos_ya:'📦',
+  rappi_online:'🛵', rappi_efectivo:'🛵', pedidos_ya_online:'📦', pedidos_ya_efectivo:'📦'
 };
 const medioLabel = m => MEDIO_LABEL[m] || m;
 const medioIcon  = m => MEDIO_ICON[m] || '•';
+const esDeliveryEfectivo = m => m === 'rappi_efectivo' || m === 'pedidos_ya_efectivo';
 
 function toast(msg, type='info'){
   const el = document.createElement('div');
@@ -1269,6 +1318,48 @@ function enterApp(){
   cargarNotificaciones();
   cargarTerminalesTuu();
   cargarPromocionesActivas();
+  _instalarScannerGlobal();
+}
+
+/* Scanner global en la pantalla Venta: cuando el cajero dispara la pistola
+   sin haber pinchado el campo de búsqueda, redirige las teclas al scanInput
+   automáticamente. Se activa SOLO en pageVentas y SOLO si el target del
+   keypress NO es un input/select/textarea/contentEditable (para no romper
+   modales, formularios, etc.). */
+let _scannerGlobalInstalado = false;
+function _instalarScannerGlobal(){
+  if(_scannerGlobalInstalado) return;
+  _scannerGlobalInstalado = true;
+  document.addEventListener('keydown', (ev) => {
+    // Solo activo en módulo Venta
+    if(S.view !== 'ventas') return;
+    // Si hay un modal abierto, no interferir (el modal puede tener inputs propios)
+    if($('#modalRoot') && $('#modalRoot').children.length > 0) return;
+    // Si el target es un campo de input editable, no interferir
+    const t = ev.target;
+    if(!t) return;
+    const tag = t.tagName;
+    if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if(t.isContentEditable) return;
+    // Ignorar teclas de navegación / modificadores
+    if(ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    if(ev.key === 'Tab' || ev.key === 'Shift' || ev.key === 'Escape') return;
+    // Foco al scanInput. Los caracteres normales se quedan en el evento;
+    // el scanInput los va a recibir directamente. Para Enter, simulamos
+    // que ya está en el input (ya focuseado).
+    const inp = $('#scanInput');
+    if(!inp) return;
+    inp.focus();
+    // Si es un caracter imprimible, lo agregamos manualmente porque el
+    // foco se aplica DESPUÉS del keydown actual y este caracter no llegaría
+    // al input. Para Enter dejamos que el form lo maneje.
+    if(ev.key && ev.key.length === 1){
+      ev.preventDefault();
+      inp.value = inp.value + ev.key;
+      // Disparar el evento input para que el resto del código reaccione
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }, true);
 }
 
 /* Carga las promociones activas. Se llaman al login y se refrescan cuando
@@ -2253,6 +2344,10 @@ function openNuevoProducto(){
         <div><label class="label">Valor venta ($)</label><input name="valor_venta" type="number" min="0" class="input" oninput="_calcMargen('venta')"></div>
         <div><label class="label">Margen % (calculado)</label><input name="margen" type="number" step="0.1" class="input" oninput="_calcMargen('margen')"></div>
         <div><label class="label">Stock inicial * (obligatorio)</label><input name="stock_inicial" type="number" min="0" class="input" required></div>
+        <div><label class="label">Fecha de vencimiento <span class="text-xs text-slate-400">(opcional)</span></label>
+          <input name="fecha_vencimiento" type="date" class="input">
+          <div class="text-xs text-slate-500 mt-1">📅 Útil para productos perecibles. Aparece en alertas del panel.</div>
+        </div>
         <div class="md:col-span-2 flex gap-2 justify-end mt-2">
           <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
           <button class="btn btn-primary">Guardar</button>
@@ -2589,6 +2684,9 @@ function openEditarProducto(id){
         </div>
         <div><label class="label">Valor compra ($)</label><input name="valor_compra" type="number" class="input" value="${p.valor_compra}"></div>
         <div><label class="label">Valor venta ($)</label><input name="valor_venta" type="number" class="input" value="${p.valor_venta}"></div>
+        <div class="md:col-span-2"><label class="label">Fecha de vencimiento <span class="text-xs text-slate-400">(opcional, para productos perecibles)</span></label>
+          <input name="fecha_vencimiento" type="date" class="input" value="${p.fecha_vencimiento ? String(p.fecha_vencimiento).slice(0,10) : ''}">
+        </div>
         <div class="md:col-span-2 mt-1 p-3 rounded-lg border ${_truthyJs(p.activo)?'border-emerald-200 bg-emerald-50':'border-slate-300 bg-slate-100'}">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" name="activo" value="true" ${_truthyJs(p.activo)?'checked':''}>
@@ -2653,6 +2751,11 @@ function openActualizarStock(id){
       <form id="formStk" class="space-y-3">
         <div><label class="label">Cantidad a sumar</label>
           <input name="cantidad" type="number" min="1" class="input" required autofocus></div>
+        <div><label class="label">Fecha de vencimiento <span class="text-xs text-slate-400">(opcional, actualiza la del producto)</span></label>
+          <input name="fecha_vencimiento" type="date" class="input"
+            value="${p.fecha_vencimiento ? String(p.fecha_vencimiento).slice(0,10) : ''}">
+          <div class="text-xs text-slate-500 mt-1">Si esta partida tiene vencimiento distinto al actual, ingrésalo acá.</div>
+        </div>
         <div><label class="label">Observaciones (opcional)</label>
           <input name="observaciones" class="input"></div>
         <div class="flex gap-2 justify-end">
@@ -2965,6 +3068,124 @@ async function openSinStock(){
 /* Modal combinado: muestra ambos estados (bajo stock y sin stock) en
    pestañas. Incluye filtros (búsqueda, categoría, cantidad máxima) y
    descarga Excel. Es el endpoint del card "Bajo / Sin Stock" del dashboard. */
+/* Modal "Productos por vencer": muestra la lista con stock > 0 cuya fecha
+   de vencimiento está dentro de los próximos N días (selector configurable).
+   Permite descargar a Excel y filtrar por categoría. */
+async function openProductosPorVencer(){
+  openModal(`<div class="p-6 max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+      <h3 class="text-lg font-bold" style="color:var(--brand-dark)">⏳ Productos por vencer</h3>
+      <button class="btn btn-success text-xs" onclick="__pvDescargarExcel()">📥 Descargar Excel</button>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+      <select id="pvDias" class="input text-sm" onchange="__pvCargar()">
+        <option value="7">Próximos 7 días</option>
+        <option value="15">Próximos 15 días</option>
+        <option value="30" selected>Próximos 30 días</option>
+        <option value="60">Próximos 60 días</option>
+        <option value="90">Próximos 90 días</option>
+      </select>
+      <input id="pvBusq" class="input text-sm" placeholder="🔍 Buscar nombre o código…" oninput="__pvAplicarFiltros()">
+      <select id="pvCat" class="input text-sm" onchange="__pvAplicarFiltros()">
+        <option value="">Todas las categorías</option>
+      </select>
+    </div>
+    <div id="pvContenido" class="max-h-[55vh] overflow-auto">Cargando…</div>
+    <div class="flex justify-between items-center mt-3 text-xs text-slate-500">
+      <span id="pvResumen">—</span>
+      <button class="btn btn-ghost" onclick="closeModal()">Cerrar</button>
+    </div>
+  </div>`);
+  let _pvData = [];
+  let _pvFiltrados = [];
+  function _pvAplicar(){
+    const q = ($('#pvBusq')?.value || '').toLowerCase().trim();
+    const cat = $('#pvCat')?.value || '';
+    _pvFiltrados = _pvData.filter(p => {
+      if(q){
+        const n = String(p.nombre||'').toLowerCase();
+        const c = String(p.codigo_barra||'').toLowerCase();
+        if(!n.includes(q) && !c.includes(q)) return false;
+      }
+      if(cat && String(p.categoria||'').trim() !== cat) return false;
+      return true;
+    });
+    _pvRender();
+  }
+  function _pvRender(){
+    const cont = $('#pvContenido');
+    if(!cont) return;
+    if(!_pvFiltrados.length){
+      cont.innerHTML = '<div class="text-emerald-700 py-6 text-center">✔️ Ningún producto en este rango.</div>';
+    } else {
+      cont.innerHTML = `<table>
+        <thead><tr>
+          <th>Código</th><th>Producto</th><th>Categoría</th>
+          <th class="text-right">Stock</th>
+          <th>Vence</th>
+          <th class="text-right">Días</th>
+        </tr></thead>
+        <tbody>${_pvFiltrados.map(p => {
+          const tag = p.vencido
+            ? `<span class="text-red-600 font-bold">${p.dias_restantes}</span>`
+            : (p.dias_restantes <= 7
+                ? `<span class="text-amber-700 font-semibold">${p.dias_restantes}</span>`
+                : `<span class="text-slate-700">${p.dias_restantes}</span>`);
+          return `<tr class="${p.vencido?'bg-red-50':(p.dias_restantes<=7?'bg-amber-50':'')}">
+            <td class="font-mono text-xs text-slate-500">${esc(p.codigo_barra)||'—'}</td>
+            <td class="font-semibold">${esc(p.nombre)}</td>
+            <td class="text-xs">${esc(p.categoria)||''}</td>
+            <td class="text-right">${p.stock_actual}</td>
+            <td class="text-xs">${fmtFechaCorta(p.fecha_vencimiento)}</td>
+            <td class="text-right">${tag}</td>
+          </tr>`;
+        }).join('')}</tbody></table>`;
+    }
+    $('#pvResumen').textContent = `Mostrando ${_pvFiltrados.length} de ${_pvData.length} producto(s)`;
+  }
+  window.__pvCargar = async () => {
+    const dias = Number($('#pvDias')?.value) || 30;
+    const cont = $('#pvContenido');
+    if(cont) cont.innerHTML = '<div class="text-slate-500 py-6 text-center">Cargando…</div>';
+    try{
+      const r = await api('productosPorVencer', { dias });
+      _pvData = Array.isArray(r.productos) ? r.productos : [];
+      // poblar select de categorías
+      const setCats = new Set();
+      _pvData.forEach(p => p.categoria && setCats.add(String(p.categoria).trim()));
+      const sel = $('#pvCat');
+      const valActual = sel?.value || '';
+      if(sel){
+        sel.innerHTML = '<option value="">Todas las categorías</option>' +
+          Array.from(setCats).sort().map(c => `<option value="${esc(c)}" ${c===valActual?'selected':''}>${esc(c)}</option>`).join('');
+      }
+      _pvAplicar();
+    }catch(err){
+      cont.innerHTML = `<div class="text-red-500 py-6 text-center">${esc(err.message)}</div>`;
+    }
+  };
+  window.__pvAplicarFiltros = () => _pvAplicar();
+  window.__pvDescargarExcel = () => {
+    if(typeof XLSX === 'undefined'){ toast('Librería de Excel no cargada','err'); return; }
+    if(!_pvData.length){ toast('Nada que descargar','info'); return; }
+    const wb = XLSX.utils.book_new();
+    const dat = _pvData.map(p => ({
+      'Código': p.codigo_barra || '',
+      'Producto': p.nombre || '',
+      'Categoría': p.categoria || '',
+      'Stock actual': Number(p.stock_actual)||0,
+      'Precio venta': Number(p.valor_venta)||0,
+      'Fecha vencimiento': p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString('es-CL') : '',
+      'Días restantes': p.dias_restantes,
+      'Estado': p.vencido ? 'VENCIDO' : (p.dias_restantes <= 7 ? 'Crítico' : 'Próximo')
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dat), 'Por vencer');
+    XLSX.writeFile(wb, `PorVencer_BarraIndomita_${new Date().toISOString().slice(0,10)}.xlsx`);
+    toast('Excel descargado','ok');
+  };
+  __pvCargar();
+}
+
 async function openBajoSinStock(){
   openModal(`<div class="p-6 max-w-4xl mx-auto">
     <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
@@ -3266,6 +3487,18 @@ function confirmCerrarCaja(){
           </div>
         </div>
 
+        <!-- Sobre para depósito -->
+        <div class="p-3 rounded border border-blue-200 bg-blue-50">
+          <label class="label">💼 Monto al sobre para depósito</label>
+          <input id="inpSobreDeposito" name="monto_sobre_deposito" type="text" inputmode="numeric"
+            class="input" placeholder="${fmtMoney(efectivoEsperado)}"
+            value="${fmtMoney(efectivoEsperado)}"
+            oninput="this.value=fmtMoney(parseMoney(this.value))">
+          <div class="text-xs text-slate-600 mt-1">
+            Cuánto efectivo se traspasa al sobre para llevar al banco. Por defecto se asume todo lo que quedó en caja. Si dejas algo de fondo para el siguiente turno, ingresa solo lo que va al sobre.
+          </div>
+        </div>
+
         <!-- Observaciones siempre disponibles -->
         <div>
           <label class="label">Observaciones al cierre (opcional)</label>
@@ -3330,6 +3563,10 @@ function confirmCerrarCaja(){
     } else {
       delete data.monto_real;
       delete data.nota_diferencia;
+    }
+    // Sobre para depósito (siempre enviado, sea o no diferencia).
+    if(data.monto_sobre_deposito !== undefined){
+      data.monto_sobre_deposito = parseMoney(String(data.monto_sobre_deposito));
     }
     try{
       await api('cerrarCaja', data);
@@ -4370,6 +4607,7 @@ function openPago(){
                   : `⚠️ Falta: <b>${fmt((Number(pago1.monto)||0) - pagaCon1)}</b>`}
               </div>` : ''}
           </div>` : ''}
+        ${esDeliveryEfectivo(pago1.medio) ? _renderPickerInput(1, pago1) : ''}
       </div>
       <label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" ${pago2?'checked':''} onchange="__togglePago2(this.checked)"> Usar 2 medios de pago</label>
       ${pago2 ? `
@@ -4398,6 +4636,7 @@ function openPago(){
                     : `⚠️ Falta: <b>${fmt((Number(pago2.monto)||0) - pagaCon2)}</b>`}
                 </div>` : ''}
             </div>` : ''}
+          ${esDeliveryEfectivo(pago2.medio) ? _renderPickerInput(2, pago2) : ''}
         </div>` : ''}
       ${(pago1.medio==='fiado'||(pago2&&pago2.medio==='fiado')) ? `
         <div class="mb-3"><label class="label">Cliente (fiado)</label>
@@ -4444,12 +4683,14 @@ function openPago(){
   window.__setMedio1 = m => {
     pago1.medio = m;
     if(m !== 'efectivo') pagaCon1 = 0;   // limpiar vuelto si cambió de efectivo
-    // Si pasamos a un medio tarjeta y no hay pago2, el monto se recalcula.
+    // Si pasamos de delivery_efectivo a otro medio, limpiamos monto_picker.
+    if(!esDeliveryEfectivo(m)) delete pago1.monto_picker;
     ajustar(); render();
   };
   window.__setMedio2 = m => {
     if(pago2) pago2.medio = m;
     if(m !== 'efectivo') pagaCon2 = 0;
+    if(pago2 && !esDeliveryEfectivo(m)) delete pago2.monto_picker;
     ajustar(); render();
   };
   window.__setMonto1 = v => {
@@ -4481,6 +4722,43 @@ function openPago(){
   window.__setPagaCon1 = v => { pagaCon1 = Number(v)||0; render(); };
   window.__setPagaCon2 = v => { pagaCon2 = Number(v)||0; render(); };
   window.__setCliente = v => { cliente_fiado = v; };
+  /* Renderiza el panel "Monto que paga el picker" para delivery en efectivo.
+     El monto del PICKER puede diferir del precio del local: la app publica
+     con margen para cubrir su comisión, así que el picker entrega más en
+     efectivo. La diferencia queda registrada como comisión de delivery. */
+  window._renderPickerInput = (idx, pago) => {
+    const total = Number(pago.monto) || 0;
+    const picker = pago.monto_picker !== undefined && pago.monto_picker !== null && pago.monto_picker !== ''
+      ? Number(pago.monto_picker)
+      : total;  // por defecto = igual al precio del local
+    const delta = picker - total;
+    const colorChip = delta > 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : (delta < 0 ? 'bg-red-50 text-red-700 border-red-200'
+                                 : 'bg-slate-50 text-slate-600 border-slate-200');
+    const labelDelta = delta > 0 ? `Comisión a favor del local: +${fmt(delta)}`
+                     : (delta < 0 ? `Comisión en contra del local: ${fmt(delta)}`
+                                  : 'Sin diferencia: monto picker = precio local');
+    return `<div class="mt-2 p-2 rounded border border-amber-300 bg-amber-50">
+      <label class="label">🛵 Monto que paga el picker</label>
+      <input type="text" inputmode="numeric" class="input"
+        value="${fmtMoney(picker)}"
+        placeholder="${fmtMoney(total)}"
+        oninput="this.value=fmtMoney(parseMoney(this.value))"
+        onchange="__setPicker(${idx}, parseMoney(this.value))">
+      <div class="text-xs text-slate-600 mt-1">
+        Precio del local: <b>${fmt(total)}</b>. Si la app publica con margen para cubrir su comisión, el picker entrega más en efectivo.
+      </div>
+      <div class="mt-2 p-2 rounded border ${colorChip} text-xs font-semibold">
+        ${labelDelta}
+      </div>
+    </div>`;
+  };
+  window.__setPicker = (idx, v) => {
+    const target = idx === 1 ? pago1 : pago2;
+    if(!target) return;
+    target.monto_picker = Number(v) || 0;
+    render();
+  };
   /* Sobrescritura local de __setTuuDocType: actualiza la variable local del
      modal (para re-render) y persiste la elección. Si el documento elegido
      no soporta exento por item, limpia las marcas. */
@@ -4793,12 +5071,15 @@ async function cargarReportes(){
   const hora_desde = $('#repHoraDesde')?.value || '00:00';
   const hora_hasta = $('#repHoraHasta')?.value || '23:59';
   const params = {desde, hasta, hora_desde, hora_hasta};
-  // Categoría "Venta por Perfil y Caja" visible sólo para administradores
+  // Categorías visibles sólo para administradores
   const catPerfilCaja = $('#repCatPerfilCaja');
   if(catPerfilCaja) catPerfilCaja.classList.toggle('hidden', S.usuario?.rol !== 'admin');
+  const catVencimientos = $('#repCatVencimientos');
+  if(catVencimientos) catVencimientos.classList.toggle('hidden', S.usuario?.rol !== 'admin');
   if(S.usuario?.rol === 'admin'){
     cargarVentasDetalladas(params);
     cargarReporteCajas(params);
+    cargarReporteVencimientos();
   }
   try{
     const [v, p, m, c] = await Promise.all([
@@ -4917,6 +5198,101 @@ async function cargarVentasDetalladas(params){
 }
 
 /* REPORTE DE CAJAS (admin) ──────────────────────────────────────── */
+/* Reporte de productos por vencer dentro del módulo Reportes (admin).
+   Lee filtros desde los selects de la sección y popula la tabla + resumen. */
+let _repVencData = [];
+async function cargarReporteVencimientos(){
+  const tbl = $('#repVencTbl');
+  const res = $('#repVencResumen');
+  if(!tbl) return;
+  tbl.innerHTML = '<div class="text-slate-500 py-6 text-center text-sm">Cargando…</div>';
+  if(res) res.innerHTML = '';
+  const dias = Number($('#repVencDias')?.value) || 30;
+  const cat = $('#repVencCat')?.value || '';
+  try{
+    const d = await api('reporteVencimientos', { dias, categoria: cat });
+    _repVencData = Array.isArray(d.productos) ? d.productos : [];
+    // Poblar select de categorías (dinámico desde el inventario)
+    const setCats = new Set();
+    (S.productos||[]).forEach(p => p.categoria && setCats.add(String(p.categoria).trim()));
+    const sel = $('#repVencCat');
+    if(sel){
+      const valActual = sel.value;
+      sel.innerHTML = '<option value="">Todas las categorías</option>' +
+        Array.from(setCats).sort().map(c => `<option value="${esc(c)}" ${c===valActual?'selected':''}>${esc(c)}</option>`).join('');
+    }
+    // Resumen
+    if(res){
+      res.innerHTML = `
+        <div class="bg-white rounded p-2 border border-slate-200">
+          <div class="text-xs text-slate-500">Productos en rango</div>
+          <div class="text-2xl font-bold">${d.total}</div>
+        </div>
+        <div class="bg-white rounded p-2 border border-red-200">
+          <div class="text-xs text-slate-500">Ya vencidos</div>
+          <div class="text-2xl font-bold text-red-700">${d.vencidos}</div>
+        </div>
+        <div class="bg-white rounded p-2 border border-amber-200">
+          <div class="text-xs text-slate-500">Críticos (≤7 días)</div>
+          <div class="text-2xl font-bold text-amber-700">${_repVencData.filter(x=>!x.vencido && x.dias_restantes<=7).length}</div>
+        </div>
+        <div class="bg-white rounded p-2 border border-slate-200">
+          <div class="text-xs text-slate-500">Categorías afectadas</div>
+          <div class="text-2xl font-bold">${Object.keys(d.por_categoria||{}).length}</div>
+        </div>`;
+    }
+    if(!_repVencData.length){
+      tbl.innerHTML = '<div class="text-emerald-700 py-6 text-center text-sm">✔️ Ningún producto en este rango.</div>';
+      return;
+    }
+    tbl.innerHTML = `<table class="w-full text-sm">
+      <thead><tr class="bg-slate-50 text-left text-slate-500 text-xs">
+        <th class="py-2 px-2">Código</th>
+        <th class="py-2 px-2">Producto</th>
+        <th class="py-2 px-2">Categoría</th>
+        <th class="py-2 px-2 text-right">Stock</th>
+        <th class="py-2 px-2">Vence</th>
+        <th class="py-2 px-2 text-right">Días</th>
+      </tr></thead>
+      <tbody>${_repVencData.map(p => {
+        const tag = p.vencido
+          ? `<span class="text-red-600 font-bold">VENCIDO (${p.dias_restantes})</span>`
+          : (p.dias_restantes <= 7
+              ? `<span class="text-amber-700 font-semibold">${p.dias_restantes}</span>`
+              : `<span>${p.dias_restantes}</span>`);
+        return `<tr class="border-t border-slate-100 ${p.vencido?'bg-red-50':(p.dias_restantes<=7?'bg-amber-50':'')}">
+          <td class="py-1 px-2 font-mono text-xs text-slate-500">${esc(p.codigo_barra)||'—'}</td>
+          <td class="py-1 px-2 font-semibold">${esc(p.nombre)}</td>
+          <td class="py-1 px-2 text-xs">${esc(p.categoria)||''}</td>
+          <td class="py-1 px-2 text-right">${p.stock_actual}</td>
+          <td class="py-1 px-2 text-xs">${fmtFechaCorta(p.fecha_vencimiento)}</td>
+          <td class="py-1 px-2 text-right">${tag}</td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  }catch(err){
+    tbl.innerHTML = `<div class="text-red-500 py-6 text-center">${esc(err.message)}</div>`;
+  }
+}
+window.__repVencDescargarExcel = () => {
+  if(typeof XLSX === 'undefined'){ toast('Librería de Excel no cargada','err'); return; }
+  if(!_repVencData.length){ toast('Nada que descargar','info'); return; }
+  const wb = XLSX.utils.book_new();
+  const dat = _repVencData.map(p => ({
+    'Código': p.codigo_barra || '',
+    'Producto': p.nombre || '',
+    'Categoría': p.categoria || '',
+    'Stock actual': Number(p.stock_actual)||0,
+    'Precio compra': Number(p.valor_compra)||0,
+    'Precio venta': Number(p.valor_venta)||0,
+    'Fecha vencimiento': p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString('es-CL') : '',
+    'Días restantes': p.dias_restantes,
+    'Estado': p.vencido ? 'VENCIDO' : (p.dias_restantes <= 7 ? 'Crítico (≤7 días)' : 'Próximo')
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dat), 'Por vencer');
+  XLSX.writeFile(wb, `Vencimientos_BarraIndomita_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Excel descargado','ok');
+};
+
 async function cargarReporteCajas(params){
   const tbl = $('#repCajasTbl');
   const resumen = $('#repCajasResumen');
@@ -4992,7 +5368,8 @@ async function cargarReporteCajas(params){
         <td class="text-right">${fmt(c.total_credito)}</td>
         <td class="text-right">${fmt(c.total_transferencia)}</td>
         <td class="text-right">${fmt(c.total_fiado)}</td>
-        <td class="text-right">${fmt((Number(c.total_rappi)||0) + (Number(c.total_pedidos_ya)||0))}</td>
+        <td class="text-right">${fmt((Number(c.total_rappi)||0) + (Number(c.total_rappi_online)||0) + (Number(c.total_rappi_efectivo)||0) + (Number(c.total_pedidos_ya)||0) + (Number(c.total_pedidos_ya_online)||0) + (Number(c.total_pedidos_ya_efectivo)||0))}</td>
+        <td class="text-right text-blue-700 font-semibold">${estado==='cerrada' && c.monto_sobre_deposito !== '' && c.monto_sobre_deposito !== null && c.monto_sobre_deposito !== undefined ? fmt(c.monto_sobre_deposito) : '—'}</td>
         <td class="text-right">${c.cant_ventas||0}</td>
         <td class="text-right font-bold" style="color:var(--ok)">${fmt(c.total_ventas)}</td>
         <td>${pill}</td>
@@ -5012,6 +5389,7 @@ async function cargarReporteCajas(params){
         <th class="text-right">Transf.</th>
         <th class="text-right">Fiado</th>
         <th class="text-right">Apps</th>
+        <th class="text-right" title="Monto que se traspasó al sobre para depósito al cerrar la caja">💼 Sobre</th>
         <th class="text-right">Ventas</th>
         <th class="text-right">Total</th>
         <th>Estado</th>
@@ -5114,24 +5492,122 @@ function renderVentasPorVendedor(){
   wrap.innerHTML = `<table class="w-full">
     <thead><tr>
       <th>Venta</th><th>Fecha</th><th>Hora</th><th>Vendedor</th>
-      <th>Artículos</th><th>Medio(s) de pago</th><th class="text-right">Total</th>
+      <th>Artículos</th><th>Medio(s) de pago</th><th class="text-right">Total</th><th></th>
     </tr></thead>
-    <tbody>${ventas.map(v=>{
+    <tbody>${ventas.map((v, i)=>{
       const medios = [];
       if(v.medio_pago_1) medios.push(`${medioIcon(v.medio_pago_1)} ${medioLabel(v.medio_pago_1)} ${fmt(v.monto_pago_1)}`);
       if(v.medio_pago_2) medios.push(`${medioIcon(v.medio_pago_2)} ${medioLabel(v.medio_pago_2)} ${fmt(v.monto_pago_2)}`);
-      const items = (v.items||[]).map(it=>`${it.nombre} ×${it.cantidad}`).join(' · ');
-      return `<tr>
+      const items = (v.items||[]).map(it=>`${esc(it.nombre)} ×${it.cantidad}`).join(' · ');
+      const cantItems = (v.items||[]).length;
+      return `<tr class="cursor-pointer hover:bg-blue-50 transition" onclick="__verDetalleVenta(${i})" title="Clic para ver el detalle completo de la venta">
         <td class="font-mono text-xs">#${v.id}</td>
         <td class="text-xs">${fmtFechaCorta(v.fecha_hora)}</td>
         <td class="text-xs">${fmtHora(v.fecha_hora)}</td>
-        <td class="text-sm font-semibold">${v.vendedor_nombre||'—'}</td>
-        <td class="text-xs max-w-[22rem] truncate" title="${items.replace(/"/g,'&quot;')}">${items}</td>
+        <td class="text-sm font-semibold">${esc(v.vendedor_nombre)||'—'}</td>
+        <td class="text-xs max-w-[22rem] truncate">${items} ${cantItems > 3 ? `<span class="text-blue-600 font-semibold">(${cantItems} ítems)</span>` : ''}</td>
         <td class="text-xs">${medios.join('<br>')||'—'}</td>
         <td class="text-right font-semibold">${fmt(v.total)}</td>
+        <td class="text-center text-blue-500"><span title="Ver detalle">🔍</span></td>
       </tr>`;
     }).join('')}</tbody></table>`;
 }
+
+/* Modal con detalle COMPLETO de una venta del reporte. Útil cuando los items
+   no caben en la celda truncada de la tabla. Muestra cabecera (id, fecha,
+   vendedor, totales, descuentos, medios de pago) y tabla con TODOS los items
+   con código, cantidad, precio, descuento, subtotal. */
+window.__verDetalleVenta = (idx) => {
+  const v = _repDetalle.ventas[idx];
+  if(!v) return;
+  const items = v.items || [];
+  const medios = [];
+  if(v.medio_pago_1) medios.push({m: v.medio_pago_1, monto: v.monto_pago_1});
+  if(v.medio_pago_2) medios.push({m: v.medio_pago_2, monto: v.monto_pago_2});
+  const subtotalItems = items.reduce((s,it) => s + (Number(it.subtotal)||0), 0);
+  openModal(`<div class="p-6 max-w-3xl mx-auto">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div>
+        <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🧾 Venta #${v.id}</h3>
+        <div class="text-xs text-slate-500">${fmtFechaCorta(v.fecha_hora)} · ${fmtHora(v.fecha_hora)} · Vendedor: <b>${esc(v.vendedor_nombre)||'—'}</b></div>
+      </div>
+      <button class="btn btn-ghost text-xs" onclick="__copiarDetalleVenta(${idx})" title="Copiar resumen al portapapeles">📋 Copiar</button>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs">
+      <div class="bg-slate-50 rounded p-2 border border-slate-200">
+        <div class="text-slate-500">Ítems</div>
+        <div class="text-lg font-bold">${items.length}</div>
+      </div>
+      <div class="bg-slate-50 rounded p-2 border border-slate-200">
+        <div class="text-slate-500">Subtotal</div>
+        <div class="text-lg font-bold">${fmt(v.subtotal || subtotalItems)}</div>
+      </div>
+      <div class="bg-slate-50 rounded p-2 border border-slate-200">
+        <div class="text-slate-500">Descuento</div>
+        <div class="text-lg font-bold text-red-600">-${fmt(v.descuento_monto||0)}</div>
+      </div>
+      <div class="bg-emerald-50 rounded p-2 border border-emerald-200">
+        <div class="text-slate-500">Total</div>
+        <div class="text-lg font-bold text-emerald-700">${fmt(v.total)}</div>
+      </div>
+    </div>
+
+    <div class="text-xs font-semibold text-slate-600 mb-1">Medio(s) de pago:</div>
+    <div class="text-sm mb-3">
+      ${medios.map(p => `<div class="inline-block px-2 py-1 mr-1 mb-1 rounded bg-slate-100">${medioIcon(p.m)} ${medioLabel(p.m)}: <b>${fmt(p.monto)}</b></div>`).join('') || '<span class="text-slate-400">—</span>'}
+      ${v.cliente_fiado ? `<div class="text-xs text-amber-700 mt-1">🧾 Cliente fiado: <b>${esc(v.cliente_fiado)}</b></div>` : ''}
+    </div>
+
+    <div class="text-xs font-semibold text-slate-600 mb-1">Detalle de productos (${items.length}):</div>
+    <div class="max-h-[45vh] overflow-auto border border-slate-200 rounded">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-slate-50 text-left text-slate-500 text-xs">
+          <th class="py-1 px-2">Código</th>
+          <th class="py-1 px-2">Producto</th>
+          <th class="py-1 px-2">Categoría</th>
+          <th class="py-1 px-2 text-right">Cant.</th>
+          <th class="py-1 px-2 text-right">P. unit.</th>
+          <th class="py-1 px-2 text-right">Desc.</th>
+          <th class="py-1 px-2 text-right">Subtotal</th>
+        </tr></thead>
+        <tbody>${items.length ? items.map(it => `
+          <tr class="border-t border-slate-100">
+            <td class="py-1 px-2 font-mono text-xs text-slate-500">${esc(it.codigo_barra)||'—'}</td>
+            <td class="py-1 px-2 font-semibold">${esc(it.nombre)}</td>
+            <td class="py-1 px-2 text-xs">${esc(it.categoria)||''}</td>
+            <td class="py-1 px-2 text-right">${it.cantidad}</td>
+            <td class="py-1 px-2 text-right">${fmt(it.precio_unitario)}</td>
+            <td class="py-1 px-2 text-right text-red-600">${Number(it.descuento_pct_item)>0 ? '-'+Number(it.descuento_pct_item)+'%' : '—'}</td>
+            <td class="py-1 px-2 text-right font-semibold">${fmt(it.subtotal)}</td>
+          </tr>`).join('') : '<tr><td colspan="7" class="text-center text-slate-400 py-4">Sin items registrados</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex justify-end mt-3">
+      <button class="btn btn-ghost" onclick="closeModal()">Cerrar</button>
+    </div>
+  </div>`);
+};
+
+window.__copiarDetalleVenta = (idx) => {
+  const v = _repDetalle.ventas[idx];
+  if(!v) return;
+  const items = v.items || [];
+  const lineas = [
+    `Venta #${v.id} — ${fmtFechaCorta(v.fecha_hora)} ${fmtHora(v.fecha_hora)}`,
+    `Vendedor: ${v.vendedor_nombre||'—'}`,
+    `Total: ${fmt(v.total)}`,
+    '',
+    'Productos:',
+    ...items.map(it => `  • ${it.cantidad}× ${it.nombre} — ${fmt(it.subtotal)}`)
+  ].join('\n');
+  navigator.clipboard?.writeText(lineas).then(
+    () => toast('Resumen copiado','ok'),
+    () => toast('No se pudo copiar','err')
+  );
+};
 
 function descargarSabanaExcel(){
   if(!window.XLSX){ toast('La librería de Excel aún no cargó, intenta de nuevo en un segundo.','err'); return; }
@@ -5866,6 +6342,46 @@ window.__marcarDifRevisada = async (id) => {
   }catch(err){ toast(err.message,'err'); }
 };
 
+/* Hora de corte de turno: las ventas de la jornada se cuentan desde
+   esta hora del día turno hasta la misma hora del día siguiente.
+   Cambialo si el botillería abre/cierra en otro horario. */
+const TURNO_HORA_CORTE = '03:30';
+
+/* Devuelve la fecha (YYYY-MM-DD) del día turno en curso. Si la hora local
+   actual es ANTES del corte (ej. 02:00), seguimos en el turno de "ayer". */
+function _diaTurnoActual(){
+  const ahora = new Date();
+  const [hh, mm] = TURNO_HORA_CORTE.split(':').map(Number);
+  const corteMins = hh * 60 + mm;
+  const ahoraMins = ahora.getHours() * 60 + ahora.getMinutes();
+  const dia = new Date(ahora);
+  if(ahoraMins < corteMins){
+    dia.setDate(dia.getDate() - 1);
+  }
+  // Usamos componentes locales (no toISOString) para no perder un día por TZ.
+  const y = dia.getFullYear();
+  const m = String(dia.getMonth() + 1).padStart(2, '0');
+  const d = String(dia.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+function _diaSiguienteISO(diaISO){
+  const d = new Date(diaISO + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + dd;
+}
+/* Hora_hasta del turno: 1 minuto antes del corte del día siguiente, para
+   evitar superponer turnos consecutivos (ej: hora_hasta = "03:29"). */
+function _horaCorteFin(){
+  const [hh, mm] = TURNO_HORA_CORTE.split(':').map(Number);
+  const totalMin = hh * 60 + mm - 1;
+  const h = String(Math.floor((totalMin + 1440) % 1440 / 60)).padStart(2, '0');
+  const m = String((totalMin + 1440) % 60).padStart(2, '0');
+  return h + ':' + m;
+}
+
 async function cargarStatsDashboard(){
   try{
     $('#statProductos').textContent = S.productos.length;
@@ -5877,9 +6393,31 @@ async function cargarStatsDashboard(){
     $('#statBajoStock').textContent = bajos;
     const sinStock = S.productos.filter(p => !esPack(p) && Number(p.stock_actual) <= 0).length;
     const el = $('#statSinStock'); if(el) el.textContent = sinStock;
-    const hoy = new Date().toISOString().slice(0,10);
-    const d = await api('reporteVentas', { desde: hoy, hasta: hoy });
+    // "Ventas turno de hoy": rango [día_turno 03:30, día_siguiente 03:29:59]
+    const diaTurno = _diaTurnoActual();
+    const diaSig   = _diaSiguienteISO(diaTurno);
+    const d = await api('reporteVentas', {
+      desde: diaTurno, hasta: diaSig,
+      hora_desde: TURNO_HORA_CORTE, hora_hasta: _horaCorteFin()
+    });
     $('#statVentasHoy').textContent = fmt(d.resumen.totalVentas);
+    // Subtítulo informativo con la fecha del turno
+    const subEl = $('#statVentasHoySub');
+    if(subEl){
+      const f = new Date(diaTurno + 'T12:00:00').toLocaleDateString('es-CL', {weekday:'short', day:'numeric', month:'short'});
+      subEl.textContent = `desde ${TURNO_HORA_CORTE} · ${f}`;
+    }
+    // Productos por vencer (próximos 30 días). Endpoint nuevo, en paralelo.
+    api('productosPorVencer', { dias: 30 }).then(r => {
+      const lista = Array.isArray(r.productos) ? r.productos : [];
+      const elN = $('#statPorVencer');
+      const elS = $('#statPorVencerSub');
+      if(elN) elN.textContent = lista.length;
+      if(elS){
+        const vencidos = lista.filter(x => x.vencido).length;
+        elS.textContent = vencidos > 0 ? `${vencidos} ya vencido(s)` : (lista.length ? 'próximos 30 días' : 'sin alertas');
+      }
+    }).catch(() => { /* silencioso, endpoint puede no estar desplegado aún */ });
   }catch(_){}
 }
 
