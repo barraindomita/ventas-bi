@@ -118,6 +118,13 @@
   .pm-fiado         {background:linear-gradient(135deg,#f59e0b,#d97706);}
   .pm-rappi         {background:linear-gradient(135deg,#ec4899,#db2777);}
   .pm-pedidos_ya    {background:linear-gradient(135deg,#ef4444,#b91c1c);}
+  .pm-delivery_online   {background:linear-gradient(135deg,#6366f1,#4338ca);}
+  .pm-delivery_efectivo {background:linear-gradient(135deg,#ec4899,#be185d);}
+  /* Variantes legacy 4-en-1 por compatibilidad con datos antiguos */
+  .pm-rappi_online,
+  .pm-pedidos_ya_online   {background:linear-gradient(135deg,#6366f1,#4338ca);}
+  .pm-rappi_efectivo,
+  .pm-pedidos_ya_efectivo {background:linear-gradient(135deg,#ec4899,#be185d);}
 
   /* ─── Botones de acción en tabla (Editar / +Stock / Merma) ─── */
   .act-pill{
@@ -1096,29 +1103,37 @@ function _normalizarRut(rut){
 }
 
 /* Medios de pago soportados — orden fijo para la UI y los reportes */
-/* Medios de pago disponibles en el modal de cobro. Las apps de delivery
-   ahora distinguen entre online (lo cobra la app al cliente) y efectivo (el
-   picker paga al local; el monto puede diferir del precio del local porque
-   la app publica con margen para cubrir su comisión).
-   Los medios "rappi" y "pedidos_ya" sin sufijo se mantienen solo para
-   compatibilidad con datos antiguos — no se ofrecen como opción al cobrar. */
+/* Medios de pago que ofrecemos en el modal de cobro.
+   Los delivery están unificados en 2 botones (online / efectivo) en vez de
+   distinguir entre apps — el cajero no necesita decir cuál app es, basta con
+   indicar si la app cobra al cliente (online) o si el picker paga al local
+   en efectivo. Los medios antiguos quedan en LABEL/ICON sólo para que los
+   reportes históricos los muestren bien. */
 const MEDIOS_PAGO = ['efectivo','debito','credito','transferencia','fiado',
-  'rappi_online','rappi_efectivo','pedidos_ya_online','pedidos_ya_efectivo'];
+  'delivery_online','delivery_efectivo'];
 const MEDIO_LABEL = {
   efectivo:'Efectivo', debito:'Débito', credito:'Crédito',
   transferencia:'Transferencia', fiado:'Fiado',
-  rappi:'Rappi', pedidos_ya:'Pedidos Ya',
+  delivery_online:'Delivery Online', delivery_efectivo:'Delivery Efectivo',
+  // Legacy — sólo lectura para reportes históricos
+  rappi:'Rappi (legacy)', pedidos_ya:'Pedidos Ya (legacy)',
   rappi_online:'Rappi online', rappi_efectivo:'Rappi efectivo',
   pedidos_ya_online:'Pedidos Ya online', pedidos_ya_efectivo:'Pedidos Ya efectivo'
 };
 const MEDIO_ICON = {
   efectivo:'💵', debito:'💳', credito:'🏦', transferencia:'🔄',
-  fiado:'📝', rappi:'🛵', pedidos_ya:'📦',
+  fiado:'📝',
+  delivery_online:'🌐', delivery_efectivo:'🛵',
+  rappi:'🛵', pedidos_ya:'📦',
   rappi_online:'🛵', rappi_efectivo:'🛵', pedidos_ya_online:'📦', pedidos_ya_efectivo:'📦'
 };
 const medioLabel = m => MEDIO_LABEL[m] || m;
 const medioIcon  = m => MEDIO_ICON[m] || '•';
-const esDeliveryEfectivo = m => m === 'rappi_efectivo' || m === 'pedidos_ya_efectivo';
+/* Detecta cualquier delivery EN EFECTIVO (incluye el unificado nuevo y los
+   antiguos 2 separados rappi_efectivo/pedidos_ya_efectivo). El modal del
+   "monto picker" se dispara para todos ellos. */
+const esDeliveryEfectivo = m =>
+  m === 'delivery_efectivo' || m === 'rappi_efectivo' || m === 'pedidos_ya_efectivo';
 
 function toast(msg, type='info'){
   const el = document.createElement('div');
@@ -5050,10 +5065,21 @@ async function verUltimaVenta(){
 
 /* REPORTES ──────────────────────────────────────────────────────── */
 function initRangoReportes(){
+  // "Desde" por defecto: el día anterior, así el cajero ve por defecto la
+  // jornada del turno recién cerrado (corte 03:30) sin tener que cambiar la
+  // fecha. "Hasta" por defecto: hoy.
   const hoy = new Date();
-  const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  if(!$('#repDesde').value) $('#repDesde').value = desde.toISOString().slice(0,10);
-  if(!$('#repHasta').value) $('#repHasta').value = hoy.toISOString().slice(0,10);
+  const ayer = new Date(hoy);
+  ayer.setDate(ayer.getDate() - 1);
+  // Usar fecha local (no toISOString) para evitar desfase por zona horaria.
+  const toLocalISO = d => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + dd;
+  };
+  if(!$('#repDesde').value) $('#repDesde').value = toLocalISO(ayer);
+  if(!$('#repHasta').value) $('#repHasta').value = toLocalISO(hoy);
 }
 function setRango(tipo){
   const hoy = new Date();
@@ -5368,7 +5394,7 @@ async function cargarReporteCajas(params){
         <td class="text-right">${fmt(c.total_credito)}</td>
         <td class="text-right">${fmt(c.total_transferencia)}</td>
         <td class="text-right">${fmt(c.total_fiado)}</td>
-        <td class="text-right">${fmt((Number(c.total_rappi)||0) + (Number(c.total_rappi_online)||0) + (Number(c.total_rappi_efectivo)||0) + (Number(c.total_pedidos_ya)||0) + (Number(c.total_pedidos_ya_online)||0) + (Number(c.total_pedidos_ya_efectivo)||0))}</td>
+        <td class="text-right">${fmt((Number(c.total_rappi)||0) + (Number(c.total_rappi_online)||0) + (Number(c.total_rappi_efectivo)||0) + (Number(c.total_pedidos_ya)||0) + (Number(c.total_pedidos_ya_online)||0) + (Number(c.total_pedidos_ya_efectivo)||0) + (Number(c.total_delivery_online)||0) + (Number(c.total_delivery_efectivo)||0))}</td>
         <td class="text-right text-blue-700 font-semibold">${estado==='cerrada' && c.monto_sobre_deposito !== '' && c.monto_sobre_deposito !== null && c.monto_sobre_deposito !== undefined ? fmt(c.monto_sobre_deposito) : '—'}</td>
         <td class="text-right">${c.cant_ventas||0}</td>
         <td class="text-right font-bold" style="color:var(--ok)">${fmt(c.total_ventas)}</td>
