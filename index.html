@@ -690,7 +690,13 @@
             <div class="p-4 border-t border-slate-100 space-y-4">
               <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por categoría</h4><canvas id="chartCat" height="120"></canvas></div>
               <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                <h4 class="font-semibold mb-3">Top 20 productos más vendidos</h4>
+                <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                  <h4 class="font-semibold">Top 20 productos más vendidos</h4>
+                  <select id="topProdCategoria" class="input text-sm max-w-xs" onchange="recargarTopProductos()" title="Ver los productos más vendidos de una categoría puntual">
+                    <option value="">Todas las categorías</option>
+                  </select>
+                </div>
+                <div id="topProdSubtitulo" class="text-xs text-slate-500 mb-2"></div>
                 <div class="overflow-auto"><table><thead><tr><th>#</th><th>Producto</th><th>Categoría</th><th class="text-right">Cantidad</th><th class="text-right">Total</th></tr></thead><tbody id="topProductosTbody"></tbody></table></div>
               </div>
             </div>
@@ -803,6 +809,28 @@
             <thead><tr><th>Nombre</th><th>RUT</th><th>Email</th><th>Rol</th><th>Estado</th><th>Último acceso</th><th>Acciones</th></tr></thead>
             <tbody id="usuariosTbody"></tbody>
           </table>
+        </div>
+
+        <!-- CATEGORÍAS -->
+        <div class="mt-8 bg-white rounded-xl border border-slate-200 p-5">
+          <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+            <div>
+              <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🏷️ Categorías del inventario</h3>
+              <p class="text-xs text-slate-500 mt-1 max-w-xl">Lista de categorías usadas y cuántos productos hay en cada una. Eliminar una categoría reasigna sus productos a otra categoría (o los deja sin categoría).</p>
+            </div>
+            <button class="btn btn-ghost" onclick="cargarCategoriasAdmin()" title="Recargar lista">🔄 Refrescar</button>
+          </div>
+          <div id="categoriasResumen" class="text-xs text-slate-500 mb-2"></div>
+          <div class="overflow-auto max-h-[60vh]">
+            <table class="w-full text-sm">
+              <thead><tr class="text-left text-slate-500 text-xs bg-slate-50">
+                <th class="py-2 px-3">Categoría</th>
+                <th class="py-2 px-3 text-right">Productos</th>
+                <th class="py-2 px-3 text-right">Acciones</th>
+              </tr></thead>
+              <tbody id="categoriasTbody"></tbody>
+            </table>
+          </div>
         </div>
 
         <!-- REPARAR / DIAGNOSTICAR PACKS -->
@@ -1331,7 +1359,10 @@ function enterApp(){
   cargarInventario();
   cargarCajaAbierta();
   cargarNotificaciones();
-  cargarTerminalesTuu();
+  // El flujo de cobro vía máquina Tuu está desactivado por decisión del
+  // negocio (no se usa). Si en el futuro se quiere reactivar, basta con
+  // descomentar la siguiente línea: el resto del código sigue intacto.
+  // cargarTerminalesTuu();
   cargarPromocionesActivas();
   _instalarScannerGlobal();
 }
@@ -1439,7 +1470,7 @@ function go(view){
   if(view==='ventas'){ renderVentas(); cargarTopVendidos(); }
   if(view==='caja') renderCajaStatus();
   if(view==='reportes'){ initRangoReportes(); cargarReportes(); }
-  if(view==='configurar') cargarUsuarios();
+  if(view==='configurar') { cargarUsuarios(); cargarCategoriasAdmin(); }
   if(view==='promociones') cargarPromocionesAdmin();
   if(view==='dashboard') cargarStatsDashboard();
 }
@@ -5133,11 +5164,52 @@ async function cargarReportes(){
     _chart('chartPagos','doughnut', mpLabelsPct, mpValues, 'Medios de pago');
     _chart('chartCat','bar', c.categorias.map(x=>x.categoria), c.categorias.map(x=>x.total), 'Por categoría');
 
-    $('#topProductosTbody').innerHTML = p.productos.map((x,i)=>`
-      <tr><td>${i+1}</td><td>${x.nombre}</td><td>${x.categoria||''}</td>
-      <td class="text-right">${x.cantidad}</td><td class="text-right">${fmt(x.total)}</td></tr>`).join('')
-      || '<tr><td colspan="5" class="text-center text-slate-400 py-4">Sin ventas en el rango</td></tr>';
+    // Poblar select de categorías con las que tienen ventas + las del inventario
+    const setCats = new Set();
+    (c.categorias || []).forEach(x => x.categoria && setCats.add(String(x.categoria).trim()));
+    (S.categorias || []).forEach(cat => cat && setCats.add(String(cat).trim()));
+    const sel = $('#topProdCategoria');
+    if(sel){
+      const valActual = sel.value;
+      sel.innerHTML = '<option value="">Todas las categorías</option>' +
+        Array.from(setCats).sort().map(cat => `<option value="${esc(cat)}" ${cat===valActual?'selected':''}>${esc(cat)}</option>`).join('');
+    }
+    _renderTopProductos(p);
   }catch(err){ toast(err.message,'err'); }
+}
+
+/* Render del "Top 20 productos" — separado para que recargarTopProductos
+   pueda reutilizarlo sin volver a pedir el resto del reporte. */
+function _renderTopProductos(p){
+  const tbody = $('#topProductosTbody');
+  const sub = $('#topProdSubtitulo');
+  if(!tbody) return;
+  if(sub){
+    sub.textContent = p.categoria_filtrada
+      ? `Filtrado: ${p.categoria_filtrada}`
+      : (p.total_categorias != null ? `Mostrando todas las categorías (${p.total_categorias} con ventas en el rango)` : '');
+  }
+  tbody.innerHTML = (p.productos || []).map((x,i)=>`
+    <tr><td>${i+1}</td><td>${esc(x.nombre)}</td><td>${esc(x.categoria)||''}</td>
+    <td class="text-right">${x.cantidad}</td><td class="text-right">${fmt(x.total)}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="text-center text-slate-400 py-4">Sin ventas en el rango' + (p.categoria_filtrada ? ' para esta categoría' : '') + '</td></tr>';
+}
+
+/* Re-llama a reporteProductosTop con la categoría elegida en el select.
+   Sólo recarga la tabla del Top, no el resto del reporte. */
+async function recargarTopProductos(){
+  const desde = $('#repDesde').value, hasta = $('#repHasta').value;
+  const hora_desde = $('#repHoraDesde')?.value || '03:30';
+  const hora_hasta = $('#repHoraHasta')?.value || '23:59';
+  const categoria = $('#topProdCategoria')?.value || '';
+  const tbody = $('#topProductosTbody');
+  if(tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-400 py-4">Cargando…</td></tr>';
+  try {
+    const p = await api('reporteProductosTop', { desde, hasta, hora_desde, hora_hasta, categoria });
+    _renderTopProductos(p);
+  } catch(err){
+    if(tbody) tbody.innerHTML = `<tr><td colspan="5" class="text-center text-red-500 py-4">${esc(err.message)}</td></tr>`;
+  }
 }
 function _chart(id, type, labels, data, label){
   const ctx = document.getElementById(id); if(!ctx) return;
@@ -6052,6 +6124,109 @@ function _truthyJs(v){
   if(typeof v === 'string') return v.toLowerCase() === 'true' || v === '1';
   return !!v;
 }
+
+/* CATEGORÍAS (admin) ────────────────────────────────────────────
+   Lista las categorías del inventario con su conteo de productos. Permite
+   eliminar (reasignando los productos a otra categoría destino o dejándolos
+   sin categoría). Útil cuando se acumulan categorías por errores de typeo
+   o cuando se quiere fusionar dos. */
+
+let _categoriasCache = [];   // [{categoria, cantidad_productos}, ...]
+
+async function cargarCategoriasAdmin(){
+  const tb = $('#categoriasTbody');
+  const res = $('#categoriasResumen');
+  if(!tb) return;
+  if(S.usuario.rol !== 'admin'){
+    tb.innerHTML = '<tr><td colspan="3" class="text-center text-slate-400 py-6">Requiere perfil administrador</td></tr>';
+    return;
+  }
+  tb.innerHTML = '<tr><td colspan="3" class="text-center text-slate-400 py-6">Cargando…</td></tr>';
+  if(res) res.textContent = '';
+  try{
+    const d = await api('listarCategoriasConConteo');
+    _categoriasCache = Array.isArray(d.categorias) ? d.categorias : [];
+    const totalProds = _categoriasCache.reduce((s,c) => s + (c.cantidad_productos||0), 0);
+    if(res){
+      const sinCat = Number(d.sin_categoria) || 0;
+      res.textContent = `${_categoriasCache.length} categoría(s) · ${totalProds} producto(s) clasificado(s)` +
+        (sinCat ? ` · ${sinCat} producto(s) sin categoría` : '');
+    }
+    if(!_categoriasCache.length){
+      tb.innerHTML = '<tr><td colspan="3" class="text-center text-slate-400 py-6">No hay categorías cargadas.</td></tr>';
+      return;
+    }
+    tb.innerHTML = _categoriasCache.map(c => `
+      <tr class="border-t border-slate-100">
+        <td class="py-2 px-3 font-semibold">${esc(c.categoria)}</td>
+        <td class="py-2 px-3 text-right">${c.cantidad_productos}</td>
+        <td class="py-2 px-3 text-right whitespace-nowrap">
+          <button class="btn btn-ghost text-xs py-1 px-2 text-red-500" onclick="openEliminarCategoria('${esc(c.categoria).replace(/'/g,'&#39;')}')">🗑 Eliminar / Fusionar</button>
+        </td>
+      </tr>`).join('');
+  } catch(err){
+    tb.innerHTML = `<tr><td colspan="3" class="text-center text-red-500 py-6">${esc(err.message)}</td></tr>`;
+  }
+}
+
+/* Modal para confirmar eliminación de categoría. Ofrece dos modos:
+    - Dejar sin categoría (los productos quedan con categoría vacía)
+    - Mover a otra categoría existente (fusionar) */
+function openEliminarCategoria(categoria){
+  const cantidad = (_categoriasCache.find(c => c.categoria === categoria)?.cantidad_productos) || 0;
+  const otras = _categoriasCache.filter(c => c.categoria !== categoria).map(c => c.categoria);
+  openModal(`<div class="p-6 max-w-lg mx-auto">
+    <h3 class="text-lg font-bold mb-2 text-red-700">🗑 Eliminar categoría</h3>
+    <p class="text-sm text-slate-700 mb-3">Vas a eliminar la categoría <b>${esc(categoria)}</b> que tiene <b>${cantidad}</b> producto(s) activo(s) asociado(s).</p>
+    <div class="bg-amber-50 border border-amber-200 rounded p-3 mb-3 text-xs text-amber-800">
+      Los productos NO se eliminan. Solo se les cambia (o quita) la categoría. Se registra un movimiento por cada uno para auditoría.
+    </div>
+    <div class="space-y-3">
+      <label class="flex items-start gap-2 cursor-pointer p-3 rounded border border-slate-300 bg-white">
+        <input type="radio" name="ecModo" value="sin" checked class="mt-0.5">
+        <div>
+          <div class="font-semibold text-sm">Dejar sin categoría</div>
+          <div class="text-xs text-slate-500">Los productos quedan con el campo "Categoría" vacío. Pueden recategorizarse después.</div>
+        </div>
+      </label>
+      <label class="flex items-start gap-2 cursor-pointer p-3 rounded border border-slate-300 bg-white">
+        <input type="radio" name="ecModo" value="mover" class="mt-0.5">
+        <div class="flex-1">
+          <div class="font-semibold text-sm">Mover a otra categoría (fusionar)</div>
+          <div class="text-xs text-slate-500 mb-2">Reasignar todos los productos a una categoría existente o nueva.</div>
+          <input id="ecDestino" class="input text-sm" list="ecDestinoList" placeholder="Nombre de la categoría destino"
+            onfocus="document.querySelector('input[name=ecModo][value=mover]').checked = true">
+          <datalist id="ecDestinoList">${otras.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+        </div>
+      </label>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-danger" onclick="__confirmarEliminarCategoria('${esc(categoria).replace(/'/g,'&#39;')}', this)">Eliminar categoría</button>
+    </div>
+  </div>`);
+}
+
+window.__confirmarEliminarCategoria = async (categoria, btn) => {
+  const modo = document.querySelector('input[name=ecModo]:checked')?.value || 'sin';
+  const destino = modo === 'mover' ? ($('#ecDestino')?.value || '').trim() : '';
+  if(modo === 'mover' && !destino){
+    toast('Ingresa el nombre de la categoría destino','err'); return;
+  }
+  try {
+    await _lockBtn(btn, async () => {
+      const r = await api('eliminarCategoria', { categoria, categoria_destino: destino });
+      const msg = destino
+        ? `${r.actualizados} producto(s) movido(s) a "${destino}"`
+        : `${r.actualizados} producto(s) quedaron sin categoría`;
+      toast(msg, 'ok');
+      closeModal();
+      // Refrescar: lista de categorías + inventario (porque cambiaron sus categorías)
+      await cargarCategoriasAdmin();
+      await cargarInventario();
+    }, 'Eliminando…');
+  } catch(err){ if(err && err.message !== 'busy') toast(err.message, 'err'); }
+};
 
 /* USUARIOS ──────────────────────────────────────────────────────── */
 async function cargarUsuarios(){
