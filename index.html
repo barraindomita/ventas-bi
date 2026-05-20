@@ -2519,7 +2519,25 @@ function openEditarPack(id){
   const p = S.productos.find(x=>Number(x.id)===id); if(!p) return;
   let comps = [];
   try { comps = JSON.parse(p.componentes||'[]'); } catch(_) { comps = []; }
-  __packDraft = comps.map(c => ({ producto_id: Number(c.producto_id), cantidad: Number(c.cantidad) }));
+  // Normalización: si un componente tiene producto_id muerto (no existe en el
+  // inventario actual), intentamos resolverlo por codigo_barra (guardado en
+  // packs recientes). Si lo encontramos, ACTUALIZAMOS el producto_id al ID
+  // real — así el componente vuelve a ser visible y el JSON queda consistente
+  // al guardar. Si no se encuentra ni por código, lo dejamos como estaba para
+  // que el usuario pueda decidir qué hacer (quitarlo y agregar el correcto).
+  __packDraft = comps.map(c => {
+    const cant = Number(c.cantidad) || 1;
+    let prod = S.productos.find(x => Number(x.id) === Number(c.producto_id));
+    if(!prod && c.codigo_barra){
+      const cod = String(c.codigo_barra).trim();
+      prod = S.productos.find(x => String(x.codigo_barra||'').trim() === cod && !esPack(x));
+    }
+    return {
+      producto_id: prod ? Number(prod.id) : Number(c.producto_id),
+      cantidad: cant,
+      _producto_no_encontrado: !prod  // marca interna para advertir en la UI
+    };
+  });
   openModal(_packFormHtml({ p }));
   _wirePackForm({ p });
 }
@@ -2686,10 +2704,25 @@ function _renderPackDraft(){
   }
   el.innerHTML = __packDraft.map(c=>{
     const p = S.productos.find(x=>Number(x.id)===Number(c.producto_id));
-    if(!p) return '';
+    // Si el componente no se encuentra (producto borrado o ID muerto sin
+    // código de barra como fallback), mostramos una fila ROJA con aviso para
+    // que el admin lo vea y decida si lo quita o agrega el producto correcto.
+    // Antes se ocultaba silenciosamente: el modal mostraba precio sin ese
+    // componente y la tabla del inventario sí lo contaba → diferencia.
+    if(!p){
+      return `
+        <div class="flex items-center gap-2 px-2 py-1 border-b border-red-200 bg-red-50 text-sm">
+          <div class="flex-1 truncate text-red-700">
+            ⚠️ Componente no encontrado <span class="text-xs">(id ${c.producto_id}${c.codigo_barra ? ' · '+esc(c.codigo_barra) : ''})</span>
+            <div class="text-xs text-red-600">Está sumando al precio del pack pero ya no existe en el inventario. Quítalo con la X.</div>
+          </div>
+          <span class="text-xs text-red-700">×${c.cantidad}</span>
+          <button type="button" class="text-red-500 text-base font-bold" onclick="_removePackCompMuerto(${c.producto_id})" title="Eliminar este componente fantasma">✕</button>
+        </div>`;
+    }
     return `
       <div class="flex items-center gap-2 px-2 py-1 border-b border-slate-100 text-sm">
-        <div class="flex-1 truncate">${p.nombre} <span class="text-xs text-slate-400">(stock: ${p.stock_actual}, compra: ${fmt(p.valor_compra)})</span></div>
+        <div class="flex-1 truncate">${esc(p.nombre)} <span class="text-xs text-slate-400">(stock: ${p.stock_actual}, compra: ${fmt(p.valor_compra)})</span></div>
         <input type="number" min="1" value="${c.cantidad}" class="input w-16 py-1" onchange="_setPackCompQty(${p.id}, this.value)">
         <button type="button" class="text-red-400 text-sm" onclick="_removePackComp(${p.id})">✕</button>
       </div>`;
@@ -2697,7 +2730,19 @@ function _renderPackDraft(){
   _recalcPackMargen();
 }
 
+/* Igual que _removePackComp pero por id "muerto" (componente sin producto
+   real en el inventario). Se identifica por el producto_id raw del draft. */
+function _removePackCompMuerto(id){
+  __packDraft = __packDraft.filter(c => Number(c.producto_id) !== Number(id));
+  _renderPackDraft();
+}
+
 function _recalcPackMargen(){
+  // OJO: este cálculo solo suma los componentes que SÍ existen en el inventario
+  // actual. Los "fantasma" (sin producto resuelto) no se suman porque no
+  // tenemos su valor_compra a mano. El usuario debe quitarlos para que el
+  // precio del modal coincida con el del inventario (que sí los suma vía
+  // fallback por código).
   let compra = 0;
   __packDraft.forEach(c=>{
     const p = S.productos.find(x=>Number(x.id)===Number(c.producto_id));
