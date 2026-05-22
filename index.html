@@ -4216,11 +4216,17 @@ function _evaluarPromociones(){
   return { promosAplicadas: aplicadas, descPorItem, totalDescuentoPromos };
 }
 
-/* Cigarrillos: detectar por marca en el nombre del producto.
-   Se considera cigarrillo sólo si el nombre contiene una de estas marcas
-   (case-insensitive): Pall Mall / PallMall, Lucky Strike, Kent, Marlboro. */
-const MARCAS_CIGARRILLOS = ['pall mall','pallmall','lucky strike','kent','marlboro'];
+/* Cigarrillos: detectar por categoría o por marca en el nombre.
+   1) Si el producto pertenece a una categoría que contenga "cigarr"
+      (Cigarrillos, Cigarros, Cigarrillo, etc.) → es cigarrillo.
+   2) Si no hay categoría que coincida, se mira el nombre por marcas
+      conocidas (Pall Mall, Lucky, Kent, Marlboro) — fallback histórico
+      por si algún producto quedó sin categoría asignada. */
+const MARCAS_CIGARRILLOS = ['pall mall','pallmall','lucky strike','lucky','kent','marlboro'];
 function _esCigarrillo(producto){
+  if(!producto) return false;
+  const cat = String(producto.categoria || '').toLowerCase().trim();
+  if(cat && cat.includes('cigarr')) return true;
   const nombre = String(producto.nombre || '').toLowerCase();
   if(!nombre) return false;
   return MARCAS_CIGARRILLOS.some(m => nombre.includes(m));
