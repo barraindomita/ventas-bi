@@ -50,6 +50,62 @@
   .dash-promo   { --dash-bg: linear-gradient(135deg,#10b981 0%, #047857 100%); }   /* verde — Promociones */
   .dash-config  { --dash-bg: linear-gradient(135deg,#64748b 0%, #334155 100%); }   /* slate — Configuración */
   .dash-mov     { --dash-bg: linear-gradient(135deg,#0ea5e9 0%, #0369a1 100%); }   /* celeste — Movimientos */
+  .dash-rrhh    { --dash-bg: linear-gradient(135deg,#ec4899 0%, #be185d 100%); }   /* rosa — RRHH (sólo propietario) */
+
+  /* ═══ RRHH styles ═══ */
+  .rrhh-tab{padding:8px 14px;border-radius:8px;font-size:13px;font-weight:500;color:#64748b;
+    background:transparent;border:none;cursor:pointer;transition:all .15s;white-space:nowrap;}
+  .rrhh-tab:hover{background:#f1f5f9;color:#0f172a;}
+  .rrhh-tab.active{background:var(--brand-dark);color:#fff;}
+  .rrhh-worker-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;
+    cursor:pointer;transition:all .15s;display:flex;gap:12px;align-items:center;}
+  .rrhh-worker-card:hover{border-color:#cbd5e1;box-shadow:0 2px 8px rgba(0,0,0,.04);}
+  .rrhh-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;background:#e2e8f0;
+    display:flex;align-items:center;justify-content:center;font-weight:600;color:#475569;font-size:16px;flex-shrink:0;}
+  /* Grilla horaria de turnos */
+  .rrhh-shift-grid{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;position:relative;}
+  .rrhh-shift-header{display:grid;grid-template-columns:60px repeat(7,1fr);background:#f1f5f9;border-bottom:1px solid #e2e8f0;}
+  .rrhh-shift-header > div{padding:8px 4px;font-size:11px;color:#64748b;text-align:center;font-weight:600;
+    border-right:1px solid #e2e8f0;text-transform:uppercase;letter-spacing:.03em;}
+  .rrhh-shift-header > div:last-child{border-right:none;}
+  .rrhh-shift-row{display:grid;grid-template-columns:60px repeat(7,1fr);border-bottom:1px solid #f1f5f9;min-height:28px;}
+  .rrhh-shift-row .hour-lbl{padding:3px 6px;font-size:10px;color:#94a3b8;text-align:right;
+    border-right:1px solid #f1f5f9;font-variant-numeric:tabular-nums;}
+  .rrhh-shift-row .day-cell{border-right:1px solid #f1f5f9;cursor:pointer;}
+  .rrhh-shift-row .day-cell:hover{background:#f8fafc;}
+  .rrhh-shift-block{position:absolute;border-radius:6px;padding:4px 7px;font-size:11px;font-weight:600;
+    color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;
+    border:1px solid rgba(0,0,0,.1);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+  .rrhh-shift-block .t{font-size:10px;opacity:.9;font-weight:500;}
+  .rrhh-shift-block.muted{opacity:.4;}
+  .rrhh-c-1{background:#3b82f6;}
+  .rrhh-c-2{background:#f59e0b;}
+  .rrhh-c-3{background:#10b981;}
+  .rrhh-c-4{background:#ec4899;}
+  .rrhh-c-5{background:#8b5cf6;}
+  .rrhh-c-6{background:#06b6d4;}
+  /* Documento liquidación */
+  .rrhh-payslip{background:#fff;color:#000;padding:30px;max-width:800px;margin:1rem auto;
+    border:1px solid #cbd5e1;border-radius:8px;font-family:'Times New Roman',Times,serif;}
+  .rrhh-payslip h2{font-size:18px;text-align:center;margin-bottom:6px;font-weight:bold;}
+  .rrhh-payslip .ps-sub{text-align:center;font-size:12px;color:#444;}
+  .rrhh-payslip .ps-emp{border:1px solid #000;padding:10px;margin:14px 0;font-size:12px;
+    display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .rrhh-payslip .ps-sec-title{font-weight:bold;font-size:13px;background:#eee;padding:5px 8px;border:1px solid #000;}
+  .rrhh-payslip table.ps-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+  .rrhh-payslip table.ps-tbl td{border:1px solid #000;padding:5px 8px;}
+  .rrhh-payslip table.ps-tbl td.amt{text-align:right;width:140px;font-variant-numeric:tabular-nums;}
+  .rrhh-payslip .ps-tot{margin-top:14px;border:2px solid #000;padding:8px;
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;}
+  .rrhh-payslip .ps-tot .row{display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px dashed #aaa;}
+  .rrhh-payslip .ps-tot .row.final{font-weight:bold;font-size:13px;border:none;border-top:2px solid #000;margin-top:4px;padding-top:6px;}
+  .rrhh-payslip .ps-sign{margin-top:50px;display:grid;grid-template-columns:1fr 1fr;gap:40px;font-size:12px;text-align:center;}
+  .rrhh-payslip .ps-sign .ln{border-top:1px solid #000;padding-top:5px;}
+  @media print{
+    .topbar-main,.sidebar,.no-print,#rrhhTabs{display:none !important;}
+    .rrhh-payslip{border:none;margin:0;padding:0;}
+    main{padding:0 !important;}
+  }
   /* Sub-stats dentro de la card combinada Bajo/Sin Stock */
   .dash-substats{display:flex;gap:14px;margin-top:2px;font-size:13px;font-weight:600;opacity:.95;}
   .dash-substats span{display:inline-flex;align-items:baseline;gap:4px;}
@@ -384,6 +440,10 @@
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="M12 15a3 3 0 100-6 3 3 0 000 6zm7-3a7 7 0 01-.2 1.7l2 1.6-2 3.4-2.3-1a7 7 0 01-3 1.7L13 22h-4l-.5-2.6a7 7 0 01-3-1.7l-2.3 1-2-3.4 2-1.6A7 7 0 013 12c0-.6.1-1.2.2-1.7l-2-1.6 2-3.4 2.3 1a7 7 0 013-1.7L9 2h4l.5 2.6a7 7 0 013 1.7l2.3-1 2 3.4-2 1.6c.1.5.2 1.1.2 1.7z"/></svg>
           Config
         </a>
+        <a class="nav-item hidden" data-view="rrhh" onclick="go('rrhh')" style="color:#fbcfe8">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          RRHH
+        </a>
         <a class="nav-item" onclick="doLogout()" style="margin-top:auto;color:#fca5a5">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="M17 16l4-4m0 0l-4-4m4 4H9M13 20H6a2 2 0 01-2-2V6a2 2 0 012-2h7"/></svg>
           Salir
@@ -448,6 +508,10 @@
           <div class="dash-card dash-mov" onclick="openMovimientos()">
             <div class="ico"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"/></svg></div>
             <div class="dash-body"><h3>Movimientos</h3></div>
+          </div>
+          <div class="dash-card dash-rrhh dash-propietario-only hidden" onclick="go('rrhh')" title="Gestión de personal (sólo propietario)">
+            <div class="ico"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" stroke-linecap="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg></div>
+            <div class="dash-body"><h3>RRHH</h3></div>
           </div>
         </div>
 
@@ -892,6 +956,63 @@
           <div id="importHint" class="text-xs text-slate-400 mt-2">Al subir el archivo se genera una vista previa; nada se escribe hasta que confirmes.</div>
         </div>
       </section>
+
+      <!-- ═══════ RRHH (sólo propietario) ═══════ -->
+      <section id="pageRRHH" class="page hidden">
+        <!-- Sub-tabs -->
+        <div class="bg-white rounded-xl border border-slate-200 mb-4 overflow-x-auto">
+          <div class="flex gap-1 p-1 min-w-max" id="rrhhTabs">
+            <button class="rrhh-tab active" data-sub="trabajadores" onclick="rrhhGoSub('trabajadores')">👥 Trabajadores</button>
+            <button class="rrhh-tab" data-sub="turnos" onclick="rrhhGoSub('turnos')">📅 Turnos</button>
+            <button class="rrhh-tab" data-sub="marcajes" onclick="rrhhGoSub('marcajes')">⏰ Marcajes</button>
+            <button class="rrhh-tab" data-sub="cruce" onclick="rrhhGoSub('cruce')">🔄 Cruce mensual</button>
+            <button class="rrhh-tab" data-sub="liquidaciones" onclick="rrhhGoSub('liquidaciones')">💵 Liquidaciones</button>
+          </div>
+        </div>
+
+        <!-- Trabajadores -->
+        <div id="rrhhSub-trabajadores" class="rrhh-sub">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="font-bold text-lg" style="color:var(--brand-dark)">Trabajadores</h3>
+            <button class="btn btn-primary" onclick="RRHH.openWorkerForm()">+ Nuevo trabajador</button>
+          </div>
+          <div id="rrhhWorkersList"></div>
+          <div id="rrhhWorkerDetail" class="hidden"></div>
+        </div>
+
+        <!-- Turnos -->
+        <div id="rrhhSub-turnos" class="rrhh-sub hidden">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="font-bold text-lg" style="color:var(--brand-dark)">Planificación de turnos</h3>
+          </div>
+          <div id="rrhhShiftPlanner"></div>
+        </div>
+
+        <!-- Marcajes -->
+        <div id="rrhhSub-marcajes" class="rrhh-sub hidden">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="font-bold text-lg" style="color:var(--brand-dark)">Marcajes del reloj control</h3>
+          </div>
+          <div id="rrhhMarcajesView"></div>
+        </div>
+
+        <!-- Cruce -->
+        <div id="rrhhSub-cruce" class="rrhh-sub hidden">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="font-bold text-lg" style="color:var(--brand-dark)">Cruce mensual: programado vs real</h3>
+          </div>
+          <div id="rrhhCruceView"></div>
+        </div>
+
+        <!-- Liquidaciones -->
+        <div id="rrhhSub-liquidaciones" class="rrhh-sub hidden">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="font-bold text-lg" style="color:var(--brand-dark)">Liquidaciones de sueldo</h3>
+          </div>
+          <div id="rrhhLiquidacionesView"></div>
+        </div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -950,6 +1071,15 @@ function _tuuDocKeyMigrate(k){
   if(k === 'factura_afecta' || k === 'factura_exenta') return 'factura';
   return TUU_DOC_TYPES[k] ? k : 'boleta';
 }
+
+/* Helpers de rol ─────────────────────────────────────────────────
+   El rol "propietario" se introdujo después de admin/vendedor. Tiene
+   todos los permisos de admin más acceso exclusivo al módulo RRHH.
+   Usar siempre estos helpers en vez de comparar S.usuario.rol directamente. */
+function isPropietario(){ return S.usuario?.rol === 'propietario'; }
+function isAdmin(){ const r=S.usuario?.rol; return r === 'admin' || r === 'propietario'; }
+function isVendedor(){ return S.usuario?.rol === 'vendedor'; }
+const ROLE_LABELS = { admin:'Administrador', vendedor:'Vendedor', propietario:'Propietario' };
 
 /* Helpers ───────────────────────────────────────────────────────── */
 
@@ -1339,8 +1469,8 @@ function enterApp(){
   $('#viewLogin').classList.add('hidden');
   $('#viewApp').classList.remove('hidden');
   $('#userName').textContent = S.usuario.nombre;
-  $('#userRole').textContent = S.usuario.rol === 'admin' ? 'Administrador' : 'Vendedor';
-  if(S.usuario.rol !== 'admin'){
+  $('#userRole').textContent = ROLE_LABELS[S.usuario.rol] || S.usuario.rol;
+  if(!isAdmin()){
     $('#btnNuevoProd')?.remove();
     $('#btnNuevoPack')?.remove();
     // Ocultar del menú los items Reportes, Promociones y Configuración para perfil vendedor.
@@ -1354,6 +1484,14 @@ function enterApp(){
     $$('.nav-item[data-view="promociones"]').forEach(el => el.classList.remove('hidden'));
     $$('.nav-item[data-view="configurar"]').forEach(el => el.classList.remove('hidden'));
     $$('.dash-admin-only').forEach(el => el.classList.remove('hidden'));
+  }
+  // RRHH: sólo para propietario
+  if(isPropietario()){
+    $$('.nav-item[data-view="rrhh"]').forEach(el => el.classList.remove('hidden'));
+    $$('.dash-propietario-only').forEach(el => el.classList.remove('hidden'));
+  } else {
+    $$('.nav-item[data-view="rrhh"]').forEach(el => el.classList.add('hidden'));
+    $$('.dash-propietario-only').forEach(el => el.classList.add('hidden'));
   }
   go('dashboard');
   cargarInventario();
@@ -1446,11 +1584,16 @@ async function cargarTerminalesTuu(){
 
 /* NAV ───────────────────────────────────────────────────────────── */
 function go(view){
+  // Acceso al módulo RRHH: sólo propietario
+  if(view==='rrhh' && !isPropietario()){
+    toast('Sólo el rol Propietario puede acceder al módulo RRHH','err');
+    view = 'dashboard';
+  }
   S.view = view;
   $$('.page').forEach(p=>p.classList.add('hidden'));
   const ids = { dashboard:'pageDashboard', inventario:'pageInventario', ventas:'pageVentas',
                 caja:'pageCaja', reportes:'pageReportes', promociones:'pagePromociones',
-                configurar:'pageConfigurar' };
+                configurar:'pageConfigurar', rrhh:'pageRRHH' };
   $('#'+ids[view]).classList.remove('hidden');
   $$('.nav-item[data-view]').forEach(a=>a.classList.toggle('active', a.dataset.view===view));
   const titles = {
@@ -1460,7 +1603,8 @@ function go(view){
     caja:['Caja','Estado de la caja activa'],
     reportes:['Reportes','Analítica de ventas y márgenes'],
     promociones:['Promociones','Descuentos automáticos al cobrar'],
-    configurar:['Configurar','Usuarios y parámetros']
+    configurar:['Configurar','Usuarios y parámetros'],
+    rrhh:['Recursos Humanos','Trabajadores, turnos, marcajes y liquidaciones']
   };
   const [t,s] = titles[view] || ['',''];
   $('#viewTitle').textContent = t;
@@ -1473,6 +1617,7 @@ function go(view){
   if(view==='configurar') { cargarUsuarios(); cargarCategoriasAdmin(); }
   if(view==='promociones') cargarPromocionesAdmin();
   if(view==='dashboard') cargarStatsDashboard();
+  if(view==='rrhh' && window.RRHH) RRHH.init();
 }
 
 /* INVENTARIO ────────────────────────────────────────────────────── */
@@ -1519,7 +1664,7 @@ function renderInventario(){
     return true;
   });
   rows = _ordenarInventario(rows, orden);
-  const admin = S.usuario?.rol==='admin';
+  const admin = isAdmin();
 
   // Mostrar/ocultar columna de selección según rol
   const selAllCell = $('#invSelAllCell');
@@ -2187,7 +2332,7 @@ async function __onImportFile(ev){
   const f = ev.target?.files?.[0];
   if(!f) return;
   if(!window.XLSX){ return toast('La librería Excel aún no cargó, intenta de nuevo.','err'); }
-  if(S.usuario?.rol !== 'admin'){ return toast('Requiere perfil administrador','err'); }
+  if(!isAdmin()){ return toast('Requiere perfil administrador','err'); }
   $('#importFileName').textContent = f.name;
   try{
     const buf = await f.arrayBuffer();
@@ -2365,7 +2510,7 @@ async function __confirmarImport(){
 }
 
 function openNuevoProducto(){
-  if(S.usuario.rol!=='admin') return toast('Requiere perfil administrador','err');
+  if(!isAdmin()) return toast('Requiere perfil administrador','err');
   openModal(`
     <div class="p-6" data-persistent="1">
       <h3 class="text-lg font-bold mb-4" style="color:var(--brand-dark)">Nuevo producto</h3>
@@ -2509,7 +2654,7 @@ function _calcMargen(origin){
 let __packDraft = []; // [{producto_id, cantidad}]
 
 function openNuevoPack(){
-  if(S.usuario.rol!=='admin') return toast('Requiere perfil administrador','err');
+  if(!isAdmin()) return toast('Requiere perfil administrador','err');
   __packDraft = [];
   openModal(_packFormHtml({ nuevo:true }));
   _wirePackForm({ nuevo:true });
@@ -2897,7 +3042,7 @@ function _mermaForm(p){
 }
 
 function openMerma(){
-  if(S.usuario?.rol!=='admin') return toast('Requiere perfil administrador','err');
+  if(!isAdmin()) return toast('Requiere perfil administrador','err');
   openModal(`
     <div class="p-6">
       <h3 class="text-lg font-bold mb-3" style="color:var(--err)">Merma de productos</h3>
@@ -2967,7 +3112,7 @@ function scanInventarioCamara(){
 }
 
 async function openMovimientos(){
-  if(S.usuario?.rol!=='admin') return toast('Requiere perfil administrador','err');
+  if(!isAdmin()) return toast('Requiere perfil administrador','err');
   openModal(`<div class="p-6"><h3 class="text-lg font-bold mb-4" style="color:var(--brand-dark)">Movimientos de stock</h3><div id="movWrap" class="max-h-[70vh] overflow-auto">Cargando…</div></div>`);
   try{
     const d = await api('listarMovimientos');
@@ -3445,7 +3590,7 @@ async function cargarCajaAbierta(){
     const d = await api('cajaAbierta');
     S.caja = d.caja;
     renderVentas(); renderCajaStatus();
-    if(S.usuario?.rol === 'admin') cargarCajasAbiertas();
+    if(isAdmin()) cargarCajasAbiertas();
   }catch(err){ toast(err.message,'err'); }
 }
 
@@ -3454,7 +3599,7 @@ async function cargarCajasAbiertas(){
   const panel = $('#cajaAdminPanel');
   const tbl = $('#cajaAdminTbl');
   if(!panel || !tbl) return;
-  if(S.usuario?.rol !== 'admin'){ panel.classList.add('hidden'); return; }
+  if(!isAdmin()){ panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
   tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">Cargando…</div>';
   try{
@@ -3674,7 +3819,7 @@ function renderCajaStatus(){
   // Mostrar/ocultar panel admin de cajas abiertas según rol
   const panelAdmin = $('#cajaAdminPanel');
   if(panelAdmin){
-    if(S.usuario?.rol === 'admin'){
+    if(isAdmin()){
       panelAdmin.classList.remove('hidden');
     } else {
       panelAdmin.classList.add('hidden');
@@ -5181,10 +5326,10 @@ async function cargarReportes(){
   const params = {desde, hasta, hora_desde, hora_hasta};
   // Categorías visibles sólo para administradores
   const catPerfilCaja = $('#repCatPerfilCaja');
-  if(catPerfilCaja) catPerfilCaja.classList.toggle('hidden', S.usuario?.rol !== 'admin');
+  if(catPerfilCaja) catPerfilCaja.classList.toggle('hidden', !isAdmin());
   const catVencimientos = $('#repCatVencimientos');
-  if(catVencimientos) catVencimientos.classList.toggle('hidden', S.usuario?.rol !== 'admin');
-  if(S.usuario?.rol === 'admin'){
+  if(catVencimientos) catVencimientos.classList.toggle('hidden', !isAdmin());
+  if(isAdmin()){
     cargarVentasDetalladas(params);
     cargarReporteCajas(params);
     cargarReporteVencimientos();
@@ -5593,7 +5738,7 @@ window.verNotaCaja = function(cajaId){
       <div class="bg-white rounded p-3 text-sm whitespace-pre-wrap border border-slate-200">${esc(c.observaciones_cierre)}</div>
     </div>` : '';
 
-  const botonRevisar = (noCoincide && !revisada && S.usuario?.rol === 'admin')
+  const botonRevisar = (noCoincide && !revisada && isAdmin())
     ? `<button class="btn btn-success mt-3 w-full" onclick="__marcarRevisadaDesdeReporte(${c.id})">✓ Marcar diferencia como revisada</button>`
     : '';
 
@@ -5875,7 +6020,7 @@ function _promoVigenciaTexto(p){
 async function cargarPromocionesAdmin(){
   const tb = $('#promocionesTbody');
   if(!tb) return;
-  if(S.usuario.rol !== 'admin'){
+  if(!isAdmin()){
     tb.innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">Requiere perfil administrador</td></tr>';
     return;
   }
@@ -6188,7 +6333,7 @@ async function cargarCategoriasAdmin(){
   const tb = $('#categoriasTbody');
   const res = $('#categoriasResumen');
   if(!tb) return;
-  if(S.usuario.rol !== 'admin'){
+  if(!isAdmin()){
     tb.innerHTML = '<tr><td colspan="3" class="text-center text-slate-400 py-6">Requiere perfil administrador</td></tr>';
     return;
   }
@@ -6281,7 +6426,7 @@ window.__confirmarEliminarCategoria = async (categoria, btn) => {
 
 /* USUARIOS ──────────────────────────────────────────────────────── */
 async function cargarUsuarios(){
-  if(S.usuario.rol!=='admin'){
+  if(!isAdmin()){
     $('#usuariosTbody').innerHTML = '<tr><td colspan="7" class="text-center text-slate-400 py-6">Requiere perfil administrador</td></tr>';
     return;
   }
@@ -6309,7 +6454,7 @@ async function cargarUsuarios(){
         <td class="font-semibold">${u.nombre || ''}</td>
         <td class="text-sm text-slate-700">${u.rut || '—'}</td>
         <td class="text-sm text-slate-600">${u.email || ''}</td>
-        <td><span class="chip ${u.rol==='admin'?'chip-info':'chip-ok'}">${u.rol}</span></td>
+        <td><span class="chip ${u.rol==='propietario'?'chip-warn':u.rol==='admin'?'chip-info':'chip-ok'}">${u.rol}</span></td>
         <td>${chipEstado}</td>
         <td class="text-xs text-slate-500">${u.ultimo_login?fmtDateTime(u.ultimo_login):'—'}</td>
         <td class="whitespace-nowrap">
@@ -6340,7 +6485,11 @@ function openNuevoUsuario(){
           <button type="button" class="pw-toggle" onclick="_togglePw('nuUsrPw', this)" title="Mostrar">👁</button>
         </div>
       </div>
-      <div><label class="label">Rol</label><select name="rol" class="input"><option value="vendedor">vendedor</option><option value="admin">admin</option></select></div>
+      <div><label class="label">Rol</label><select name="rol" class="input">
+        <option value="vendedor">vendedor</option>
+        <option value="admin">admin</option>
+        <option value="propietario">propietario (acceso a RRHH)</option>
+      </select></div>
       <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear</button></div>
     </form></div>`);
   $('#formUsr').addEventListener('submit', e => _lockSubmit(e, async () => {
@@ -6363,7 +6512,9 @@ function openEditarUsuario(u){
       </div>
       <div><label class="label">Rol</label><select name="rol" class="input">
         <option value="vendedor" ${u.rol==='vendedor'?'selected':''}>vendedor</option>
-        <option value="admin" ${u.rol==='admin'?'selected':''}>admin</option></select></div>
+        <option value="admin" ${u.rol==='admin'?'selected':''}>admin</option>
+        <option value="propietario" ${u.rol==='propietario'?'selected':''}>propietario (acceso a RRHH)</option>
+      </select></div>
       <div><label class="label">Activo</label><select name="activo" class="input">
         <option value="true" ${(''+u.activo).toLowerCase()==='true'?'selected':''}>Activo</option>
         <option value="false" ${(''+u.activo).toLowerCase()!=='true'?'selected':''}>Inactivo</option></select></div>
@@ -6490,7 +6641,7 @@ async function cargarNotificaciones(){
     totalBajo = d.productos.length;
   }catch(_){}
   // Las discrepancias de caja sólo las ve el admin
-  if(S.usuario?.rol === 'admin'){
+  if(isAdmin()){
     try{
       const d = await api('cajasConDiferencia');
       cajasDif = d.cajas || [];
@@ -6512,7 +6663,7 @@ async function cargarNotificaciones(){
 // Modal de notificaciones: muestra cajas con diferencia (para admin)
 // y el acceso directo al listado de productos bajo stock.
 function openNotificaciones(){
-  const esAdmin = S.usuario?.rol === 'admin';
+  const esAdmin = isAdmin();
   const cajas = _notifCajasDif || [];
   const bajoN = _notifBajoStockN || 0;
   openModal(`
@@ -6687,5 +6838,1161 @@ async function cargarStatsDashboard(){
   }
 })();
 </script>
+
+<!-- ═══════ MÓDULO RRHH ═══════ -->
+<script>
+window.RRHH = (function(){
+  // Caché en memoria. Se hidrata desde el backend en init() y se mantiene
+  // sincronizada con cada mutación (api() → actualizar caché → re-render).
+  let DB = {
+    workers: [], shifts: {},
+    payslipParams: { afp: 11.5, salud: 7.0, afc: 0.6 }
+  };
+  let state = {
+    currentSub: 'trabajadores',
+    selectedWorkerId: null,
+    editingWorkerId: null,
+    currentWeekKey: getWeekKey(new Date()),
+    selectedShiftWorkerId: null,
+    cruceMes: null,
+    marcajesPeriod: null,
+    marcajesWorker: null,
+    liq: { workerId: null, periodo: null, data: null },
+    loaded: false
+  };
+  let allMarcajes = []; // marcajes procesados en memoria (se hidrata del backend)
+
+  /* ── Persistencia: backend via api() ─────────────────────────────────────
+     Cargamos todo el dataset en una sola llamada (listarRRHH). Cada mutación
+     llama al endpoint específico y refresca la caché local. */
+  async function loadFromBackend(){
+    try {
+      const d = await api('listarRRHH');
+      DB.workers = d.trabajadores || [];
+      DB.shifts = d.shifts || {};
+      DB.payslipParams = d.payslipParams || { afp: 11.5, salud: 7.0, afc: 0.6 };
+      // Reconstituir allMarcajes (con Date objects) para la vista de Marcajes/Cruce
+      const rawMarcajes = d.marcajes || [];
+      allMarcajes = rawMarcajes.map(m => {
+        const shiftDate = new Date(m.rawY, m.rawM - 1, m.rawD);
+        // Si el marcaje fue 00:00-02:59, fecha_jornada apunta al día anterior
+        if (m.shiftMin >= 24 * 60) shiftDate.setDate(shiftDate.getDate() - 1);
+        return {
+          workerId: m.workerId,
+          y: m.rawY, m: m.rawM, d: m.rawD,
+          clockMin: m.shiftMin >= 24*60 ? m.shiftMin - 24*60 : m.shiftMin,
+          timeStr: m.timeStr,
+          shiftDate: shiftDate,
+          shiftDateKey: fmtDateKey(shiftDate),
+          shiftMin: m.shiftMin
+        };
+      });
+      state.loaded = true;
+    } catch(e){
+      toast('Error cargando datos RRHH: '+e.message,'err');
+      throw e;
+    }
+  }
+  function newId(prefix){ return (prefix||'i_')+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3); }
+
+  /* ── Utilidades ── */
+  const DAY_NAMES = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const DAY_NAMES_FULL = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const TOLERANCE_MIN = 15, DEDUP_MIN = 5, COLACION_PACTADA_MIN = 45, MIN_TURNO_COLACION = 4*60;
+
+  function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmtCLP(n){ if(n==null||isNaN(n)) return '$0'; return '$'+Math.round(n).toLocaleString('es-CL'); }
+  function fmtDate(d){ if(!d) return '–'; const dt=(d instanceof Date)?d:new Date(d); return String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear(); }
+  function fmtTime(m){ if(m==null) return '–'; const n=((m%1440)+1440)%1440; return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0'); }
+  function fmtDur(m){ if(m==null) return '–'; const s=m<0?'-':''; const a=Math.abs(Math.round(m)); return s+(Math.floor(a/60)>0?Math.floor(a/60)+'h ':'')+String(a%60).padStart(2,'0')+'m'; }
+  function parseTimeToMin(t){ if(!t) return null; const p=t.split(':'); return parseInt(p[0])*60+parseInt(p[1]||0); }
+  function round2(n){ return Math.round(n*100)/100; }
+  function formatRut(v){
+    v=(v||'').replace(/[^0-9kK]/g,'').toUpperCase();
+    if(v.length<=1) return v;
+    const dv=v.slice(-1); let num=v.slice(0,-1);
+    num=num.replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    return num+'-'+dv;
+  }
+  function validarRut(rut){
+    if(!rut) return false;
+    rut=rut.replace(/[^0-9kK]/g,'').toUpperCase();
+    if(rut.length<2) return false;
+    const dv=rut.slice(-1), num=rut.slice(0,-1);
+    let s=1, m=0;
+    for(let i=num.length-1;i>=0;i--){ s=(s+parseInt(num[i])*(9-m++%6))%11; }
+    return (s ? String(s-1) : 'K')===dv;
+  }
+  function calcAge(birth){
+    if(!birth) return null;
+    const d=new Date(birth), now=new Date();
+    let age=now.getFullYear()-d.getFullYear();
+    const m=now.getMonth()-d.getMonth();
+    if(m<0||(m===0&&now.getDate()<d.getDate())) age--;
+    return age;
+  }
+  function getWeekKey(date){
+    const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+    const day=d.getUTCDay()||7;
+    d.setUTCDate(d.getUTCDate()+4-day);
+    const yearStart=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    const week=Math.ceil((((d-yearStart)/86400000)+1)/7);
+    return d.getUTCFullYear()+'-W'+String(week).padStart(2,'0');
+  }
+  function weekKeyToMonday(wk){
+    const [y,w]=wk.split('-W').map(Number);
+    const jan4=new Date(Date.UTC(y,0,4));
+    const monday=new Date(jan4);
+    monday.setUTCDate(jan4.getUTCDate()-((jan4.getUTCDay()||7)-1)+(w-1)*7);
+    return monday;
+  }
+  function formatPeriodo(p){ if(!p) return ''; const [y,m]=p.split('-'); return MONTHS[parseInt(m)-1]+' '+y; }
+  function fmtDateKey(d){ return d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0'); }
+
+  /* ── Sub-tab navigation ── */
+  function goSub(sub){
+    state.currentSub = sub;
+    document.querySelectorAll('.rrhh-sub').forEach(el=>el.classList.add('hidden'));
+    const target = document.getElementById('rrhhSub-'+sub);
+    if(target) target.classList.remove('hidden');
+    document.querySelectorAll('.rrhh-tab').forEach(b=>b.classList.toggle('active', b.dataset.sub===sub));
+    if(sub==='trabajadores') renderWorkers();
+    if(sub==='turnos') renderShiftPlanner();
+    if(sub==='marcajes') renderMarcajesView();
+    if(sub==='cruce') renderCruce();
+    if(sub==='liquidaciones') renderLiquidaciones();
+  }
+
+  /* ════════════ TRABAJADORES ════════════ */
+  function renderWorkers(){
+    const listEl = document.getElementById('rrhhWorkersList');
+    const detailEl = document.getElementById('rrhhWorkerDetail');
+    if(state.selectedWorkerId){
+      listEl.classList.add('hidden'); detailEl.classList.remove('hidden');
+      renderWorkerDetail(state.selectedWorkerId);
+      return;
+    }
+    listEl.classList.remove('hidden'); detailEl.classList.add('hidden');
+    if(!DB.workers.length){
+      listEl.innerHTML = '<div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">Aún no hay trabajadores registrados.<br><span class="text-sm">Haz clic en <b>+ Nuevo trabajador</b> para comenzar.</span></div>';
+      return;
+    }
+    listEl.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">' + DB.workers.map(w=>{
+      const age = calcAge(w.fechaNacimiento);
+      const initials = (w.nombre||'?').split(' ').filter(Boolean).slice(0,2).map(s=>s[0]).join('').toUpperCase();
+      const tipoChip = w.tipoContrato==='full'?'<span class="chip chip-info text-xs">Jornada completa</span>':w.tipoContrato==='part'?'<span class="chip chip-warn text-xs">Part-time</span>':'';
+      const photo = w.fotoUrl?'<img src="'+escapeHtml(w.fotoUrl)+'" class="rrhh-avatar" onerror="this.outerHTML=\'<div class=rrhh-avatar>'+initials+'</div>\'">':'<div class="rrhh-avatar">'+initials+'</div>';
+      return '<div class="rrhh-worker-card" onclick="RRHH.selectWorker(\''+w.id+'\')">'+photo+'<div class="flex-1 min-w-0"><div class="font-semibold text-sm truncate">'+escapeHtml(w.nombre||'(sin nombre)')+'</div><div class="text-xs text-slate-500 mt-0.5">'+escapeHtml(w.rut||'–')+(age!=null?' · '+age+' años':'')+'</div><div class="mt-1">'+tipoChip+'</div></div></div>';
+    }).join('') + '</div>';
+  }
+
+  function selectWorker(id){ state.selectedWorkerId = id; renderWorkers(); }
+  function backToWorkerList(){ state.selectedWorkerId = null; renderWorkers(); }
+
+  function renderWorkerDetail(id){
+    const w = DB.workers.find(x=>x.id===id);
+    if(!w){ backToWorkerList(); return; }
+    const age = calcAge(w.fechaNacimiento);
+    const initials = (w.nombre||'?').split(' ').filter(Boolean).slice(0,2).map(s=>s[0]).join('').toUpperCase();
+    const photo = w.fotoUrl?'<img src="'+escapeHtml(w.fotoUrl)+'" style="width:84px;height:84px;border-radius:50%;object-fit:cover" onerror="this.outerHTML=\'<div class=rrhh-avatar style=width:84px;height:84px;font-size:24px>'+initials+'</div>\'">':'<div class="rrhh-avatar" style="width:84px;height:84px;font-size:24px">'+initials+'</div>';
+    const tipo = w.tipoContrato==='full'?'Jornada completa':w.tipoContrato==='part'?'Part-time':'(sin definir)';
+    const liqs = (w.liquidaciones||[]).slice().sort((a,b)=>b.periodo.localeCompare(a.periodo));
+    const cts = w.contratos||[];
+    document.getElementById('rrhhWorkerDetail').innerHTML =
+      '<button class="btn btn-ghost mb-3" onclick="RRHH.backToWorkerList()">← Volver al listado</button>'+
+      '<div class="bg-white rounded-xl p-5 border border-slate-200 mb-3">'+
+        '<div class="flex items-center gap-4 flex-wrap">'+photo+'<div class="flex-1 min-w-[200px]"><div class="text-xl font-bold" style="color:var(--brand-dark)">'+escapeHtml(w.nombre||'(sin nombre)')+'</div><div class="text-sm text-slate-500">'+escapeHtml(w.rut||'–')+(age!=null?' · '+age+' años':'')+'</div><div class="text-xs text-slate-500 mt-1">'+tipo+' · Ingreso: '+(w.fechaIngreso?fmtDate(w.fechaIngreso):'–')+'</div></div><div class="flex gap-2"><button class="btn btn-ghost" onclick="RRHH.openWorkerForm(\''+w.id+'\')">Editar</button><button class="btn btn-ghost text-red-600" onclick="RRHH.deleteWorker(\''+w.id+'\')">Eliminar</button></div></div>'+
+        '<hr class="my-4 border-slate-200"><div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">'+
+          '<div><div class="text-xs text-slate-500 uppercase">Teléfono</div><div>'+escapeHtml(w.telefono||'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">Fecha nacimiento</div><div>'+(w.fechaNacimiento?fmtDate(w.fechaNacimiento):'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">Sueldo bruto mensual</div><div class="font-semibold">'+(w.sueldoBase?fmtCLP(w.sueldoBase):'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">Valor hora</div><div class="font-semibold">'+(w.valorHora?fmtCLP(w.valorHora):'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">Gratificación 25%</div><div>'+(w.gratificacion==='si'?'Sí':'No')+'</div></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="bg-white rounded-xl p-5 border border-slate-200 mb-3">'+
+        '<div class="flex items-center justify-between mb-3"><h4 class="font-semibold">Respaldos de contratos</h4><button class="btn btn-ghost text-sm" onclick="RRHH.addContract(\''+w.id+'\')">+ Agregar</button></div>'+
+        (cts.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Documento</th><th class="text-left">Fecha</th><th class="text-left">Link</th><th></th></tr></thead><tbody>'+cts.map((c,i)=>'<tr class="border-t border-slate-100"><td class="py-2">'+escapeHtml(c.nombre||'Contrato')+'</td><td>'+(c.fecha?fmtDate(c.fecha):'–')+'</td><td><a href="'+escapeHtml(c.url)+'" target="_blank" class="text-blue-600 hover:underline">Abrir</a></td><td class="text-right"><button class="text-xs text-red-600 hover:underline" onclick="RRHH.deleteContract(\''+w.id+'\','+i+')">Eliminar</button></td></tr>').join('')+'</tbody></table></div><p class="text-xs text-slate-500 mt-3">Los contratos se almacenan como links a Google Drive. Sube el archivo a Drive con permiso "cualquiera con el enlace" y pega el link aquí.</p>':'<div class="text-sm text-slate-500 text-center py-4">Sin contratos cargados.</div>')+
+      '</div>'+
+      '<div class="bg-white rounded-xl p-5 border border-slate-200">'+
+        '<h4 class="font-semibold mb-3">Liquidaciones generadas</h4>'+
+        (liqs.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Período</th><th class="text-left">Emisión</th><th class="text-right">Líquido</th><th></th></tr></thead><tbody>'+liqs.map(l=>'<tr class="border-t border-slate-100"><td class="py-2">'+formatPeriodo(l.periodo)+'</td><td>'+fmtDate(l.fechaEmision)+'</td><td class="text-right font-semibold">'+fmtCLP(l.liquidoPago)+'</td><td class="text-right"><button class="text-xs text-blue-600 hover:underline" onclick="RRHH.reopenLiquidacion(\''+w.id+'\',\''+l.periodo+'\')">Ver</button></td></tr>').join('')+'</tbody></table></div>':'<div class="text-sm text-slate-500 text-center py-4">No hay liquidaciones generadas.</div>')+
+      '</div>';
+  }
+
+  function openWorkerForm(id){
+    state.editingWorkerId = id||null;
+    const w = id ? DB.workers.find(x=>x.id===id) : null;
+    const html =
+      '<div class="p-6"><h3 class="text-lg font-bold mb-3" style="color:var(--brand-dark)">'+(id?'Editar trabajador':'Nuevo trabajador')+'</h3>'+
+      '<form id="rrhhWorkerForm" class="space-y-3" autocomplete="off">'+
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">'+
+          '<div><label class="label">Nombre completo *</label><input name="nombre" class="input" required value="'+escapeHtml(w?.nombre||'')+'"></div>'+
+          '<div><label class="label">RUT *</label><input name="rut" class="input" required placeholder="12.345.678-9" value="'+escapeHtml(w?.rut||'')+'" oninput="this.value=RRHH._formatRut(this.value)"></div>'+
+          '<div><label class="label">Fecha nacimiento</label><input type="date" name="fechaNacimiento" class="input" value="'+(w?.fechaNacimiento||'')+'" oninput="RRHH._updateAge(this)"></div>'+
+          '<div><label class="label">Edad</label><input name="edadDisplay" class="input bg-slate-50" readonly value="'+(w?.fechaNacimiento?calcAge(w.fechaNacimiento)+' años':'')+'"></div>'+
+          '<div><label class="label">Fecha de ingreso</label><input type="date" name="fechaIngreso" class="input" value="'+(w?.fechaIngreso||'')+'"></div>'+
+          '<div><label class="label">Teléfono</label><input type="tel" name="telefono" class="input" placeholder="+56 9 1234 5678" value="'+escapeHtml(w?.telefono||'')+'"></div>'+
+          '<div class="sm:col-span-2"><label class="label">Foto de perfil (link Drive, opcional)</label><input type="url" name="fotoUrl" class="input" placeholder="https://drive.google.com/..." value="'+escapeHtml(w?.fotoUrl||'')+'"></div>'+
+        '</div>'+
+        '<hr class="border-slate-200">'+
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">'+
+          '<div><label class="label">Tipo de contrato *</label><select name="tipoContrato" class="input" required onchange="RRHH._onTipoContrato(this)">'+
+            '<option value="">Seleccionar...</option>'+
+            '<option value="full" '+(w?.tipoContrato==='full'?'selected':'')+'>Jornada completa (sueldo fijo + extras)</option>'+
+            '<option value="part" '+(w?.tipoContrato==='part'?'selected':'')+'>Part-time (por hora)</option>'+
+          '</select></div>'+
+          '<div><label class="label">Sueldo bruto mensual (CLP)</label><input type="number" name="sueldoBase" class="input" min="0" placeholder="Ej: 500000" value="'+(w?.sueldoBase||'')+'"></div>'+
+          '<div><label class="label">Valor hora ordinaria (CLP)</label><input type="number" name="valorHora" class="input" step="0.01" min="0" placeholder="3572.4 ó 3208" value="'+(w?.valorHora||'')+'"></div>'+
+          '<div><label class="label">Gratificación 25% (full-time)</label><select name="gratificacion" class="input"><option value="si" '+(w?.gratificacion==='si'?'selected':'')+'>Sí, sumar 25%</option><option value="no" '+(w?.gratificacion==='no'?'selected':'')+'>No</option></select></div>'+
+        '</div>'+
+        '<div class="flex gap-2 justify-end pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar</button></div>'+
+      '</form></div>';
+    openModal(html);
+    document.getElementById('rrhhWorkerForm').addEventListener('submit', async e=>{
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      delete data.edadDisplay;
+      data.sueldoBase = data.sueldoBase?parseFloat(data.sueldoBase):null;
+      data.valorHora = data.valorHora?parseFloat(data.valorHora):null;
+      data.fechaNacimiento = data.fechaNacimiento||null;
+      data.fechaIngreso = data.fechaIngreso||null;
+      if(!validarRut(data.rut)){
+        if(!confirm('El RUT no parece válido. ¿Guardar de todas formas?')) return;
+      }
+      try {
+        if(state.editingWorkerId){
+          await api('actualizarTrabajadorRRHH', { id: state.editingWorkerId, trabajador: data });
+          const idx = DB.workers.findIndex(x=>x.id===state.editingWorkerId);
+          if(idx>=0) DB.workers[idx] = Object.assign({}, DB.workers[idx], data);
+        } else {
+          const res = await api('crearTrabajadorRRHH', { trabajador: data });
+          DB.workers.push(Object.assign({ id: String(res.id), contratos:[], liquidaciones:[] }, data));
+        }
+        closeModal();
+        renderWorkers();
+        toast(state.editingWorkerId?'Trabajador actualizado':'Trabajador creado','ok');
+      } catch(err){ toast('Error guardando: '+err.message,'err'); }
+    });
+  }
+
+  async function deleteWorker(id){
+    const w = DB.workers.find(x=>x.id===id);
+    if(!w) return;
+    if(!confirm('¿Eliminar a '+w.nombre+'? Su historial (turnos, marcajes, liquidaciones) se conserva en la planilla. Quedará oculto en el módulo.')) return;
+    try {
+      await api('eliminarTrabajadorRRHH', { id: id });
+      DB.workers = DB.workers.filter(x=>x.id!==id);
+      // En la caché local quitamos los turnos del trabajador (en backend se conservan para historial)
+      Object.keys(DB.shifts).forEach(wk=>{ DB.shifts[wk]=(DB.shifts[wk]||[]).filter(s=>s.workerId!==id); });
+      state.selectedWorkerId = null;
+      renderWorkers();
+      toast('Trabajador eliminado','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+
+  async function addContract(workerId){
+    const nombre = prompt('Nombre del documento (ej: Contrato indefinido 2026):');
+    if(!nombre) return;
+    const url = prompt('Link de Google Drive (compartir "cualquiera con el enlace"):');
+    if(!url) return;
+    const fecha = prompt('Fecha (YYYY-MM-DD), vacío para hoy:', new Date().toISOString().slice(0,10));
+    try {
+      const res = await api('agregarContratoRRHH', { trabajadorId: workerId, nombre: nombre.trim(), url: url.trim(), fecha: fecha||null });
+      const w = DB.workers.find(x=>x.id===workerId);
+      if(!w.contratos) w.contratos=[];
+      w.contratos.push({nombre:nombre.trim(), url:url.trim(), fecha:fecha||null, _id:String(res.id)});
+      renderWorkers();
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+
+  async function deleteContract(workerId, idx){
+    if(!confirm('¿Eliminar este respaldo?')) return;
+    const w = DB.workers.find(x=>x.id===workerId);
+    const c = w.contratos[idx];
+    if(!c) return;
+    try {
+      if(c._id) await api('eliminarContratoRRHH', { id: c._id });
+      w.contratos.splice(idx,1);
+      renderWorkers();
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+  function _updateAge(el){
+    const f = el.form;
+    const age = calcAge(el.value);
+    f.edadDisplay.value = age!=null? age+' años':'';
+  }
+  function _onTipoContrato(sel){
+    const f = sel.form;
+    if(sel.value==='full'){
+      if(!f.valorHora.value) f.valorHora.value = 3572.4;
+      f.gratificacion.value = 'si';
+    } else if(sel.value==='part'){
+      if(!f.valorHora.value) f.valorHora.value = 3208;
+      f.gratificacion.value = 'no';
+    }
+  }
+
+  /* ════════════ TURNOS ════════════ */
+  const GRID_START_HOUR = 8, GRID_END_HOUR = 28;
+  const ROW_PX = 28;
+
+  function workerColor(workerId){ const i=DB.workers.findIndex(w=>w.id===workerId); return 'rrhh-c-'+((i%6)+1); }
+  function shiftWeekKey(wk, delta){
+    const monday = weekKeyToMonday(wk);
+    monday.setUTCDate(monday.getUTCDate()+delta*7);
+    return getWeekKey(new Date(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate()));
+  }
+  function weekRangeLabel(wk){
+    const monday = weekKeyToMonday(wk);
+    const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate()+6);
+    const f = d=>String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0');
+    return 'Semana del '+f(monday)+' al '+f(sunday)+' de '+monday.getUTCFullYear();
+  }
+  function weekDates(wk){
+    const monday = weekKeyToMonday(wk);
+    return Array.from({length:7},(_,i)=>{ const d=new Date(monday); d.setUTCDate(monday.getUTCDate()+i); return d; });
+  }
+
+  function renderShiftPlanner(){
+    const root = document.getElementById('rrhhShiftPlanner');
+    if(!DB.workers.length){
+      root.innerHTML = '<div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">Primero registra al menos un trabajador.</div>';
+      return;
+    }
+    const shifts = DB.shifts[state.currentWeekKey] || [];
+    const dates = weekDates(state.currentWeekKey);
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    let html =
+      '<div class="bg-white rounded-xl border border-slate-200 p-3 mb-3 flex items-center gap-2 flex-wrap">'+
+        '<button class="btn btn-ghost" onclick="RRHH.changeWeek(-1)">←</button>'+
+        '<span class="font-semibold text-sm">'+weekRangeLabel(state.currentWeekKey)+'</span>'+
+        '<button class="btn btn-ghost" onclick="RRHH.changeWeek(1)">→</button>'+
+        '<button class="btn btn-ghost text-sm" onclick="RRHH.goToCurrentWeek()">Hoy</button>'+
+        '<div class="flex-1"></div>'+
+        '<button class="btn btn-ghost text-sm" onclick="RRHH.copyPreviousWeek()">↻ Copiar semana anterior</button>'+
+        '<button class="btn btn-ghost text-sm text-red-600" onclick="RRHH.clearWeek()">Limpiar</button>'+
+      '</div>'+
+      '<div class="bg-white rounded-xl border border-slate-200 p-3 mb-3 flex items-center gap-2 flex-wrap">'+
+        '<span class="text-sm font-semibold">Filtrar:</span>'+
+        '<button class="btn '+(state.selectedShiftWorkerId===null?'btn-primary':'btn-ghost')+' text-sm" onclick="RRHH.filterShiftWorker(null)">Todos</button>'+
+        DB.workers.map(w=>'<button class="btn '+(state.selectedShiftWorkerId===w.id?'btn-primary':'btn-ghost')+' text-sm" onclick="RRHH.filterShiftWorker(\''+w.id+'\')">'+escapeHtml(w.nombre.split(' ')[0])+'</button>').join('')+
+      '</div>'+
+      '<div class="bg-slate-50 rounded-xl border border-slate-200 p-3 mb-3 grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">'+
+        '<div><label class="label">Trabajador</label><select id="rrhhAddShiftW" class="input">'+DB.workers.map(w=>'<option value="'+w.id+'">'+escapeHtml(w.nombre)+'</option>').join('')+'</select></div>'+
+        '<div><label class="label">Día</label><select id="rrhhAddShiftD" class="input">'+DAY_NAMES_FULL.map((d,i)=>'<option value="'+i+'">'+d+' '+dates[i].getUTCDate()+'/'+(dates[i].getUTCMonth()+1)+'</option>').join('')+'</select></div>'+
+        '<div><label class="label">Inicio</label><input type="time" id="rrhhAddShiftS" class="input" value="15:45"></div>'+
+        '<div><label class="label">Fin</label><input type="time" id="rrhhAddShiftE" class="input" value="01:30"></div>'+
+        '<button class="btn btn-primary" onclick="RRHH.addShiftFromForm()">+ Agregar</button>'+
+      '</div>'+
+      '<p class="text-xs text-slate-500 mb-3">Si la hora fin es menor que inicio, se asume que termina al día siguiente (ej: 15:45 → 01:30).</p>';
+
+    // grid
+    let header = '<div class="rrhh-shift-header"><div>Hora</div>'+
+      DAY_NAMES.map((d,i)=>{
+        const dt = dates[i]; const isToday = new Date(dt).toDateString() === today.toDateString();
+        return '<div'+(isToday?' style="background:#e0e7ff;color:#1e293b"':'')+'>'+d+' '+String(dt.getUTCDate()).padStart(2,'0')+'/'+String(dt.getUTCMonth()+1).padStart(2,'0')+'</div>';
+      }).join('')+'</div>';
+    let rows = '';
+    for(let h=GRID_START_HOUR; h<GRID_END_HOUR; h++){
+      const lbl = String(h%24).padStart(2,'0')+':00'+(h>=24?' +1':'');
+      rows += '<div class="rrhh-shift-row"><div class="hour-lbl">'+lbl+'</div>'+
+        [0,1,2,3,4,5,6].map(d=>'<div class="day-cell" data-day="'+d+'" data-hour="'+h+'" onclick="RRHH.quickAddShift('+d+','+h+')"></div>').join('')+
+        '</div>';
+    }
+    let blocks = '';
+    shifts.forEach(s=>{
+      const w = DB.workers.find(x=>x.id===s.workerId);
+      if(!w) return;
+      const dim = (state.selectedShiftWorkerId && state.selectedShiftWorkerId !== s.workerId);
+      const top = (s.startMin/60 - GRID_START_HOUR) * ROW_PX;
+      const height = ((s.endMin - s.startMin)/60) * ROW_PX;
+      blocks += '<div class="rrhh-shift-block '+workerColor(s.workerId)+(dim?' muted':'')+'" '+
+        'style="top:'+(33+top)+'px;height:'+(height-2)+'px;left:calc(60px + '+s.day+' * ((100% - 60px) / 7) + 3px);width:calc((100% - 60px) / 7 - 6px);" '+
+        'onclick="event.stopPropagation();RRHH.editShift(\''+s.id+'\')" '+
+        'title="'+escapeHtml(w.nombre)+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'">'+
+        '<div>'+escapeHtml(w.nombre.split(' ')[0])+'</div><div class="t">'+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'</div></div>';
+    });
+    html += '<div class="rrhh-shift-grid">'+header+rows+blocks+'</div>';
+
+    // past weeks
+    const pastWeeks = Object.keys(DB.shifts).filter(k=>k!==state.currentWeekKey && (DB.shifts[k]||[]).length>0).sort().reverse();
+    if(pastWeeks.length){
+      html += '<div class="bg-white rounded-xl border border-slate-200 p-4 mt-4"><h4 class="font-semibold mb-3">Programaciones anteriores</h4>'+
+        '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Semana</th><th class="text-left">Turnos</th><th class="text-left">Total hrs</th><th></th></tr></thead><tbody>'+
+        pastWeeks.slice(0,12).map(wk=>{
+          const ss = DB.shifts[wk]||[];
+          const totalMin = ss.reduce((s,x)=>s+(x.endMin-x.startMin),0);
+          return '<tr class="border-t border-slate-100"><td class="py-2">'+weekRangeLabel(wk)+'</td><td>'+ss.length+'</td><td>'+fmtDur(totalMin)+'</td><td class="text-right"><button class="text-xs text-blue-600 hover:underline" onclick="RRHH.goToWeek(\''+wk+'\')">Ver</button></td></tr>';
+        }).join('')+'</tbody></table></div></div>';
+    }
+    root.innerHTML = html;
+  }
+
+  function changeWeek(delta){ state.currentWeekKey = shiftWeekKey(state.currentWeekKey, delta); renderShiftPlanner(); }
+  function goToCurrentWeek(){ state.currentWeekKey = getWeekKey(new Date()); renderShiftPlanner(); }
+  function goToWeek(wk){ state.currentWeekKey = wk; renderShiftPlanner(); window.scrollTo(0,0); }
+  function filterShiftWorker(id){ state.selectedShiftWorkerId = id; renderShiftPlanner(); }
+  async function addShiftFromForm(){
+    const wid = document.getElementById('rrhhAddShiftW').value;
+    const day = parseInt(document.getElementById('rrhhAddShiftD').value);
+    const startMin = parseTimeToMin(document.getElementById('rrhhAddShiftS').value);
+    let endMin = parseTimeToMin(document.getElementById('rrhhAddShiftE').value);
+    if(endMin<=startMin) endMin += 24*60;
+    try {
+      const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin } });
+      if(!DB.shifts[state.currentWeekKey]) DB.shifts[state.currentWeekKey]=[];
+      DB.shifts[state.currentWeekKey].push({ id:String(res.id), workerId:wid, day, startMin, endMin });
+      renderShiftPlanner();
+    } catch(err){ toast('Error guardando turno: '+err.message,'err'); }
+  }
+  async function quickAddShift(day, hour){
+    if(!DB.workers.length) return;
+    const wid = state.selectedShiftWorkerId || document.getElementById('rrhhAddShiftW').value;
+    const w = DB.workers.find(x=>x.id===wid);
+    if(!confirm('¿Agregar turno de 6h a '+w.nombre.split(' ')[0]+' el '+DAY_NAMES_FULL[day]+' desde '+String(hour%24).padStart(2,'0')+':00?')) return;
+    const startMin = hour*60, endMin = (hour+6)*60;
+    try {
+      const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin } });
+      if(!DB.shifts[state.currentWeekKey]) DB.shifts[state.currentWeekKey]=[];
+      DB.shifts[state.currentWeekKey].push({ id:String(res.id), workerId:wid, day, startMin, endMin });
+      renderShiftPlanner();
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+  async function editShift(id){
+    const shifts = DB.shifts[state.currentWeekKey]||[];
+    const s = shifts.find(x=>x.id===id);
+    if(!s) return;
+    const w = DB.workers.find(x=>x.id===s.workerId);
+    const act = prompt('Turno de '+w.nombre+' - '+DAY_NAMES_FULL[s.day]+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'\n\nEscribe:\n  e = editar horario\n  d = eliminar\n  (vacío para cancelar)');
+    if(act==='d'){
+      try {
+        await api('eliminarTurnoRRHH', { id: s.id });
+        DB.shifts[state.currentWeekKey] = shifts.filter(x=>x.id!==id);
+        renderShiftPlanner();
+      } catch(err){ toast('Error: '+err.message,'err'); }
+    } else if(act==='e'){
+      const ns = prompt('Hora inicio (HH:MM):', fmtTime(s.startMin));
+      if(!ns) return;
+      const ne = prompt('Hora fin (HH:MM):', fmtTime(s.endMin%(24*60)));
+      if(!ne) return;
+      const newStart = parseTimeToMin(ns);
+      let newEnd = parseTimeToMin(ne);
+      if(newEnd<=newStart) newEnd += 24*60;
+      try {
+        await api('actualizarTurnoRRHH', { id: s.id, startMin: newStart, endMin: newEnd });
+        s.startMin = newStart; s.endMin = newEnd;
+        renderShiftPlanner();
+      } catch(err){ toast('Error: '+err.message,'err'); }
+    }
+  }
+  async function copyPreviousWeek(){
+    const prevWk = shiftWeekKey(state.currentWeekKey,-1);
+    const prev = DB.shifts[prevWk]||[];
+    if(!prev.length){ toast('No hay turnos en la semana anterior','warn'); return; }
+    if(!confirm('Copiar '+prev.length+' turnos de la semana anterior. Esto reemplaza los turnos actuales. ¿Continuar?')) return;
+    try {
+      const res = await api('copiarTurnosSemanaRRHH', { sourceWeekKey: prevWk, destWeekKey: state.currentWeekKey });
+      DB.shifts[state.currentWeekKey] = res.turnos || [];
+      renderShiftPlanner();
+      toast('Turnos copiados','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+  async function clearWeek(){
+    if(!(DB.shifts[state.currentWeekKey]||[]).length) return;
+    if(!confirm('¿Borrar todos los turnos de esta semana?')) return;
+    try {
+      await api('limpiarTurnosSemanaRRHH', { weekKey: state.currentWeekKey });
+      delete DB.shifts[state.currentWeekKey];
+      renderShiftPlanner();
+      toast('Turnos eliminados','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+
+  /* ════════════ MARCAJES ════════════ */
+  function renderMarcajesView(){
+    const root = document.getElementById('rrhhMarcajesView');
+    if(!DB.workers.length){
+      root.innerHTML = '<div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">Primero registra trabajadores y planifica turnos.</div>';
+      return;
+    }
+    root.innerHTML =
+      '<div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:bg-slate-50 transition" id="rrhhDropZone" onclick="document.getElementById(\'rrhhFileInput\').click()">'+
+        '<p class="text-slate-600">Arrastra el archivo TXT aquí o haz clic para seleccionarlo</p>'+
+        '<p class="text-xs text-slate-400 mt-1">También puedes pegar el contenido directamente abajo</p>'+
+        '<input type="file" id="rrhhFileInput" accept=".txt" style="display:none">'+
+      '</div>'+
+      '<textarea id="rrhhTxtInput" placeholder="Pega el contenido del TXT..." class="input mt-2 font-mono text-xs" rows="5" style="display:none"></textarea>'+
+      '<div class="flex items-center gap-2 my-3 flex-wrap">'+
+        '<button class="btn btn-ghost" onclick="RRHH.togglePaste()">✏ Pegar texto</button>'+
+        '<button class="btn btn-primary" onclick="RRHH.loadMarcajesFromText()">Analizar</button>'+
+        '<button class="btn btn-ghost" onclick="RRHH.clearMarcajes()">Limpiar</button>'+
+        '<span id="rrhhMarcStatus" class="text-xs text-slate-500"></span>'+
+      '</div>'+
+      '<div id="rrhhMarcDashboard"></div>';
+
+    document.getElementById('rrhhFileInput').onchange = e=>{
+      const f = e.target.files[0]; if(!f) return;
+      const r = new FileReader();
+      r.onload = ev=>{ document.getElementById('rrhhTxtInput').value = ev.target.result; loadMarcajesFromText(); };
+      r.readAsText(f,'utf-8');
+    };
+    const dz = document.getElementById('rrhhDropZone');
+    ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('bg-slate-100');}));
+    ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('bg-slate-100');}));
+    dz.addEventListener('drop',e=>{
+      e.preventDefault();
+      const f = e.dataTransfer.files[0]; if(!f) return;
+      const r = new FileReader();
+      r.onload = ev=>{ document.getElementById('rrhhTxtInput').value = ev.target.result; loadMarcajesFromText(); };
+      r.readAsText(f,'utf-8');
+    });
+    // Si ya hay marcajes hidratados desde el backend, mostrar el dashboard inmediatamente.
+    if(allMarcajes.length){
+      const wids = Array.from(new Set(allMarcajes.map(r=>r.workerId)));
+      document.getElementById('rrhhMarcStatus').textContent = '✓ '+allMarcajes.length+' marcajes en planilla ('+wids.length+' trabajador'+(wids.length!==1?'es':'')+')';
+      if(!state.marcajesWorker || !wids.includes(state.marcajesWorker)) state.marcajesWorker = wids[0];
+      const periods = getMarcajesPeriods(allMarcajes);
+      if(!state.marcajesPeriod || !periods.includes(state.marcajesPeriod)) state.marcajesPeriod = periods[periods.length-1]||null;
+      renderMarcajesDashboard();
+    }
+  }
+  function togglePaste(){
+    const ta = document.getElementById('rrhhTxtInput');
+    ta.style.display = (ta.style.display==='none'||!ta.style.display) ? 'block' : 'none';
+  }
+  async function clearMarcajes(){
+    if(!allMarcajes.length){ toast('No hay marcajes para borrar','warn'); return; }
+    const periods = getMarcajesPeriods(allMarcajes);
+    const opt = prompt('¿Qué quieres borrar?\n  todo = borra TODOS los marcajes (todos los meses)\n  '+(periods.length?periods.join(', '):'(sin meses)')+' = borra sólo ese mes\n  (vacío para cancelar)', periods.length?periods[periods.length-1]:'todo');
+    if(!opt) return;
+    try {
+      if(opt.toLowerCase()==='todo'){
+        await api('limpiarMarcajesRRHH', {});
+        allMarcajes = [];
+      } else {
+        await api('limpiarMarcajesRRHH', { periodo: opt });
+        const [py,pm] = opt.split('-').map(Number);
+        allMarcajes = allMarcajes.filter(m => !(m.shiftDate.getFullYear()===py && m.shiftDate.getMonth()+1===pm));
+      }
+      renderMarcajesView();
+      toast('Marcajes eliminados','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+  async function loadMarcajesFromText(){
+    const txt = document.getElementById('rrhhTxtInput').value;
+    if(!txt.trim()){ toast('No hay texto para analizar','err'); return; }
+    // Parseo client-side y dedup (igual que antes)
+    const raw = parseTxtMarcajes(txt);
+    if(!raw.length){
+      document.getElementById('rrhhMarcStatus').textContent = '❗ No se reconocieron trabajadores. Verifica que los nombres del TXT coincidan con los registrados.';
+      return;
+    }
+    const processed = processRecords(raw);
+    // Construir payload para el backend con metadatos completos
+    const payload = processed.map(r => ({
+      workerId: r.workerId,
+      rawY: r.y, rawM: r.m, rawD: r.d,
+      shiftMin: r.shiftMin,
+      timeStr: r.timeStr,
+      fechaJornada: fmtDate(r.shiftDate)
+    }));
+    try {
+      document.getElementById('rrhhMarcStatus').textContent = '⏳ Subiendo a planilla...';
+      const res = await api('cargarMarcajesRRHH', { marcajes: payload });
+      // Actualizar caché local: reemplazar los marcajes de los meses cargados
+      const mesesNuevos = new Set(res.mesesReemplazados || payload.map(m=>m.rawY+'-'+String(m.rawM).padStart(2,'0')));
+      allMarcajes = allMarcajes.filter(m => {
+        const k = m.shiftDate.getFullYear()+'-'+String(m.shiftDate.getMonth()+1).padStart(2,'0');
+        // Si el shiftDate no coincide con shiftMin, ajustar: cuando shiftMin>=24*60, el shiftDate ya está corrido al día anterior, así que su año/mes es el real.
+        return !mesesNuevos.has(k);
+      });
+      processed.forEach(r => allMarcajes.push(r));
+      // Ordenar
+      allMarcajes.sort((a,b)=>{
+        if(a.workerId!==b.workerId) return String(a.workerId).localeCompare(String(b.workerId));
+        if(a.shiftDateKey!==b.shiftDateKey) return a.shiftDateKey.localeCompare(b.shiftDateKey);
+        return a.shiftMin-b.shiftMin;
+      });
+      const wids = Array.from(new Set(allMarcajes.map(r=>r.workerId)));
+      document.getElementById('rrhhMarcStatus').textContent = '✓ '+res.insertados+' marcajes guardados ('+wids.length+' trabajador'+(wids.length!==1?'es':'')+')';
+      if(!state.marcajesWorker || !wids.includes(state.marcajesWorker)) state.marcajesWorker = wids[0];
+      const periods = getMarcajesPeriods(allMarcajes);
+      if(!state.marcajesPeriod || !periods.includes(state.marcajesPeriod)) state.marcajesPeriod = periods[periods.length-1]||null;
+      renderMarcajesDashboard();
+    } catch(err){
+      document.getElementById('rrhhMarcStatus').textContent = '❗ Error: '+err.message;
+      toast('Error subiendo marcajes: '+err.message,'err');
+    }
+  }
+  function matchWorkerByName(rawName){
+    const upper = (rawName||'').trim().toUpperCase();
+    if(!upper) return null;
+    for(const w of DB.workers){
+      const wn = (w.nombre||'').toUpperCase();
+      if(!wn) continue;
+      if(upper.includes(wn) || wn.includes(upper)) return w.id;
+      const parts = wn.split(' ').filter(x=>x.length>2);
+      if(parts.length && parts.every(p=>upper.includes(p))) return w.id;
+    }
+    const iw = upper.split(/\s+/).filter(Boolean);
+    for(const w of DB.workers){
+      const wn = (w.nombre||'').toUpperCase().split(/\s+/).filter(Boolean);
+      if(wn.length && iw.some(x=>wn.includes(x))) return w.id;
+    }
+    return null;
+  }
+  function parseTxtMarcajes(text){
+    const raw = [];
+    for(const line of text.trim().split('\n')){
+      const p = line.trim().split(/\t+/).filter(Boolean);
+      if(p.length<7 || isNaN(parseInt(p[0]))) continue;
+      const wid = matchWorkerByName(p[3]); if(!wid) continue;
+      const dt = p[6].split(' '); if(dt.length<2) continue;
+      const [y,m,d] = dt[0].split('/').map(Number);
+      const [hh,mm] = dt[1].split(':').map(Number);
+      raw.push({workerId:wid, y, m, d, clockMin:hh*60+mm, timeStr:dt[1].slice(0,5)});
+    }
+    return raw;
+  }
+  function processRecords(raw){
+    const assigned = [];
+    for(const r of raw){
+      let shiftDate, shiftMin;
+      if(r.clockMin>=12*60){ shiftDate=new Date(r.y, r.m-1, r.d); shiftMin=r.clockMin; }
+      else if(r.clockMin<3*60){ shiftDate=new Date(r.y, r.m-1, r.d); shiftDate.setDate(shiftDate.getDate()-1); shiftMin=r.clockMin+24*60; }
+      else continue;
+      assigned.push(Object.assign({},r,{shiftDate, shiftDateKey:fmtDateKey(shiftDate), shiftMin}));
+    }
+    assigned.sort((a,b)=>{
+      if(a.workerId!==b.workerId) return a.workerId.localeCompare(b.workerId);
+      if(a.shiftDateKey!==b.shiftDateKey) return a.shiftDateKey.localeCompare(b.shiftDateKey);
+      return a.shiftMin-b.shiftMin;
+    });
+    const ded=[]; const last={};
+    for(const r of assigned){
+      const k=r.workerId+'|'+r.shiftDateKey;
+      if(last[k]==null || r.shiftMin-last[k]>DEDUP_MIN){ ded.push(r); last[k]=r.shiftMin; }
+    }
+    return ded;
+  }
+  function _parseAndShow(txt, fromCache){
+    const raw = parseTxtMarcajes(txt);
+    if(!raw.length){
+      document.getElementById('rrhhMarcStatus').textContent = '❗ No se reconocieron trabajadores. Verifica que los nombres del TXT coincidan con los registrados.';
+      document.getElementById('rrhhMarcDashboard').innerHTML='';
+      allMarcajes=[]; return;
+    }
+    allMarcajes = processRecords(raw);
+    const wids = Array.from(new Set(allMarcajes.map(r=>r.workerId)));
+    document.getElementById('rrhhMarcStatus').textContent = '✓ '+allMarcajes.length+' marcajes ('+wids.length+' trabajador'+(wids.length!==1?'es':'')+')'+(fromCache?' [caché]':'');
+    if(!state.marcajesWorker || !wids.includes(state.marcajesWorker)) state.marcajesWorker = wids[0];
+    const periods = getMarcajesPeriods(allMarcajes);
+    if(!state.marcajesPeriod || !periods.includes(state.marcajesPeriod)) state.marcajesPeriod = periods[periods.length-1]||null;
+    renderMarcajesDashboard();
+  }
+  function getMarcajesPeriods(records){
+    const m={}; for(const x of records){ m[x.shiftDate.getFullYear()+'-'+String(x.shiftDate.getMonth()+1).padStart(2,'0')]=true; }
+    return Object.keys(m).sort();
+  }
+  function analyzeWorker(workerId, periodKey){
+    const w = DB.workers.find(x=>x.id===workerId);
+    if(!w) return null;
+    let f = allMarcajes.filter(r=>r.workerId===workerId);
+    if(periodKey){
+      const [py,pm] = periodKey.split('-').map(Number);
+      f = f.filter(r=>r.shiftDate.getFullYear()===py && r.shiftDate.getMonth()+1===pm);
+    }
+    let s,e;
+    if(periodKey){
+      const [py,pm] = periodKey.split('-').map(Number);
+      s = new Date(py,pm-1,1); e = new Date(py,pm,0);
+    } else if(f.length){
+      const ts = f.map(r=>r.shiftDate.getTime());
+      s = new Date(Math.min.apply(null,ts)); e = new Date(Math.max.apply(null,ts));
+    } else return null;
+    const byDate={};
+    for(const r of f){ if(!byDate[r.shiftDateKey]) byDate[r.shiftDateKey]=[]; byDate[r.shiftDateKey].push(r); }
+    const lastTs = f.length?Math.max.apply(null, f.map(r=>r.shiftDate.getTime())):null;
+    const lastDate = lastTs?new Date(lastTs):null;
+    if(lastDate) lastDate.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0,0,0,0);
+    const limit = lastDate?new Date(Math.min(today.getTime(),lastDate.getTime())):today;
+    const jornadas=[];
+    const cur = new Date(s);
+    while(cur<=e){
+      const dow = (cur.getDay()+6)%7;
+      const wk = getWeekKey(cur);
+      const plans = (DB.shifts[wk]||[]).filter(x=>x.workerId===workerId && x.day===dow);
+      if(plans.length){
+        const sched = plans[0];
+        const ss=sched.startMin, se=sched.endMin;
+        const dk = fmtDateKey(cur);
+        const marks = byDate[dk]||[];
+        const turnoMin = se-ss;
+        const colacion = turnoMin>MIN_TURNO_COLACION?COLACION_PACTADA_MIN:0;
+        const jNet = turnoMin-colacion;
+        let entrada=null,salida=null,colSal=null,colReg=null,colEstado=null,colTiempo=null;
+        let horasTrab=null, atraso=null, extra=null, estado='ausente';
+        const norm = new Date(cur); norm.setHours(0,0,0,0);
+        const past = norm>limit;
+        if(marks.length>=1){
+          entrada = marks[0]; salida = marks[marks.length-1];
+          if(marks.length===3){ colSal=marks[1]; colEstado='incompleta'; }
+          else if(marks.length>=4){ colSal=marks[1]; colReg=marks[2]; colTiempo=colReg.shiftMin-colSal.shiftMin; colEstado='completa'; }
+          const dur = salida.shiftMin-entrada.shiftMin;
+          horasTrab = dur-(colEstado==='completa'?colTiempo:0);
+          const dA = entrada.shiftMin-ss;
+          atraso = dA>TOLERANCE_MIN?dA:0;
+          extra = horasTrab-jNet-atraso;
+          if(dA>TOLERANCE_MIN) estado='atraso';
+          else if(extra>30) estado='extra';
+          else if(horasTrab<jNet-30) estado='incompleta';
+          else estado='ok';
+        } else if(past){
+          estado='pendiente';
+        }
+        jornadas.push({date:new Date(cur), dateKey:dk, dow, schedStart:ss, schedEnd:se, turnoMin, colacion, jNet, marks, entrada, colSal, colReg, salida, colEstado, colTiempo, estado, horasTrab, atraso, extra});
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+    const ef = jornadas.filter(j=>j.estado!=='pendiente');
+    return {
+      worker:w, jornadas,
+      totalJornadas: ef.length,
+      totalAusencias: ef.filter(j=>j.estado==='ausente').length,
+      totalAtrasos: ef.filter(j=>j.estado==='atraso').length,
+      totalExtra: ef.filter(j=>j.estado==='extra').length,
+      totalMinAtraso: ef.reduce((s,j)=>s+(j.atraso||0),0),
+      totalMinExtra: ef.reduce((s,j)=>s+(j.extra>0?j.extra:0),0),
+      totalMinTrabajados: ef.reduce((s,j)=>s+(j.horasTrab||0),0),
+      totalMinProgramados: ef.reduce((s,j)=>s+(j.jNet||0),0)
+    };
+  }
+  function renderMarcajesDashboard(){
+    const root = document.getElementById('rrhhMarcDashboard');
+    if(!allMarcajes.length){ root.innerHTML=''; return; }
+    const periods = getMarcajesPeriods(allMarcajes);
+    const wids = Array.from(new Set(allMarcajes.map(r=>r.workerId)));
+    const a = analyzeWorker(state.marcajesWorker, state.marcajesPeriod);
+
+    let html =
+      '<div class="bg-white rounded-xl border border-slate-200 p-3 mb-3 flex items-center gap-2 flex-wrap">'+
+        '<button class="btn btn-ghost" onclick="RRHH.changeMarcajesPeriod(-1)">←</button>'+
+        '<span class="font-semibold">'+(state.marcajesPeriod?formatPeriodo(state.marcajesPeriod):'Todo el período')+'</span>'+
+        '<button class="btn btn-ghost" onclick="RRHH.changeMarcajesPeriod(1)">→</button>'+
+        '<button class="btn btn-ghost text-sm" onclick="RRHH._marcVerTodo()">Ver todo</button>'+
+      '</div>'+
+      '<div class="flex flex-wrap gap-2 mb-3">'+
+        wids.map(wid=>{ const w = DB.workers.find(x=>x.id===wid); return '<button class="btn '+(wid===state.marcajesWorker?'btn-primary':'btn-ghost')+' text-sm" onclick="RRHH._setMarcWorker(\''+wid+'\')">'+escapeHtml(w?w.nombre.split(' ')[0]:'?')+'</button>'; }).join('')+
+      '</div>';
+
+    if(!a){
+      html += '<div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">Sin datos. Verifica que el trabajador tenga turnos planificados en este período.</div>';
+      root.innerHTML = html; return;
+    }
+    html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">'+
+      '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Jornadas</div><div class="text-2xl font-bold" style="color:var(--brand-dark)">'+a.totalJornadas+'</div></div>'+
+      '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Ausencias</div><div class="text-2xl font-bold '+(a.totalAusencias>0?'text-red-600':'')+'">'+a.totalAusencias+'</div></div>'+
+      '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Atrasos</div><div class="text-xl font-bold '+(a.totalMinAtraso>0?'text-amber-600':'')+'">'+fmtDur(a.totalMinAtraso)+'</div></div>'+
+      '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Hrs extra</div><div class="text-xl font-bold text-blue-600">'+fmtDur(a.totalMinExtra)+'</div></div>'+
+    '</div>';
+    const bd = {ok:'chip-ok',atraso:'chip-warn',ausente:'chip-danger',extra:'chip-info',incompleta:'chip-warn',pendiente:'chip-muted'};
+    const bl = {ok:'Ok',atraso:'Atraso',ausente:'Ausente',extra:'Extra',incompleta:'Incompleta',pendiente:'Pendiente'};
+    html += '<div class="bg-white rounded-xl border border-slate-200 overflow-x-auto"><table class="w-full text-sm">'+
+      '<thead><tr class="text-xs text-slate-500 uppercase bg-slate-50"><th class="text-left px-3 py-2">Fecha</th><th class="text-left">Día</th><th class="text-left">Pactado</th><th class="text-left">Entrada</th><th class="text-left">Salida</th><th class="text-left">Hrs trab</th><th class="text-left">Atraso</th><th class="text-left">Hrs extra</th><th class="text-left px-3">Estado</th></tr></thead><tbody>'+
+      a.jornadas.map(j=>{
+        if(j.estado==='pendiente'){
+          return '<tr class="border-t border-slate-100 opacity-50"><td class="px-3 py-2">'+fmtDate(j.date)+'</td><td>'+DAY_NAMES[j.dow]+'</td><td>'+fmtTime(j.schedStart)+'–'+fmtTime(j.schedEnd)+'</td><td colspan="5" class="italic text-slate-400">Sin marcajes aún</td><td class="px-3"><span class="chip chip-muted">Pendiente</span></td></tr>';
+        }
+        const ent = j.entrada?j.entrada.timeStr:'–';
+        const sal = (j.salida && j.salida!==j.entrada)?j.salida.timeStr:(j.entrada?'<i class="text-slate-400">sin salida</i>':'–');
+        const at = j.atraso>0?'<span class="text-amber-600 font-medium">+'+fmtDur(j.atraso)+'</span>':'<span class="text-slate-400">–</span>';
+        let ex='<span class="text-slate-400">–</span>';
+        if(j.extra!=null && j.horasTrab!=null){
+          if(j.extra>5) ex='<span class="text-blue-600 font-medium">+'+fmtDur(j.extra)+'</span>';
+          else if(j.extra<-5) ex='<span class="text-red-600 font-medium">'+fmtDur(j.extra)+'</span>';
+          else ex='<span class="text-slate-400">'+fmtDur(j.extra)+'</span>';
+        }
+        return '<tr class="border-t border-slate-100"><td class="px-3 py-2">'+fmtDate(j.date)+'</td><td>'+DAY_NAMES[j.dow]+'</td><td>'+fmtTime(j.schedStart)+'–'+fmtTime(j.schedEnd)+'</td><td>'+ent+'</td><td>'+sal+'</td><td>'+(j.horasTrab!=null?fmtDur(j.horasTrab):'–')+'</td><td>'+at+'</td><td>'+ex+'</td><td class="px-3"><span class="chip '+(bd[j.estado]||'chip-muted')+'">'+(bl[j.estado]||j.estado)+'</span></td></tr>';
+      }).join('')+
+      '</tbody></table></div>'+
+      '<p class="text-xs text-slate-500 mt-2">Tolerancia atraso: 15 min. Colación 45 min se descuenta sólo si turno > 4h. Marcajes 00:00–02:59 se asignan al día anterior. Marcajes con ≤5 min se agrupan.</p>';
+    root.innerHTML = html;
+  }
+  function changeMarcajesPeriod(delta){
+    const p = getMarcajesPeriods(allMarcajes);
+    if(!p.length) return;
+    let i = state.marcajesPeriod?p.indexOf(state.marcajesPeriod):p.length-1;
+    i = Math.max(0,Math.min(p.length-1,i+delta));
+    state.marcajesPeriod = p[i];
+    renderMarcajesDashboard();
+  }
+  function _setMarcWorker(wid){ state.marcajesWorker = wid; renderMarcajesDashboard(); }
+  function _marcVerTodo(){ state.marcajesPeriod=null; renderMarcajesDashboard(); }
+
+  /* ════════════ CRUCE MENSUAL ════════════ */
+  function renderCruce(){
+    const root = document.getElementById('rrhhCruceView');
+    if(!DB.workers.length){
+      root.innerHTML='<div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">Registra trabajadores antes de generar cruces.</div>';
+      return;
+    }
+    if(!state.cruceMes){
+      const p = getMarcajesPeriods(allMarcajes);
+      state.cruceMes = p.length?p[p.length-1]:new Date().toISOString().slice(0,7);
+    }
+    root.innerHTML =
+      '<div class="bg-white rounded-xl border border-slate-200 p-4 mb-3 flex items-center gap-3 flex-wrap">'+
+        '<label class="label m-0">Mes:</label>'+
+        '<input type="month" class="input" style="width:auto" value="'+state.cruceMes+'" onchange="RRHH._setCruceMes(this.value)">'+
+        '<span class="text-xs text-slate-500">El cruce compara turnos planificados vs marcajes cargados.</span>'+
+      '</div>'+
+      '<div id="rrhhCruceContent"></div>';
+    renderCruceContent();
+  }
+  function _setCruceMes(m){ state.cruceMes = m; renderCruceContent(); }
+
+  function computeCruceForWorker(workerId, periodKey){
+    const w = DB.workers.find(x=>x.id===workerId); if(!w) return null;
+    const [py,pm] = periodKey.split('-').map(Number);
+    const start = new Date(py,pm-1,1), end = new Date(py,pm,0);
+    let totalProg=0, diasProg=0;
+    for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+      const dow = (d.getDay()+6)%7;
+      const wk = getWeekKey(d);
+      (DB.shifts[wk]||[]).filter(s=>s.workerId===workerId && s.day===dow).forEach(s=>{
+        const dur = s.endMin-s.startMin;
+        const col = dur>MIN_TURNO_COLACION?COLACION_PACTADA_MIN:0;
+        totalProg += dur-col; diasProg++;
+      });
+    }
+    const a = analyzeWorker(workerId, periodKey);
+    let totalTrab=0, totalCont=0, falta=0, exc=0, diasTrab=0, aus=0, det=[];
+    if(a){
+      a.jornadas.forEach(j=>{
+        if(j.estado==='pendiente') return;
+        if(j.estado==='ausente'){
+          aus++; falta += j.jNet||0;
+          det.push({fecha:j.date, dow:j.dow, programado:j.jNet, trabajado:0, contabilizado:0, falta:j.jNet, exceso:0, estado:'ausente'});
+          return;
+        }
+        diasTrab++;
+        const tr = j.horasTrab||0;
+        totalTrab += tr;
+        const pr = j.jNet||0;
+        const c = Math.min(tr,pr);
+        totalCont += c;
+        const f = Math.max(0,pr-tr);
+        const e = Math.max(0,tr-pr);
+        falta += f; exc += e;
+        det.push({fecha:j.date, dow:j.dow, programado:pr, trabajado:tr, contabilizado:c, falta:f, exceso:e, estado:j.estado});
+      });
+    }
+    return { worker:w, diasProg, diasTrab, aus, totalProg, totalTrab, totalCont, falta, exc, det };
+  }
+  function renderCruceContent(){
+    const root = document.getElementById('rrhhCruceContent');
+    if(!state.cruceMes){ root.innerHTML=''; return; }
+    let html = '<div class="bg-white rounded-xl border border-slate-200 overflow-x-auto"><table class="w-full text-sm">'+
+      '<thead><tr class="text-xs text-slate-500 uppercase bg-slate-50">'+
+        '<th class="text-left px-3 py-2">Trabajador</th><th class="text-center">Días prog</th><th class="text-center">Días trab</th>'+
+        '<th class="text-right">Hrs prog</th><th class="text-right">Hrs trab</th>'+
+        '<th class="text-right">Hrs contabilizadas</th><th class="text-right">Hrs faltantes</th><th class="text-right">Exceso (no cuenta)</th><th class="px-3"></th>'+
+      '</tr></thead><tbody>';
+    DB.workers.forEach(w=>{
+      const c = computeCruceForWorker(w.id, state.cruceMes); if(!c) return;
+      const tf = c.falta>0;
+      html += '<tr class="border-t border-slate-100">'+
+        '<td class="px-3 py-2 font-semibold">'+escapeHtml(w.nombre)+'</td>'+
+        '<td class="text-center">'+c.diasProg+'</td><td class="text-center">'+c.diasTrab+'</td>'+
+        '<td class="text-right">'+fmtDur(c.totalProg)+'</td><td class="text-right">'+fmtDur(c.totalTrab)+'</td>'+
+        '<td class="text-right font-semibold">'+fmtDur(c.totalCont)+'</td>'+
+        '<td class="text-right">'+(tf?'<span class="text-red-600 font-medium">'+fmtDur(c.falta)+'</span>':'<span class="text-slate-400">0m</span>')+'</td>'+
+        '<td class="text-right text-slate-400">'+(c.exc>0?fmtDur(c.exc):'0m')+'</td>'+
+        '<td class="px-3 text-right"><button class="text-xs text-blue-600 hover:underline" onclick="RRHH.showCruceDetail(\''+w.id+'\')">Detalle</button></td>'+
+      '</tr>';
+    });
+    html += '</tbody></table></div>'+
+      '<p class="text-xs text-slate-500 mt-3"><b>Hrs contabilizadas</b> = mínimo entre programado y trabajado por jornada (las horas en exceso no se contabilizan automáticamente como extra; se ven aparte). Para autorizar horas extra al full-time, ingrésalas manualmente al generar la liquidación.</p>'+
+      '<div id="rrhhCruceDetail" class="mt-4"></div>';
+    root.innerHTML = html;
+  }
+  function showCruceDetail(workerId){
+    const c = computeCruceForWorker(workerId, state.cruceMes);
+    if(!c){ document.getElementById('rrhhCruceDetail').innerHTML=''; return; }
+    const bd = {ok:'chip-ok',atraso:'chip-warn',ausente:'chip-danger',extra:'chip-info',incompleta:'chip-warn'};
+    let html = '<div class="bg-white rounded-xl border border-slate-200 p-4">'+
+      '<div class="flex items-center justify-between mb-3"><h4 class="font-semibold">Detalle diario — '+escapeHtml(c.worker.nombre)+' · '+formatPeriodo(state.cruceMes)+'</h4><button class="btn btn-ghost text-sm" onclick="document.getElementById(\'rrhhCruceDetail\').innerHTML=\'\'">Cerrar</button></div>'+
+      '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Fecha</th><th class="text-left">Día</th><th class="text-right">Programado</th><th class="text-right">Trabajado</th><th class="text-right">Contabilizado</th><th class="text-right">Falta</th><th class="text-right">Exceso</th><th class="text-left px-3">Estado</th></tr></thead><tbody>'+
+      c.det.map(d=>'<tr class="border-t border-slate-100"><td class="py-2">'+fmtDate(d.fecha)+'</td><td>'+DAY_NAMES[d.dow]+'</td><td class="text-right">'+fmtDur(d.programado)+'</td><td class="text-right">'+(d.trabajado?fmtDur(d.trabajado):'–')+'</td><td class="text-right">'+fmtDur(d.contabilizado)+'</td><td class="text-right">'+(d.falta>0?'<span class="text-red-600">'+fmtDur(d.falta)+'</span>':'–')+'</td><td class="text-right text-slate-400">'+(d.exceso>0?fmtDur(d.exceso):'–')+'</td><td class="px-3"><span class="chip '+(bd[d.estado]||'chip-muted')+'">'+d.estado+'</span></td></tr>').join('')+
+      '</tbody></table></div>'+
+      '<hr class="my-3 border-slate-200"><div class="flex justify-between items-center gap-2 flex-wrap text-sm">'+
+        '<div><b>Total contabilizado:</b> '+fmtDur(c.totalCont)+'</div>'+
+        '<div><b>Total faltante:</b> '+fmtDur(c.falta)+'</div>'+
+        '<button class="btn btn-primary text-sm" onclick="RRHH.goToLiquidacionWith(\''+workerId+'\',\''+state.cruceMes+'\')">Generar liquidación →</button>'+
+      '</div></div>';
+    document.getElementById('rrhhCruceDetail').innerHTML = html;
+  }
+  function goToLiquidacionWith(workerId, periodo){
+    goSub('liquidaciones');
+    setTimeout(()=>{
+      document.getElementById('rrhhLiqWorker').value = workerId;
+      document.getElementById('rrhhLiqPeriodo').value = periodo;
+      onLiqWorkerOrPeriodoChange();
+    },50);
+  }
+
+  /* ════════════ LIQUIDACIONES ════════════ */
+  function renderLiquidaciones(){
+    const root = document.getElementById('rrhhLiquidacionesView');
+    if(!DB.workers.length){
+      root.innerHTML='<div class="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-500">Registra trabajadores antes de generar liquidaciones.</div>';
+      return;
+    }
+    const periods = getMarcajesPeriods(allMarcajes);
+    const def = periods.length?periods[periods.length-1]:new Date().toISOString().slice(0,7);
+    root.innerHTML =
+      '<div class="bg-white rounded-xl border border-slate-200 p-5 mb-3"><h4 class="font-semibold mb-3">Datos de la liquidación</h4>'+
+        '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">'+
+          '<div><label class="label">Trabajador</label><select id="rrhhLiqWorker" class="input" onchange="RRHH.onLiqWorkerOrPeriodoChange()"><option value="">Seleccionar...</option>'+DB.workers.map(w=>'<option value="'+w.id+'">'+escapeHtml(w.nombre)+'</option>').join('')+'</select></div>'+
+          '<div><label class="label">Período</label><input type="month" id="rrhhLiqPeriodo" class="input" value="'+def+'" onchange="RRHH.onLiqWorkerOrPeriodoChange()"></div>'+
+          '<div><label class="label">Empresa</label><input type="text" id="rrhhLiqEmpresa" class="input" value="'+escapeHtml(localStorage.getItem('rrhh_empresa')||'Barra Indómita')+'" oninput="localStorage.setItem(\'rrhh_empresa\',this.value)"></div>'+
+          '<div><label class="label">RUT empleador</label><input type="text" id="rrhhLiqRutEmpresa" class="input" placeholder="76.123.456-7" value="'+escapeHtml(localStorage.getItem('rrhh_rut_empresa')||'')+'" oninput="localStorage.setItem(\'rrhh_rut_empresa\',this.value)"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div id="rrhhLiqEditor"></div>';
+  }
+  function onLiqWorkerOrPeriodoChange(){
+    state.liq.workerId = document.getElementById('rrhhLiqWorker').value || null;
+    state.liq.periodo = document.getElementById('rrhhLiqPeriodo').value || null;
+    if(state.liq.workerId && state.liq.periodo){ computeLiqInitial(); renderLiqEditor(); }
+    else document.getElementById('rrhhLiqEditor').innerHTML = '';
+  }
+  function computeLiqInitial(){
+    const w = DB.workers.find(x=>x.id===state.liq.workerId); if(!w) return;
+    const c = computeCruceForWorker(w.id, state.liq.periodo);
+    const valorHora = parseFloat(w.valorHora) || (w.tipoContrato==='full'?3572.4:3208);
+    const sueldoBase = parseFloat(w.sueldoBase) || 0;
+    state.liq.data = {
+      valorHora, sueldoBase,
+      horasContabilizadas: round2(c?c.totalCont/60:0),
+      horasFaltantes: round2(c?c.falta/60:0),
+      horasExcesoNoCont: round2(c?c.exc/60:0),
+      horasExtraAutorizadas: 0,
+      descuentoFaltantes: false,
+      gratificacion: w.gratificacion==='si',
+      afp: DB.payslipParams.afp, salud: DB.payslipParams.salud, afc: DB.payslipParams.afc,
+      otrosDescuentos: [], otrosHaberes: []
+    };
+  }
+  function calcLiqTotals(){
+    const w = DB.workers.find(x=>x.id===state.liq.workerId);
+    const d = state.liq.data;
+    if(!w||!d) return null;
+    let haberes=[], imp=0;
+    if(w.tipoContrato==='full'){
+      haberes.push({nombre:'Sueldo base', monto:d.sueldoBase, imp:true});
+      imp += d.sueldoBase;
+      if(d.descuentoFaltantes && d.horasFaltantes>0){
+        const ds = d.horasFaltantes*d.valorHora;
+        haberes.push({nombre:'Dscto. horas faltantes ('+d.horasFaltantes+'h × '+fmtCLP(d.valorHora)+')', monto:-ds, imp:true});
+        imp -= ds;
+      }
+      if(d.horasExtraAutorizadas>0){
+        const vh = d.valorHora*1.5, tot = d.horasExtraAutorizadas*vh;
+        haberes.push({nombre:'Horas extra ('+d.horasExtraAutorizadas+'h × '+fmtCLP(vh)+')', monto:tot, imp:true});
+        imp += tot;
+      }
+      if(d.gratificacion){
+        const g = imp*0.25;
+        haberes.push({nombre:'Gratificación legal (25%)', monto:g, imp:true});
+        imp += g;
+      }
+    } else if(w.tipoContrato==='part'){
+      const t = d.horasContabilizadas, sh = t*d.valorHora;
+      haberes.push({nombre:'Pago por hora ('+t+'h × '+fmtCLP(d.valorHora)+')', monto:sh, imp:true});
+      imp += sh;
+      if(d.horasExtraAutorizadas>0){
+        const vh = d.valorHora*1.5, tot = d.horasExtraAutorizadas*vh;
+        haberes.push({nombre:'Horas extra ('+d.horasExtraAutorizadas+'h × '+fmtCLP(vh)+')', monto:tot, imp:true});
+        imp += tot;
+      }
+    }
+    d.otrosHaberes.forEach(h=>{ haberes.push({nombre:h.nombre, monto:h.monto, imp:!!h.imponible}); if(h.imponible) imp += h.monto; });
+    const tH = haberes.reduce((s,h)=>s+h.monto,0);
+    const dAFP = imp*(d.afp/100), dSal = imp*(d.salud/100), dAFC = imp*(d.afc/100);
+    const desc = [
+      {nombre:'AFP ('+d.afp+'%)', monto:dAFP},
+      {nombre:'Salud ('+d.salud+'%)', monto:dSal},
+      {nombre:'AFC ('+d.afc+'%)', monto:dAFC}
+    ];
+    d.otrosDescuentos.forEach(x=>desc.push({nombre:x.nombre, monto:x.monto}));
+    const tD = desc.reduce((s,x)=>s+x.monto,0);
+    return { haberes, tH, imp, desc, tD, liq: tH-tD };
+  }
+  function renderLiqEditor(){
+    const w = DB.workers.find(x=>x.id===state.liq.workerId);
+    if(!w || !state.liq.data){ document.getElementById('rrhhLiqEditor').innerHTML=''; return; }
+    const d = state.liq.data;
+    const isFull = w.tipoContrato==='full';
+    const t = calcLiqTotals();
+    let html = '<div class="bg-white rounded-xl border border-slate-200 p-5 mb-3">'+
+      '<h4 class="font-semibold mb-3">Cálculo de la liquidación</h4>'+
+      '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">'+
+        '<div><label class="label">Tipo contrato</label><div class="font-semibold">'+(isFull?'Jornada completa':'Part-time')+'</div></div>'+
+        '<div><label class="label">Valor hora</label><input type="number" step="0.01" class="input" value="'+d.valorHora+'" oninput="RRHH._updLiq(\'valorHora\',this.value,true)"></div>'+
+        (isFull?'<div><label class="label">Sueldo bruto</label><input type="number" step="1" class="input" value="'+d.sueldoBase+'" oninput="RRHH._updLiq(\'sueldoBase\',this.value,true)"></div><div><label class="label">Gratificación 25%</label><select class="input" onchange="RRHH._updLiq(\'gratificacion\',this.value===\'si\',false)"><option value="si" '+(d.gratificacion?'selected':'')+'>Sí</option><option value="no" '+(!d.gratificacion?'selected':'')+'>No</option></select></div>':'')+
+      '</div>'+
+      '<hr class="my-3 border-slate-200"><h5 class="font-semibold mb-2 text-sm">Horas del período</h5>'+
+      '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">'+
+        '<div><label class="label">Hrs contabilizadas</label><div class="font-semibold">'+d.horasContabilizadas+'h</div></div>'+
+        '<div><label class="label">Hrs faltantes</label><div class="font-semibold '+(d.horasFaltantes>0?'text-red-600':'')+'">'+d.horasFaltantes+'h</div></div>'+
+        '<div><label class="label">Hrs exceso (no auto)</label><div class="text-slate-500">'+d.horasExcesoNoCont+'h</div></div>'+
+        (isFull?'<div><label class="label">¿Descontar faltantes?</label><select class="input" onchange="RRHH._updLiq(\'descuentoFaltantes\',this.value===\'si\',false)"><option value="no" '+(!d.descuentoFaltantes?'selected':'')+'>No</option><option value="si" '+(d.descuentoFaltantes?'selected':'')+'>Sí ('+fmtCLP(d.horasFaltantes*d.valorHora)+')</option></select></div>':'')+
+        '<div><label class="label">Hrs extra autorizadas (1.5×)</label><input type="number" step="0.1" min="0" class="input" value="'+d.horasExtraAutorizadas+'" oninput="RRHH._updLiq(\'horasExtraAutorizadas\',this.value,true)"></div>'+
+      '</div>'+
+      '<hr class="my-3 border-slate-200"><h5 class="font-semibold mb-2 text-sm">Descuentos legales (%)</h5>'+
+      '<div class="grid grid-cols-3 gap-3">'+
+        '<div><label class="label">AFP %</label><input type="number" step="0.1" class="input" value="'+d.afp+'" oninput="RRHH._updLiq(\'afp\',this.value,true)"></div>'+
+        '<div><label class="label">Salud %</label><input type="number" step="0.1" class="input" value="'+d.salud+'" oninput="RRHH._updLiq(\'salud\',this.value,true)"></div>'+
+        '<div><label class="label">AFC %</label><input type="number" step="0.1" class="input" value="'+d.afc+'" oninput="RRHH._updLiq(\'afc\',this.value,true)"></div>'+
+      '</div>'+
+      '<hr class="my-3 border-slate-200"><div class="flex items-center justify-between mb-2"><h5 class="font-semibold text-sm">Otros descuentos</h5><button class="btn btn-ghost text-sm" onclick="RRHH.addOtroDescuento()">+ Agregar</button></div>'+
+      (d.otrosDescuentos.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500"><th class="text-left py-1">Concepto</th><th class="text-left">Monto</th><th></th></tr></thead><tbody>'+d.otrosDescuentos.map((x,i)=>'<tr class="border-t border-slate-100"><td class="py-1"><input class="input" value="'+escapeHtml(x.nombre)+'" oninput="RRHH._updOtroDesc('+i+',\'nombre\',this.value)"></td><td><input type="number" class="input" value="'+x.monto+'" oninput="RRHH._updOtroDesc('+i+',\'monto\',this.value)"></td><td><button class="text-xs text-red-600 hover:underline" onclick="RRHH._delOtroDesc('+i+')">×</button></td></tr>').join('')+'</tbody></table></div>':'<p class="text-sm text-slate-500">Sin otros descuentos.</p>')+
+      '<hr class="my-3 border-slate-200"><div class="flex items-center justify-between mb-2"><h5 class="font-semibold text-sm">Otros haberes</h5><button class="btn btn-ghost text-sm" onclick="RRHH.addOtroHaber()">+ Agregar</button></div>'+
+      (d.otrosHaberes.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500"><th class="text-left py-1">Concepto</th><th class="text-left">Monto</th><th class="text-left">Imponible</th><th></th></tr></thead><tbody>'+d.otrosHaberes.map((x,i)=>'<tr class="border-t border-slate-100"><td class="py-1"><input class="input" value="'+escapeHtml(x.nombre)+'" oninput="RRHH._updOtroHab('+i+',\'nombre\',this.value)"></td><td><input type="number" class="input" value="'+x.monto+'" oninput="RRHH._updOtroHab('+i+',\'monto\',this.value)"></td><td><select class="input" onchange="RRHH._updOtroHab('+i+',\'imponible\',this.value===\'si\')"><option value="si" '+(x.imponible?'selected':'')+'>Sí</option><option value="no" '+(!x.imponible?'selected':'')+'>No</option></select></td><td><button class="text-xs text-red-600 hover:underline" onclick="RRHH._delOtroHab('+i+')">×</button></td></tr>').join('')+'</tbody></table></div>':'<p class="text-sm text-slate-500">Sin otros haberes.</p>')+
+    '</div>'+
+    '<div class="bg-white rounded-xl border border-slate-200 p-5 mb-3"><h4 class="font-semibold mb-3">Resumen</h4>'+
+      '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">'+
+        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Total haberes</div><div class="text-xl font-bold">'+fmtCLP(t.tH)+'</div></div>'+
+        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Imponible</div><div class="text-xl font-bold">'+fmtCLP(t.imp)+'</div></div>'+
+        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Descuentos</div><div class="text-xl font-bold text-red-600">'+fmtCLP(t.tD)+'</div></div>'+
+        '<div class="rounded-lg p-3 border-2 border-green-600 bg-green-50"><div class="text-xs text-green-700 uppercase">Líquido a pago</div><div class="text-2xl font-bold text-green-700">'+fmtCLP(t.liq)+'</div></div>'+
+      '</div>'+
+      '<div class="flex gap-2 flex-wrap"><button class="btn btn-primary" onclick="RRHH.generarLiquidacionPreview()">📄 Generar liquidación</button><button class="btn btn-ghost" onclick="RRHH.saveLiquidacion()">💾 Guardar en historial</button></div>'+
+    '</div>'+
+    '<div id="rrhhLiqDocPreview"></div>';
+    document.getElementById('rrhhLiqEditor').innerHTML = html;
+  }
+  function _updLiq(field, val, num){ state.liq.data[field] = num?(parseFloat(val)||0):val; renderLiqEditor(); }
+  function _updOtroDesc(i, k, v){ state.liq.data.otrosDescuentos[i][k] = k==='monto'?(parseFloat(v)||0):v; if(k==='monto') renderLiqEditor(); }
+  function _delOtroDesc(i){ state.liq.data.otrosDescuentos.splice(i,1); renderLiqEditor(); }
+  function _updOtroHab(i, k, v){ state.liq.data.otrosHaberes[i][k] = k==='monto'?(parseFloat(v)||0):v; if(k==='monto'||k==='imponible') renderLiqEditor(); }
+  function _delOtroHab(i){ state.liq.data.otrosHaberes.splice(i,1); renderLiqEditor(); }
+  function addOtroDescuento(){ state.liq.data.otrosDescuentos.push({nombre:'Préstamo / Anticipo', monto:0}); renderLiqEditor(); }
+  function addOtroHaber(){ state.liq.data.otrosHaberes.push({nombre:'Bono / Asignación', monto:0, imponible:false}); renderLiqEditor(); }
+
+  function generarLiquidacionPreview(){
+    const w = DB.workers.find(x=>x.id===state.liq.workerId);
+    const t = calcLiqTotals(); if(!w||!t) return;
+    const empresa = document.getElementById('rrhhLiqEmpresa').value || 'Barra Indómita';
+    const rutE = document.getElementById('rrhhLiqRutEmpresa').value || '–';
+    const fe = new Date();
+    const html =
+      '<div class="rrhh-payslip" id="rrhhPayslipDoc">'+
+        '<h2>LIQUIDACIÓN DE SUELDO</h2>'+
+        '<p class="ps-sub">'+escapeHtml(empresa)+' · RUT: '+escapeHtml(rutE)+'</p>'+
+        '<p class="ps-sub">Período: '+formatPeriodo(state.liq.periodo)+' · Emitido: '+fmtDate(fe)+'</p>'+
+        '<div class="ps-emp"><div><b>Trabajador:</b> '+escapeHtml(w.nombre||'')+'</div><div><b>RUT:</b> '+escapeHtml(w.rut||'–')+'</div><div><b>Cargo:</b> '+(w.tipoContrato==='full'?'Jornada completa':'Part-time')+'</div><div><b>Fecha ingreso:</b> '+(w.fechaIngreso?fmtDate(w.fechaIngreso):'–')+'</div></div>'+
+        '<div class="ps-sec-title">HABERES</div><table class="ps-tbl"><tbody>'+t.haberes.map(h=>'<tr><td>'+escapeHtml(h.nombre)+(h.imp?'':' <span style="font-size:10px;color:#666">(no imp.)</span>')+'</td><td class="amt">'+fmtCLP(h.monto)+'</td></tr>').join('')+'<tr style="background:#f5f5f5;font-weight:bold"><td>TOTAL HABERES</td><td class="amt">'+fmtCLP(t.tH)+'</td></tr></tbody></table>'+
+        '<div class="ps-sec-title" style="margin-top:14px">DESCUENTOS</div><table class="ps-tbl"><tbody>'+t.desc.map(x=>'<tr><td>'+escapeHtml(x.nombre)+'</td><td class="amt">'+fmtCLP(x.monto)+'</td></tr>').join('')+'<tr style="background:#f5f5f5;font-weight:bold"><td>TOTAL DESCUENTOS</td><td class="amt">'+fmtCLP(t.tD)+'</td></tr></tbody></table>'+
+        '<div class="ps-tot"><div class="row"><span>Total imponible:</span><span>'+fmtCLP(t.imp)+'</span></div><div class="row"><span>Total haberes:</span><span>'+fmtCLP(t.tH)+'</span></div><div class="row"><span>Total descuentos:</span><span>'+fmtCLP(t.tD)+'</span></div><div class="row final"><span>LÍQUIDO A PAGO:</span><span>'+fmtCLP(t.liq)+'</span></div></div>'+
+        '<div class="ps-sign"><div><div class="ln">'+escapeHtml(w.nombre||'')+'</div><div>RUT: '+escapeHtml(w.rut||'–')+'</div><div>Firma del trabajador</div></div><div><div class="ln">'+escapeHtml(empresa)+'</div><div>RUT: '+escapeHtml(rutE)+'</div><div>Empleador</div></div></div>'+
+        '<p style="font-size:10px;color:#444;margin-top:14px;text-align:center">Recibí conforme la cantidad indicada como líquido a pago, declarando no tener cargo ni cobro alguno posterior por concepto de remuneraciones del período.</p>'+
+      '</div>'+
+      '<div class="flex gap-2 my-3 flex-wrap no-print"><button class="btn btn-primary" onclick="window.print()">🖨 Imprimir / Guardar PDF</button><button class="btn btn-ghost" onclick="RRHH.downloadPayslipHtml()">⬇ Descargar HTML</button><button class="btn btn-ghost" onclick="RRHH.shareWhatsApp()">📲 Enviar por WhatsApp</button><button class="btn btn-ghost" onclick="RRHH.saveLiquidacion()">💾 Guardar</button></div>';
+    document.getElementById('rrhhLiqDocPreview').innerHTML = html;
+    document.getElementById('rrhhLiqDocPreview').scrollIntoView({behavior:'smooth'});
+  }
+
+  function downloadPayslipHtml(){
+    const w = DB.workers.find(x=>x.id===state.liq.workerId);
+    const node = document.getElementById('rrhhPayslipDoc'); if(!node) return;
+    const css = '<style>body{font-family:"Times New Roman",Times,serif;color:#000;background:#fff;padding:20px}.rrhh-payslip{max-width:800px;margin:0 auto}.rrhh-payslip h2{font-size:18px;text-align:center;margin-bottom:6px;font-weight:bold}.ps-sub{text-align:center;font-size:12px;color:#444}.ps-emp{border:1px solid #000;padding:10px;margin:14px 0;font-size:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px}.ps-sec-title{font-weight:bold;font-size:13px;background:#eee;padding:5px 8px;border:1px solid #000}.ps-tbl{width:100%;border-collapse:collapse;font-size:12px}.ps-tbl td{border:1px solid #000;padding:5px 8px}.ps-tbl td.amt{text-align:right;width:140px}.ps-tot{margin-top:14px;border:2px solid #000;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}.ps-tot .row{display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px dashed #aaa}.ps-tot .row.final{font-weight:bold;font-size:13px;border:none;border-top:2px solid #000;margin-top:4px;padding-top:6px}.ps-sign{margin-top:50px;display:grid;grid-template-columns:1fr 1fr;gap:40px;font-size:12px;text-align:center}.ps-sign .ln{border-top:1px solid #000;padding-top:5px}</style>';
+    const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Liquidación '+escapeHtml(w.nombre)+' '+formatPeriodo(state.liq.periodo)+'</title>'+css+'</head><body>'+node.outerHTML+'</body></html>';
+    const blob = new Blob([html],{type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'Liquidacion_'+(w.nombre||'').replace(/\s+/g,'_')+'_'+state.liq.periodo+'.html';
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+  function shareWhatsApp(){
+    const w = DB.workers.find(x=>x.id===state.liq.workerId);
+    const t = calcLiqTotals(); if(!w||!t) return;
+    const phone = (w.telefono||'').replace(/[^0-9]/g,'');
+    const msg = 'Hola '+w.nombre.split(' ')[0]+', te comparto tu liquidación de '+formatPeriodo(state.liq.periodo)+'.\n\nTotal haberes: '+fmtCLP(t.tH)+'\nTotal descuentos: '+fmtCLP(t.tD)+'\n*Líquido a pago: '+fmtCLP(t.liq)+'*\n\nEnviaré el documento por separado para tu firma.';
+    const url = phone?'https://wa.me/'+phone+'?text='+encodeURIComponent(msg):'https://wa.me/?text='+encodeURIComponent(msg);
+    alert('Se abrirá WhatsApp con el mensaje. Recuerda adjuntar manualmente el PDF/HTML descargado.');
+    window.open(url,'_blank');
+  }
+
+  async function saveLiquidacion(){
+    const w = DB.workers.find(x=>x.id===state.liq.workerId);
+    const t = calcLiqTotals();
+    if(!w||!t||!state.liq.periodo){ toast('Completa los datos primero','err'); return; }
+    const fechaEmision = new Date().toISOString();
+    const snapshot = JSON.parse(JSON.stringify(state.liq.data));
+    try {
+      await api('guardarLiquidacionRRHH', {
+        liquidacion: { workerId: w.id, periodo: state.liq.periodo, fechaEmision, snapshot,
+          totalHaberes: t.tH, totalDescuentos: t.tD, liquidoPago: t.liq }
+      });
+      await api('setConfigRRHH', { config: { afp: state.liq.data.afp, salud: state.liq.data.salud, afc: state.liq.data.afc } });
+      if(!w.liquidaciones) w.liquidaciones=[];
+      w.liquidaciones = w.liquidaciones.filter(l=>l.periodo!==state.liq.periodo);
+      w.liquidaciones.push({ periodo:state.liq.periodo, fechaEmision, snapshot, totalHaberes:t.tH, totalDescuentos:t.tD, liquidoPago:t.liq });
+      DB.payslipParams = { afp:state.liq.data.afp, salud:state.liq.data.salud, afc:state.liq.data.afc };
+      toast('Liquidación guardada en historial de '+w.nombre,'ok');
+    } catch(err){ toast('Error guardando: '+err.message,'err'); }
+  }
+
+  function reopenLiquidacion(workerId, periodo){
+    const w = DB.workers.find(x=>x.id===workerId);
+    const l = (w.liquidaciones||[]).find(x=>x.periodo===periodo);
+    if(!l) return;
+    goSub('liquidaciones');
+    setTimeout(()=>{
+      document.getElementById('rrhhLiqWorker').value = workerId;
+      document.getElementById('rrhhLiqPeriodo').value = periodo;
+      state.liq.workerId = workerId; state.liq.periodo = periodo;
+      computeLiqInitial();
+      Object.assign(state.liq.data, l.snapshot);
+      renderLiqEditor();
+      generarLiquidacionPreview();
+    },50);
+  }
+
+  /* ── Init (async: hidrata caché desde el backend antes de renderizar) ── */
+  async function init(){
+    if(!state.currentSub) state.currentSub = 'trabajadores';
+    // Mostrar inmediatamente el sub-tab activo (vacío) y hacer la carga en background.
+    goSub(state.currentSub);
+    if(!state.loaded){
+      try {
+        await loadFromBackend();
+        // Re-render del sub-tab actual con los datos ya cargados
+        goSub(state.currentSub);
+      } catch(e){
+        // Ya se mostró el toast en loadFromBackend
+      }
+    }
+  }
+
+  return {
+    init, goSub,
+    openWorkerForm, selectWorker, backToWorkerList, deleteWorker, addContract, deleteContract,
+    _formatRut: formatRut, _updateAge, _onTipoContrato,
+    changeWeek, goToCurrentWeek, goToWeek, filterShiftWorker, addShiftFromForm, quickAddShift, editShift, copyPreviousWeek, clearWeek,
+    togglePaste, loadMarcajesFromText, clearMarcajes, changeMarcajesPeriod, _setMarcWorker, _marcVerTodo,
+    showCruceDetail, goToLiquidacionWith, _setCruceMes,
+    onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab
+  };
+})();
+</script>
+
 </body>
 </html>
