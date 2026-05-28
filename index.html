@@ -962,11 +962,12 @@
         <!-- Sub-tabs -->
         <div class="bg-white rounded-xl border border-slate-200 mb-4 overflow-x-auto">
           <div class="flex gap-1 p-1 min-w-max" id="rrhhTabs">
-            <button class="rrhh-tab active" data-sub="trabajadores" onclick="rrhhGoSub('trabajadores')">👥 Trabajadores</button>
-            <button class="rrhh-tab" data-sub="turnos" onclick="rrhhGoSub('turnos')">📅 Turnos</button>
-            <button class="rrhh-tab" data-sub="marcajes" onclick="rrhhGoSub('marcajes')">⏰ Marcajes</button>
-            <button class="rrhh-tab" data-sub="cruce" onclick="rrhhGoSub('cruce')">🔄 Cruce mensual</button>
-            <button class="rrhh-tab" data-sub="liquidaciones" onclick="rrhhGoSub('liquidaciones')">💵 Liquidaciones</button>
+            <button class="rrhh-tab active" data-sub="trabajadores" onclick="RRHH.goSub('trabajadores')">👥 Trabajadores</button>
+            <button class="rrhh-tab" data-sub="turnos" onclick="RRHH.goSub('turnos')">📅 Turnos</button>
+            <button class="rrhh-tab" data-sub="marcajes" onclick="RRHH.goSub('marcajes')">⏰ Marcajes</button>
+            <button class="rrhh-tab" data-sub="cruce" onclick="RRHH.goSub('cruce')">🔄 Cruce mensual</button>
+            <button class="rrhh-tab" data-sub="liquidaciones" onclick="RRHH.goSub('liquidaciones')">💵 Liquidaciones</button>
+            <button class="rrhh-tab" data-sub="feriados" onclick="RRHH.goSub('feriados')">🎉 Feriados</button>
           </div>
         </div>
 
@@ -1010,6 +1011,14 @@
             <h3 class="font-bold text-lg" style="color:var(--brand-dark)">Liquidaciones de sueldo</h3>
           </div>
           <div id="rrhhLiquidacionesView"></div>
+        </div>
+
+        <!-- Feriados -->
+        <div id="rrhhSub-feriados" class="rrhh-sub hidden">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="font-bold text-lg" style="color:var(--brand-dark)">Feriados</h3>
+          </div>
+          <div id="rrhhFeriadosView"></div>
         </div>
       </section>
 
@@ -1378,16 +1387,14 @@ async function openLoginUserList(){
     }
     list.innerHTML = usuarios.map(u => {
       const inicial = (u.nombre||'?').trim().charAt(0).toUpperCase();
-      const rolLbl = u.rol === 'admin' ? 'Administrador' : 'Vendedor';
-      const isAdmin = u.rol === 'admin';
-      const avatarCls = isAdmin ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600';
-      const borderCls = isAdmin ? 'border-blue-200 bg-blue-50' : 'border-green-200 bg-green-50';
-      return `<button type="button" class="w-full flex items-center gap-3 p-3 rounded-xl border ${borderCls} hover:shadow transition text-left"
+      // Por decisión de UX, el rol no se muestra en la pantalla de login —
+      // todos los usuarios aparecen visualmente iguales para no exponer la
+      // estructura de roles. El rol se revela después del login.
+      return `<button type="button" class="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-white hover:shadow hover:bg-slate-50 transition text-left"
                 onclick='pickLoginUser(${JSON.stringify(u).replace(/'/g,"&#39;")})'>
-        <div class="w-10 h-10 rounded-full ${avatarCls} flex items-center justify-center font-bold">${inicial}</div>
+        <div class="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">${inicial}</div>
         <div class="flex-1 min-w-0">
           <div class="font-bold truncate uppercase" style="color:var(--brand-dark)">${u.nombre||'—'}</div>
-          <div class="text-xs ${isAdmin?'text-blue-700':'text-green-700'} font-semibold">${rolLbl}</div>
         </div>
         <span class="text-slate-400">›</span>
       </button>`;
@@ -1404,7 +1411,8 @@ function pickLoginUser(u){
   const inicial = (u.nombre||'?').trim().charAt(0).toUpperCase();
   $('#loginUserAvatar').textContent = inicial;
   $('#loginUserName').textContent = u.nombre || '—';
-  $('#loginUserRole').textContent = u.rol === 'admin' ? 'Administrador' : 'Vendedor';
+  // Por consistencia con la pantalla anterior, no mostramos el rol en login.
+  $('#loginUserRole').textContent = '';
   setTimeout(()=>{ const pw = $('#loginPassword'); if(pw) pw.focus(); }, 80);
 }
 
@@ -6846,7 +6854,8 @@ window.RRHH = (function(){
   // sincronizada con cada mutación (api() → actualizar caché → re-render).
   let DB = {
     workers: [], shifts: {},
-    payslipParams: { afp: 11.5, salud: 7.0, afc: 0.6 }
+    payslipParams: { afp: 11.5, salud: 7.0, afc: 0.6 },
+    feriados: [] // [{id, fecha, nombre, tipo, irrenunciable, recargoPct}]
   };
   let state = {
     currentSub: 'trabajadores',
@@ -6871,6 +6880,7 @@ window.RRHH = (function(){
       DB.workers = d.trabajadores || [];
       DB.shifts = d.shifts || {};
       DB.payslipParams = d.payslipParams || { afp: 11.5, salud: 7.0, afc: 0.6 };
+      DB.feriados = d.feriados || [];
       // Reconstituir allMarcajes (con Date objects) para la vista de Marcajes/Cruce
       const rawMarcajes = d.marcajes || [];
       allMarcajes = rawMarcajes.map(m => {
@@ -6962,6 +6972,117 @@ window.RRHH = (function(){
     if(sub==='marcajes') renderMarcajesView();
     if(sub==='cruce') renderCruce();
     if(sub==='liquidaciones') renderLiquidaciones();
+    if(sub==='feriados') renderFeriados();
+  }
+
+  /* ════════════ FERIADOS ════════════ */
+  // Mapa lookup por fecha (YYYY-MM-DD) — usado por la lógica de cruce/liquidación
+  function feriadosMap(){
+    const m = {};
+    DB.feriados.forEach(f => { if(f.fecha) m[f.fecha] = f; });
+    return m;
+  }
+  function esFeriado(date){
+    const k = date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');
+    return feriadosMap()[k] || null;
+  }
+
+  function renderFeriados(){
+    const root = document.getElementById('rrhhFeriadosView');
+    const sorted = DB.feriados.slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    const yearActual = new Date().getFullYear();
+    let html =
+      '<div class="bg-white rounded-xl border border-slate-200 p-4 mb-3 flex items-center gap-3 flex-wrap">'+
+        '<span class="text-sm">Año:</span>'+
+        '<input type="number" id="rrhhFeriadoYear" class="input" style="width:90px" value="'+yearActual+'" min="2020" max="2030">'+
+        '<button class="btn btn-ghost text-sm" onclick="RRHH.poblarFeriadosChile()">⬇ Cargar feriados oficiales de Chile</button>'+
+        '<div class="flex-1"></div>'+
+        '<button class="btn btn-primary text-sm" onclick="RRHH.openFeriadoForm()">+ Nuevo feriado</button>'+
+      '</div>'+
+      '<p class="text-xs text-slate-500 mb-3">Los feriados se usan para calcular el recargo correspondiente en la liquidación cuando un trabajador trabaja en un día feriado. El recargo por defecto es 50% sobre el valor hora ordinaria (configurable por feriado).</p>'+
+      '<div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">'+
+        '<table class="w-full text-sm">'+
+        '<thead><tr class="text-xs text-slate-500 uppercase bg-slate-50">'+
+          '<th class="text-left px-3 py-2">Fecha</th><th class="text-left">Día</th><th class="text-left">Festividad</th><th class="text-left">Tipo</th><th class="text-center">Irrenunciable</th><th class="text-right">Recargo %</th><th class="px-3"></th>'+
+        '</tr></thead><tbody>'+
+        (sorted.length ? sorted.map(f => {
+          const d = new Date(f.fecha+'T12:00:00');
+          return '<tr class="border-t border-slate-100">'+
+            '<td class="px-3 py-2 font-mono">'+fmtDate(d)+'</td>'+
+            '<td>'+DAY_NAMES_FULL[(d.getDay()+6)%7]+'</td>'+
+            '<td class="font-semibold">'+escapeHtml(f.nombre)+'</td>'+
+            '<td>'+escapeHtml(f.tipo)+'</td>'+
+            '<td class="text-center">'+(f.irrenunciable?'<span class="chip chip-warn">Irrenunciable</span>':'<span class="text-slate-400 text-xs">—</span>')+'</td>'+
+            '<td class="text-right font-semibold">+'+f.recargoPct+'%</td>'+
+            '<td class="px-3 text-right whitespace-nowrap">'+
+              '<button class="text-xs text-blue-600 hover:underline mr-2" onclick="RRHH.openFeriadoForm(\''+f.id+'\')">Editar</button>'+
+              '<button class="text-xs text-red-600 hover:underline" onclick="RRHH.deleteFeriado(\''+f.id+'\')">Eliminar</button>'+
+            '</td></tr>';
+        }).join('') : '<tr><td colspan="7" class="text-center text-slate-400 py-6">Sin feriados registrados. Usa el botón "Cargar feriados oficiales de Chile" para pre-poblar el año.</td></tr>')+
+        '</tbody></table>'+
+      '</div>';
+    root.innerHTML = html;
+  }
+
+  function openFeriadoForm(id){
+    const f = id ? DB.feriados.find(x=>x.id===id) : null;
+    const html =
+      '<div class="p-6"><h3 class="text-lg font-bold mb-3" style="color:var(--brand-dark)">'+(id?'Editar feriado':'Nuevo feriado')+'</h3>'+
+      '<form id="rrhhFeriadoForm" class="space-y-3" autocomplete="off">'+
+        (id?'<input type="hidden" name="id" value="'+id+'">':'')+
+        '<div><label class="label">Fecha *</label><input type="date" name="fecha" class="input" required value="'+(f?f.fecha:'')+'"></div>'+
+        '<div><label class="label">Nombre *</label><input type="text" name="nombre" class="input" required value="'+escapeHtml(f?f.nombre:'')+'" placeholder="Ej: Día del Trabajo"></div>'+
+        '<div><label class="label">Tipo</label><select name="tipo" class="input"><option value="Civil" '+(f?.tipo==='Civil'?'selected':'')+'>Civil</option><option value="Religioso" '+(f?.tipo==='Religioso'?'selected':'')+'>Religioso</option></select></div>'+
+        '<div><label class="label">¿Irrenunciable?</label><select name="irrenunciable" class="input"><option value="false" '+(!f?.irrenunciable?'selected':'')+'>No</option><option value="true" '+(f?.irrenunciable?'selected':'')+'>Sí</option></select></div>'+
+        '<div><label class="label">Recargo % sobre valor hora</label><input type="number" name="recargoPct" class="input" min="0" max="200" value="'+(f?f.recargoPct:50)+'"><p class="text-xs text-slate-500 mt-1">Habitual: 50% (igual a hora extra). Para irrenunciables o domingos a veces 100%.</p></div>'+
+        '<div class="flex gap-2 justify-end pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar</button></div>'+
+      '</form></div>';
+    openModal(html);
+    document.getElementById('rrhhFeriadoForm').addEventListener('submit', e => _lockSubmit(e, async ()=>{
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      const feriado = {
+        fecha: data.fecha,
+        nombre: data.nombre.trim(),
+        tipo: data.tipo,
+        irrenunciable: data.irrenunciable === 'true',
+        recargoPct: parseFloat(data.recargoPct) || 50
+      };
+      try {
+        const res = await api('guardarFeriadoRRHH', { feriado });
+        // Upsert local
+        const existIdx = DB.feriados.findIndex(x => x.fecha === feriado.fecha);
+        if(existIdx >= 0) DB.feriados[existIdx] = Object.assign({}, DB.feriados[existIdx], feriado, { id: DB.feriados[existIdx].id });
+        else DB.feriados.push(Object.assign({ id: String(res.id) }, feriado));
+        closeModal();
+        renderFeriados();
+        toast('Feriado guardado','ok');
+      } catch(err){ toast('Error: '+err.message,'err'); throw err; }
+    }, 'Guardando...'));
+  }
+
+  async function deleteFeriado(id){
+    const f = DB.feriados.find(x=>x.id===id);
+    if(!f) return;
+    if(!confirm('¿Eliminar el feriado "'+f.nombre+'" del '+fmtDate(new Date(f.fecha+'T12:00:00'))+'?')) return;
+    try {
+      await api('eliminarFeriadoRRHH', { id });
+      DB.feriados = DB.feriados.filter(x=>x.id!==id);
+      renderFeriados();
+      toast('Feriado eliminado','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+
+  async function poblarFeriadosChile(){
+    const year = parseInt(document.getElementById('rrhhFeriadoYear').value) || new Date().getFullYear();
+    if(!confirm('Cargar feriados oficiales de Chile para '+year+'? Sólo agrega los que no existan ya.')) return;
+    try {
+      const res = await api('poblarFeriadosChileRRHH', { year });
+      toast('Se agregaron '+res.insertados+' feriados','ok');
+      // Recargar feriados del backend
+      const d = await api('listarRRHH');
+      DB.feriados = d.feriados || [];
+      renderFeriados();
+    } catch(err){ toast('Error: '+err.message,'err'); }
   }
 
   /* ════════════ TRABAJADORES ════════════ */
@@ -7050,16 +7171,18 @@ window.RRHH = (function(){
         '<div class="flex gap-2 justify-end pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar</button></div>'+
       '</form></div>';
     openModal(html);
-    document.getElementById('rrhhWorkerForm').addEventListener('submit', async e=>{
-      e.preventDefault();
-      const data = Object.fromEntries(new FormData(e.target).entries());
+    document.getElementById('rrhhWorkerForm').addEventListener('submit', e => _lockSubmit(e, async ()=>{
+      // _lockSubmit ya llama preventDefault y deshabilita el botón mientras corre
+      // — esto previene la duplicación por doble-click.
+      const form = e.target;
+      const data = Object.fromEntries(new FormData(form).entries());
       delete data.edadDisplay;
       data.sueldoBase = data.sueldoBase?parseFloat(data.sueldoBase):null;
       data.valorHora = data.valorHora?parseFloat(data.valorHora):null;
       data.fechaNacimiento = data.fechaNacimiento||null;
       data.fechaIngreso = data.fechaIngreso||null;
       if(!validarRut(data.rut)){
-        if(!confirm('El RUT no parece válido. ¿Guardar de todas formas?')) return;
+        if(!confirm('El RUT no parece válido. ¿Guardar de todas formas?')) throw new Error('cancel');
       }
       try {
         if(state.editingWorkerId){
@@ -7073,8 +7196,11 @@ window.RRHH = (function(){
         closeModal();
         renderWorkers();
         toast(state.editingWorkerId?'Trabajador actualizado':'Trabajador creado','ok');
-      } catch(err){ toast('Error guardando: '+err.message,'err'); }
-    });
+      } catch(err){
+        if(err.message!=='cancel') toast('Error guardando: '+err.message,'err');
+        throw err;
+      }
+    }, 'Guardando...'));
   }
 
   async function deleteWorker(id){
@@ -7670,13 +7796,17 @@ window.RRHH = (function(){
       });
     }
     const a = analyzeWorker(workerId, periodKey);
-    let totalTrab=0, totalCont=0, falta=0, exc=0, diasTrab=0, aus=0, det=[];
+    const fMap = feriadosMap();
+    let totalTrab=0, totalCont=0, totalContFeriado=0, falta=0, exc=0, diasTrab=0, aus=0, det=[], diasFeriado=0;
     if(a){
       a.jornadas.forEach(j=>{
         if(j.estado==='pendiente') return;
+        // Detección de feriado por fecha (YYYY-MM-DD)
+        const dk = j.date.getFullYear()+'-'+String(j.date.getMonth()+1).padStart(2,'0')+'-'+String(j.date.getDate()).padStart(2,'0');
+        const feriado = fMap[dk] || null;
         if(j.estado==='ausente'){
           aus++; falta += j.jNet||0;
-          det.push({fecha:j.date, dow:j.dow, programado:j.jNet, trabajado:0, contabilizado:0, falta:j.jNet, exceso:0, estado:'ausente'});
+          det.push({fecha:j.date, dow:j.dow, programado:j.jNet, trabajado:0, contabilizado:0, falta:j.jNet, exceso:0, estado:'ausente', feriado});
           return;
         }
         diasTrab++;
@@ -7685,13 +7815,14 @@ window.RRHH = (function(){
         const pr = j.jNet||0;
         const c = Math.min(tr,pr);
         totalCont += c;
+        if(feriado){ totalContFeriado += c; diasFeriado++; }
         const f = Math.max(0,pr-tr);
         const e = Math.max(0,tr-pr);
         falta += f; exc += e;
-        det.push({fecha:j.date, dow:j.dow, programado:pr, trabajado:tr, contabilizado:c, falta:f, exceso:e, estado:j.estado});
+        det.push({fecha:j.date, dow:j.dow, programado:pr, trabajado:tr, contabilizado:c, falta:f, exceso:e, estado:j.estado, feriado});
       });
     }
-    return { worker:w, diasProg, diasTrab, aus, totalProg, totalTrab, totalCont, falta, exc, det };
+    return { worker:w, diasProg, diasTrab, aus, totalProg, totalTrab, totalCont, totalContFeriado, diasFeriado, falta, exc, det };
   }
   function renderCruceContent(){
     const root = document.getElementById('rrhhCruceContent');
@@ -7781,6 +7912,8 @@ window.RRHH = (function(){
       horasContabilizadas: round2(c?c.totalCont/60:0),
       horasFaltantes: round2(c?c.falta/60:0),
       horasExcesoNoCont: round2(c?c.exc/60:0),
+      horasFeriado: round2(c?c.totalContFeriado/60:0),  // horas trabajadas en feriados
+      recargoFeriadoPct: 50,                            // % de recargo sobre el valor hora (editable)
       horasExtraAutorizadas: 0,
       descuentoFaltantes: false,
       gratificacion: w.gratificacion==='si',
@@ -7806,6 +7939,12 @@ window.RRHH = (function(){
         haberes.push({nombre:'Horas extra ('+d.horasExtraAutorizadas+'h × '+fmtCLP(vh)+')', monto:tot, imp:true});
         imp += tot;
       }
+      // Recargo por horas trabajadas en feriado (se suma sólo el recargo, no el valor normal de la hora — ese ya está en el sueldo base).
+      if(d.horasFeriado>0 && d.recargoFeriadoPct>0){
+        const recargo = d.horasFeriado * d.valorHora * (d.recargoFeriadoPct/100);
+        haberes.push({nombre:'Recargo feriados ('+d.horasFeriado+'h × '+fmtCLP(d.valorHora)+' × '+d.recargoFeriadoPct+'%)', monto:recargo, imp:true});
+        imp += recargo;
+      }
       if(d.gratificacion){
         const g = imp*0.25;
         haberes.push({nombre:'Gratificación legal (25%)', monto:g, imp:true});
@@ -7820,6 +7959,12 @@ window.RRHH = (function(){
         haberes.push({nombre:'Horas extra ('+d.horasExtraAutorizadas+'h × '+fmtCLP(vh)+')', monto:tot, imp:true});
         imp += tot;
       }
+      if(d.horasFeriado>0 && d.recargoFeriadoPct>0){
+        // En part-time las horas en feriado ya están pagadas como horas normales — sumamos sólo el recargo.
+        const recargo = d.horasFeriado * d.valorHora * (d.recargoFeriadoPct/100);
+        haberes.push({nombre:'Recargo feriados ('+d.horasFeriado+'h × '+fmtCLP(d.valorHora)+' × '+d.recargoFeriadoPct+'%)', monto:recargo, imp:true});
+        imp += recargo;
+      }
     }
     d.otrosHaberes.forEach(h=>{ haberes.push({nombre:h.nombre, monto:h.monto, imp:!!h.imponible}); if(h.imponible) imp += h.monto; });
     const tH = haberes.reduce((s,h)=>s+h.monto,0);
@@ -7833,7 +7978,7 @@ window.RRHH = (function(){
     const tD = desc.reduce((s,x)=>s+x.monto,0);
     return { haberes, tH, imp, desc, tD, liq: tH-tD };
   }
-  function renderLiqEditor(){
+function renderLiqEditor(){
     const w = DB.workers.find(x=>x.id===state.liq.workerId);
     if(!w || !state.liq.data){ document.getElementById('rrhhLiqEditor').innerHTML=''; return; }
     const d = state.liq.data;
@@ -7853,6 +7998,8 @@ window.RRHH = (function(){
         '<div><label class="label">Hrs exceso (no auto)</label><div class="text-slate-500">'+d.horasExcesoNoCont+'h</div></div>'+
         (isFull?'<div><label class="label">¿Descontar faltantes?</label><select class="input" onchange="RRHH._updLiq(\'descuentoFaltantes\',this.value===\'si\',false)"><option value="no" '+(!d.descuentoFaltantes?'selected':'')+'>No</option><option value="si" '+(d.descuentoFaltantes?'selected':'')+'>Sí ('+fmtCLP(d.horasFaltantes*d.valorHora)+')</option></select></div>':'')+
         '<div><label class="label">Hrs extra autorizadas (1.5×)</label><input type="number" step="0.1" min="0" class="input" value="'+d.horasExtraAutorizadas+'" oninput="RRHH._updLiq(\'horasExtraAutorizadas\',this.value,true)"></div>'+
+        '<div><label class="label">Hrs trabajadas en feriado</label><input type="number" step="0.1" min="0" class="input" value="'+(d.horasFeriado||0)+'" oninput="RRHH._updLiq(\'horasFeriado\',this.value,true)"><p class="text-xs text-slate-500 mt-1">'+(d.horasFeriado>0?'Detectadas automáticamente del cruce':'No se detectaron horas en feriado')+'</p></div>'+
+        '<div><label class="label">Recargo feriado %</label><input type="number" step="1" min="0" max="200" class="input" value="'+(d.recargoFeriadoPct||50)+'" oninput="RRHH._updLiq(\'recargoFeriadoPct\',this.value,true)"><p class="text-xs text-slate-500 mt-1">+50% típico. 100% para recargo doble.</p></div>'+
       '</div>'+
       '<hr class="my-3 border-slate-200"><h5 class="font-semibold mb-2 text-sm">Descuentos legales (%)</h5>'+
       '<div class="grid grid-cols-3 gap-3">'+
@@ -7901,7 +8048,7 @@ window.RRHH = (function(){
         '<div class="ps-sec-title" style="margin-top:14px">DESCUENTOS</div><table class="ps-tbl"><tbody>'+t.desc.map(x=>'<tr><td>'+escapeHtml(x.nombre)+'</td><td class="amt">'+fmtCLP(x.monto)+'</td></tr>').join('')+'<tr style="background:#f5f5f5;font-weight:bold"><td>TOTAL DESCUENTOS</td><td class="amt">'+fmtCLP(t.tD)+'</td></tr></tbody></table>'+
         '<div class="ps-tot"><div class="row"><span>Total imponible:</span><span>'+fmtCLP(t.imp)+'</span></div><div class="row"><span>Total haberes:</span><span>'+fmtCLP(t.tH)+'</span></div><div class="row"><span>Total descuentos:</span><span>'+fmtCLP(t.tD)+'</span></div><div class="row final"><span>LÍQUIDO A PAGO:</span><span>'+fmtCLP(t.liq)+'</span></div></div>'+
         '<div class="ps-sign"><div><div class="ln">'+escapeHtml(w.nombre||'')+'</div><div>RUT: '+escapeHtml(w.rut||'–')+'</div><div>Firma del trabajador</div></div><div><div class="ln">'+escapeHtml(empresa)+'</div><div>RUT: '+escapeHtml(rutE)+'</div><div>Empleador</div></div></div>'+
-        '<p style="font-size:10px;color:#444;margin-top:14px;text-align:center">Recibí conforme la cantidad indicada como líquido a pago, declarando no tener cargo ni cobro alguno posterior por concepto de remuneraciones del período.</p>'+
+        '<p style="font-size:10px;color:#444;margin-top:14px;text-align:center">Recibí conforme la cantidad indicada como líquido a pago.</p>'+
       '</div>'+
       '<div class="flex gap-2 my-3 flex-wrap no-print"><button class="btn btn-primary" onclick="window.print()">🖨 Imprimir / Guardar PDF</button><button class="btn btn-ghost" onclick="RRHH.downloadPayslipHtml()">⬇ Descargar HTML</button><button class="btn btn-ghost" onclick="RRHH.shareWhatsApp()">📲 Enviar por WhatsApp</button><button class="btn btn-ghost" onclick="RRHH.saveLiquidacion()">💾 Guardar</button></div>';
     document.getElementById('rrhhLiqDocPreview').innerHTML = html;
@@ -7912,7 +8059,7 @@ window.RRHH = (function(){
     const w = DB.workers.find(x=>x.id===state.liq.workerId);
     const node = document.getElementById('rrhhPayslipDoc'); if(!node) return;
     const css = '<style>body{font-family:"Times New Roman",Times,serif;color:#000;background:#fff;padding:20px}.rrhh-payslip{max-width:800px;margin:0 auto}.rrhh-payslip h2{font-size:18px;text-align:center;margin-bottom:6px;font-weight:bold}.ps-sub{text-align:center;font-size:12px;color:#444}.ps-emp{border:1px solid #000;padding:10px;margin:14px 0;font-size:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px}.ps-sec-title{font-weight:bold;font-size:13px;background:#eee;padding:5px 8px;border:1px solid #000}.ps-tbl{width:100%;border-collapse:collapse;font-size:12px}.ps-tbl td{border:1px solid #000;padding:5px 8px}.ps-tbl td.amt{text-align:right;width:140px}.ps-tot{margin-top:14px;border:2px solid #000;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}.ps-tot .row{display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px dashed #aaa}.ps-tot .row.final{font-weight:bold;font-size:13px;border:none;border-top:2px solid #000;margin-top:4px;padding-top:6px}.ps-sign{margin-top:50px;display:grid;grid-template-columns:1fr 1fr;gap:40px;font-size:12px;text-align:center}.ps-sign .ln{border-top:1px solid #000;padding-top:5px}</style>';
-    const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Liquidación '+escapeHtml(w.nombre)+' '+formatPeriodo(state.liq.periodo)+'</title>'+css+'</head><body>'+node.outerHTML+'</body></html>';
+    const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Liquidacion '+escapeHtml(w.nombre)+' '+formatPeriodo(state.liq.periodo)+'</title>'+css+'</head><body>'+node.outerHTML+'</body></html>';
     const blob = new Blob([html],{type:'text/html'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -7937,10 +8084,7 @@ window.RRHH = (function(){
     const fechaEmision = new Date().toISOString();
     const snapshot = JSON.parse(JSON.stringify(state.liq.data));
     try {
-      await api('guardarLiquidacionRRHH', {
-        liquidacion: { workerId: w.id, periodo: state.liq.periodo, fechaEmision, snapshot,
-          totalHaberes: t.tH, totalDescuentos: t.tD, liquidoPago: t.liq }
-      });
+      await api('guardarLiquidacionRRHH', { liquidacion: { workerId: w.id, periodo: state.liq.periodo, fechaEmision, snapshot, totalHaberes: t.tH, totalDescuentos: t.tD, liquidoPago: t.liq } });
       await api('setConfigRRHH', { config: { afp: state.liq.data.afp, salud: state.liq.data.salud, afc: state.liq.data.afc } });
       if(!w.liquidaciones) w.liquidaciones=[];
       w.liquidaciones = w.liquidaciones.filter(l=>l.periodo!==state.liq.periodo);
@@ -7966,19 +8110,14 @@ window.RRHH = (function(){
     },50);
   }
 
-  /* ── Init (async: hidrata caché desde el backend antes de renderizar) ── */
   async function init(){
     if(!state.currentSub) state.currentSub = 'trabajadores';
-    // Mostrar inmediatamente el sub-tab activo (vacío) y hacer la carga en background.
     goSub(state.currentSub);
     if(!state.loaded){
       try {
         await loadFromBackend();
-        // Re-render del sub-tab actual con los datos ya cargados
         goSub(state.currentSub);
-      } catch(e){
-        // Ya se mostró el toast en loadFromBackend
-      }
+      } catch(e){}
     }
   }
 
@@ -7989,7 +8128,8 @@ window.RRHH = (function(){
     changeWeek, goToCurrentWeek, goToWeek, filterShiftWorker, addShiftFromForm, quickAddShift, editShift, copyPreviousWeek, clearWeek,
     togglePaste, loadMarcajesFromText, clearMarcajes, changeMarcajesPeriod, _setMarcWorker, _marcVerTodo,
     showCruceDetail, goToLiquidacionWith, _setCruceMes,
-    onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab
+    onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab,
+    openFeriadoForm, deleteFeriado, poblarFeriadosChile
   };
 })();
 </script>
