@@ -78,6 +78,13 @@
     border:1px solid rgba(0,0,0,.1);box-shadow:0 1px 2px rgba(0,0,0,.06);}
   .rrhh-shift-block .t{font-size:10px;opacity:.9;font-weight:500;}
   .rrhh-shift-block.muted{opacity:.4;}
+  /* Franja de colación dentro del bloque del turno (overlay) */
+  .rrhh-colacion-band{position:absolute;left:0;right:0;background:repeating-linear-gradient(45deg,
+    rgba(255,255,255,.35) 0 4px, rgba(255,255,255,.55) 4px 8px);
+    border-top:1px dashed rgba(255,255,255,.7);border-bottom:1px dashed rgba(255,255,255,.7);
+    pointer-events:none;}
+  .rrhh-colacion-band .lbl{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-size:9px;font-weight:700;color:rgba(255,255,255,.95);text-shadow:0 1px 1px rgba(0,0,0,.25);letter-spacing:.04em;}
   .rrhh-c-1{background:#3b82f6;}
   .rrhh-c-2{background:#f59e0b;}
   .rrhh-c-3{background:#10b981;}
@@ -115,6 +122,8 @@
   .chip-warn{background:#fef3c7;color:#92400e;}
   .chip-err{background:#fee2e2;color:#991b1b;}
   .chip-info{background:#dbeafe;color:#1e40af;}
+  .chip-danger{background:#fee2e2;color:#991b1b;}
+  .chip-muted{background:#f1f5f9;color:#64748b;}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:9px;font-weight:600;font-size:14px;transition:all .15s;cursor:pointer;border:none;}
   .btn-primary{background:var(--brand);color:#fff;}
   .btn-primary:hover{background:#1976d2;}
@@ -7385,15 +7394,16 @@ window.RRHH = (function(){
         '<button class="btn '+(state.selectedShiftWorkerId===null?'btn-primary':'btn-ghost')+' text-sm" onclick="RRHH.filterShiftWorker(null)">Todos</button>'+
         DB.workers.map(w=>'<button class="btn '+(state.selectedShiftWorkerId===w.id?'btn-primary':'btn-ghost')+' text-sm" onclick="RRHH.filterShiftWorker(\''+w.id+'\')">'+escapeHtml(w.nombre.split(' ')[0])+'</button>').join('')+
       '</div>'+
-      '<div class="bg-slate-50 rounded-xl border border-slate-200 p-3 mb-3 grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">'+
+      '<div class="bg-slate-50 rounded-xl border border-slate-200 p-3 mb-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 items-end">'+
         '<div><label class="label">Trabajador</label><select id="rrhhAddShiftW" class="input">'+DB.workers.map(w=>'<option value="'+w.id+'">'+escapeHtml(w.nombre)+'</option>').join('')+'</select></div>'+
         '<div><label class="label">Día</label><select id="rrhhAddShiftD" class="input">'+DAY_NAMES_FULL.map((d,i)=>'<option value="'+i+'">'+d+' '+dates[i].getUTCDate()+'/'+(dates[i].getUTCMonth()+1)+'</option>').join('')+'</select></div>'+
         '<div><label class="label">Inicio</label><input type="time" id="rrhhAddShiftS" class="input" value="15:45"></div>'+
         '<div><label class="label">Fin</label><input type="time" id="rrhhAddShiftE" class="input" value="01:30"></div>'+
         '<div><label class="label">Colación (min)</label><input type="number" id="rrhhAddShiftC" class="input" value="45" min="0" max="180"></div>'+
+        '<div><label class="label">Inicio colación</label><input type="time" id="rrhhAddShiftCS" class="input" placeholder="(auto)" title="Vacío = punto medio del turno"></div>'+
         '<button class="btn btn-primary" onclick="RRHH.addShiftFromForm()">+ Agregar</button>'+
       '</div>'+
-      '<p class="text-xs text-slate-500 mb-3">Si la hora fin es menor que inicio, se asume que termina al día siguiente (ej: 15:45 → 01:30). La colación se descuenta de la jornada para calcular horas netas (default 45 min, 0 si turno corto).</p>';
+      '<p class="text-xs text-slate-500 mb-3">Si la hora fin es menor que inicio, se asume que termina al día siguiente (ej: 15:45 → 01:30). La colación se descuenta de la jornada (default 45 min). Si dejas "Inicio colación" vacío, se ubica en el punto medio del turno. <strong>Sólo se permite 1 turno por día por trabajador.</strong></p>';
 
     // grid
     let header = '<div class="rrhh-shift-header"><div>Hora</div>'+
@@ -7415,11 +7425,25 @@ window.RRHH = (function(){
       const dim = (state.selectedShiftWorkerId && state.selectedShiftWorkerId !== s.workerId);
       const top = (s.startMin/60 - GRID_START_HOUR) * ROW_PX;
       const height = ((s.endMin - s.startMin)/60) * ROW_PX;
+      // Banda de colación: usa colacionStartMin si está definido; si no, va al punto medio del turno.
+      let colBand = '';
+      const colMin = (s.colacionMin!=null) ? Number(s.colacionMin) : 0;
+      if(colMin > 0 && (s.endMin - s.startMin) > colMin){
+        let colStart;
+        if(s.colacionStartMin != null) colStart = Number(s.colacionStartMin);
+        else colStart = s.startMin + Math.floor(((s.endMin - s.startMin) - colMin) / 2);
+        const colTop = (colStart - s.startMin) / 60 * ROW_PX;
+        const colHeight = colMin / 60 * ROW_PX;
+        colBand = '<div class="rrhh-colacion-band" style="top:'+colTop+'px;height:'+colHeight+'px;">'+
+          '<span class="lbl">colación '+colMin+'m</span></div>';
+      }
       blocks += '<div class="rrhh-shift-block '+workerColor(s.workerId)+(dim?' muted':'')+'" '+
         'style="top:'+(33+top)+'px;height:'+(height-2)+'px;left:calc(60px + '+s.day+' * ((100% - 60px) / 7) + 3px);width:calc((100% - 60px) / 7 - 6px);" '+
         'onclick="event.stopPropagation();RRHH.editShift(\''+s.id+'\')" '+
-        'title="'+escapeHtml(w.nombre)+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'">'+
-        '<div>'+escapeHtml(w.nombre.split(' ')[0])+'</div><div class="t">'+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'</div></div>';
+        'title="'+escapeHtml(w.nombre)+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+(colMin>0?' (colación '+colMin+'m)':'')+'">'+
+        '<div>'+escapeHtml(w.nombre.split(' ')[0])+'</div><div class="t">'+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'</div>'+
+        colBand+
+        '</div>';
     });
     html += '<div class="rrhh-shift-grid">'+header+rows+blocks+'</div>';
 
@@ -7443,16 +7467,23 @@ window.RRHH = (function(){
       html += '<div class="bg-white rounded-xl border border-slate-200 p-4 mt-4">'+
         '<h4 class="font-semibold mb-2">Horas planificadas esta semana</h4>'+
         '<div class="overflow-x-auto"><table class="w-full text-sm">'+
-          '<thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Trabajador</th><th class="text-center">Turnos</th><th class="text-right">Horas brutas</th><th class="text-right">Colación</th><th class="text-right">Horas netas</th></tr></thead>'+
+          '<thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Trabajador</th><th class="text-center">Turnos</th><th class="text-right">Horas brutas</th><th class="text-right">Colación</th><th class="text-right">Horas netas</th><th class="text-center">Estado</th></tr></thead>'+
           '<tbody>'+
             Object.entries(porTrabajador).map(([wid, t]) => {
               const w = DB.workers.find(x=>x.id===wid);
-              return '<tr class="border-t border-slate-100">'+
+              const netH = t.neta/60;
+              const exceso = netH - 42; // Límite legal Chile (abril 2026)
+              const cls = exceso > 0 ? 'bg-red-50' : '';
+              const chip = exceso > 0
+                ? '<span class="chip chip-danger" title="Excede el límite legal de 42h semanales (Ley 21.561, vigente desde abr-2026)">Excede +'+fmtDur(exceso*60)+'</span>'
+                : (netH >= 42 ? '<span class="chip chip-warn" title="Justo en el límite legal">En el límite</span>' : '<span class="chip chip-ok">Ok</span>');
+              return '<tr class="border-t border-slate-100 '+cls+'">'+
                 '<td class="py-2 font-semibold">'+escapeHtml(w?w.nombre:'(desconocido)')+'</td>'+
                 '<td class="text-center">'+t.turnos+'</td>'+
                 '<td class="text-right">'+fmtDur(t.bruta)+'</td>'+
                 '<td class="text-right text-slate-400">-'+fmtDur(t.bruta-t.neta)+'</td>'+
-                '<td class="text-right font-semibold">'+fmtDur(t.neta)+'</td>'+
+                '<td class="text-right font-semibold '+(exceso>0?'text-red-600':'')+'">'+fmtDur(t.neta)+'</td>'+
+                '<td class="text-center">'+chip+'</td>'+
               '</tr>';
             }).join('')+
             '<tr class="border-t-2 border-slate-300 bg-slate-50 font-bold">'+
@@ -7461,10 +7492,11 @@ window.RRHH = (function(){
               '<td class="text-right">'+fmtDur(totBruta)+'</td>'+
               '<td class="text-right text-slate-500">-'+fmtDur(totBruta-totNeta)+'</td>'+
               '<td class="text-right">'+fmtDur(totNeta)+'</td>'+
+              '<td></td>'+
             '</tr>'+
           '</tbody>'+
         '</table></div>'+
-        '<p class="text-xs text-slate-500 mt-2">Horas netas = brutas menos colación (default 45 min si turno > 4 h; editable al crear/editar el turno).</p>'+
+        '<p class="text-xs text-slate-500 mt-2">Horas netas = brutas menos colación. Límite legal: <strong>42h semanales por trabajador</strong> (Ley 21.561, vigente desde abril 2026 — bajará a 40h en 2028). Los excesos se marcan en rojo.</p>'+
       '</div>';
     }
 
@@ -7486,6 +7518,24 @@ window.RRHH = (function(){
   function goToCurrentWeek(){ state.currentWeekKey = getWeekKey(new Date()); renderShiftPlanner(); }
   function goToWeek(wk){ state.currentWeekKey = wk; renderShiftPlanner(); window.scrollTo(0,0); }
   function filterShiftWorker(id){ state.selectedShiftWorkerId = id; renderShiftPlanner(); }
+  // Verifica si ya existe un turno para ese trabajador en ese día/semana.
+  // Si existe y el usuario confirma reemplazo, lo elimina y devuelve true.
+  // Devuelve false si el usuario canceló (no agregar el nuevo).
+  async function _checkOverlapAndMaybeReplace(workerId, day){
+    const existing = (DB.shifts[state.currentWeekKey]||[]).find(s => s.workerId===workerId && s.day===day);
+    if(!existing) return true;
+    const w = DB.workers.find(x=>x.id===workerId);
+    if(!confirm('Ya existe un turno para '+w.nombre.split(' ')[0]+' el '+DAY_NAMES_FULL[day]+' ('+fmtTime(existing.startMin)+'–'+fmtTime(existing.endMin)+').\n\nSólo se permite 1 turno por día. ¿Reemplazar el turno existente?')) return false;
+    try {
+      await api('eliminarTurnoRRHH', { id: existing.id });
+      DB.shifts[state.currentWeekKey] = DB.shifts[state.currentWeekKey].filter(s => s.id !== existing.id);
+      return true;
+    } catch(err){
+      toast('Error eliminando turno previo: '+err.message,'err');
+      return false;
+    }
+  }
+
   async function addShiftFromForm(){
     const wid = document.getElementById('rrhhAddShiftW').value;
     const day = parseInt(document.getElementById('rrhhAddShiftD').value);
@@ -7494,10 +7544,18 @@ window.RRHH = (function(){
     if(endMin<=startMin) endMin += 24*60;
     const colC = document.getElementById('rrhhAddShiftC');
     const colacionMin = colC ? (parseInt(colC.value)||0) : 45;
+    const colSEl = document.getElementById('rrhhAddShiftCS');
+    let colacionStartMin = null;
+    if(colSEl && colSEl.value){
+      colacionStartMin = parseTimeToMin(colSEl.value);
+      // Si la hora marcada es antes del inicio del turno o cae en un día siguiente nocturno
+      if(colacionStartMin < startMin) colacionStartMin += 24*60;
+    }
+    if(!(await _checkOverlapAndMaybeReplace(wid, day))) return;
     try {
-      const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin, colacionMin } });
+      const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin, colacionMin, colacionStartMin } });
       if(!DB.shifts[state.currentWeekKey]) DB.shifts[state.currentWeekKey]=[];
-      DB.shifts[state.currentWeekKey].push({ id:String(res.id), workerId:wid, day, startMin, endMin, colacionMin });
+      DB.shifts[state.currentWeekKey].push({ id:String(res.id), workerId:wid, day, startMin, endMin, colacionMin, colacionStartMin });
       renderShiftPlanner();
     } catch(err){ toast('Error guardando turno: '+err.message,'err'); }
   }
@@ -7506,6 +7564,7 @@ window.RRHH = (function(){
     const wid = state.selectedShiftWorkerId || document.getElementById('rrhhAddShiftW').value;
     const w = DB.workers.find(x=>x.id===wid);
     if(!confirm('¿Agregar turno de 6h a '+w.nombre.split(' ')[0]+' el '+DAY_NAMES_FULL[day]+' desde '+String(hour%24).padStart(2,'0')+':00?')) return;
+    if(!(await _checkOverlapAndMaybeReplace(wid, day))) return;
     const startMin = hour*60, endMin = (hour+6)*60, colacionMin = 45;
     try {
       const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin, colacionMin } });
@@ -7520,7 +7579,8 @@ window.RRHH = (function(){
     if(!s) return;
     const w = DB.workers.find(x=>x.id===s.workerId);
     const colActual = (s.colacionMin!==undefined && s.colacionMin!==null) ? s.colacionMin : 45;
-    const act = prompt('Turno de '+w.nombre+' - '+DAY_NAMES_FULL[s.day]+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+' (colación '+colActual+' min)\n\nEscribe:\n  e = editar horario + colación\n  c = editar sólo colación\n  d = eliminar\n  (vacío para cancelar)');
+    const colStartActual = (s.colacionStartMin!=null) ? fmtTime(s.colacionStartMin) : '(auto)';
+    const act = prompt('Turno de '+w.nombre+' - '+DAY_NAMES_FULL[s.day]+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'\nColación: '+colActual+' min, inicio '+colStartActual+'\n\nEscribe:\n  e = editar horario + colación\n  c = editar sólo colación\n  d = eliminar\n  (vacío para cancelar)');
     if(act==='d'){
       try {
         await api('eliminarTurnoRRHH', { id: s.id });
@@ -7528,28 +7588,42 @@ window.RRHH = (function(){
         renderShiftPlanner();
       } catch(err){ toast('Error: '+err.message,'err'); }
     } else if(act==='e'){
-      const ns = prompt('Hora inicio (HH:MM):', fmtTime(s.startMin));
+      const ns = prompt('Hora inicio del turno (HH:MM):', fmtTime(s.startMin));
       if(!ns) return;
-      const ne = prompt('Hora fin (HH:MM):', fmtTime(s.endMin%(24*60)));
+      const ne = prompt('Hora fin del turno (HH:MM):', fmtTime(s.endMin%(24*60)));
       if(!ne) return;
       const nc = prompt('Colación (minutos):', String(colActual));
       if(nc===null) return;
+      const ncs = prompt('Hora inicio colación (HH:MM, vacío = auto al punto medio):', (s.colacionStartMin!=null) ? fmtTime(s.colacionStartMin) : '');
+      if(ncs===null) return;
       const newStart = parseTimeToMin(ns);
       let newEnd = parseTimeToMin(ne);
       const newCol = parseInt(nc)||0;
+      let newColStart = null;
+      if(ncs.trim()){
+        newColStart = parseTimeToMin(ncs);
+        if(newColStart < newStart) newColStart += 24*60;
+      }
       if(newEnd<=newStart) newEnd += 24*60;
       try {
-        await api('actualizarTurnoRRHH', { id: s.id, startMin: newStart, endMin: newEnd, colacionMin: newCol });
-        s.startMin = newStart; s.endMin = newEnd; s.colacionMin = newCol;
+        await api('actualizarTurnoRRHH', { id: s.id, startMin: newStart, endMin: newEnd, colacionMin: newCol, colacionStartMin: newColStart });
+        s.startMin = newStart; s.endMin = newEnd; s.colacionMin = newCol; s.colacionStartMin = newColStart;
         renderShiftPlanner();
       } catch(err){ toast('Error: '+err.message,'err'); }
     } else if(act==='c'){
       const nc = prompt('Colación (minutos):', String(colActual));
       if(nc===null) return;
+      const ncs = prompt('Hora inicio colación (HH:MM, vacío = auto al punto medio):', (s.colacionStartMin!=null) ? fmtTime(s.colacionStartMin) : '');
+      if(ncs===null) return;
       const newCol = parseInt(nc)||0;
+      let newColStart = null;
+      if(ncs.trim()){
+        newColStart = parseTimeToMin(ncs);
+        if(newColStart < s.startMin) newColStart += 24*60;
+      }
       try {
-        await api('actualizarTurnoRRHH', { id: s.id, colacionMin: newCol });
-        s.colacionMin = newCol;
+        await api('actualizarTurnoRRHH', { id: s.id, colacionMin: newCol, colacionStartMin: newColStart });
+        s.colacionMin = newCol; s.colacionStartMin = newColStart;
         renderShiftPlanner();
       } catch(err){ toast('Error: '+err.message,'err'); }
     }
@@ -8271,7 +8345,7 @@ function renderLiqEditor(){
     document.getElementById('rrhhLiqDocPreview').scrollIntoView({behavior:'smooth'});
   }
 
-  function downloadPayslipHtml(){
+function downloadPayslipHtml(){
     const w = DB.workers.find(x=>x.id===state.liq.workerId);
     const node = document.getElementById('rrhhPayslipDoc'); if(!node) return;
     const css = '<style>body{font-family:"Times New Roman",Times,serif;color:#000;background:#fff;padding:20px}.rrhh-payslip{max-width:800px;margin:0 auto}.rrhh-payslip h2{font-size:18px;text-align:center;margin-bottom:6px;font-weight:bold}.ps-sub{text-align:center;font-size:12px;color:#444}.ps-emp{border:1px solid #000;padding:10px;margin:14px 0;font-size:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px}.ps-sec-title{font-weight:bold;font-size:13px;background:#eee;padding:5px 8px;border:1px solid #000}.ps-tbl{width:100%;border-collapse:collapse;font-size:12px}.ps-tbl td{border:1px solid #000;padding:5px 8px}.ps-tbl td.amt{text-align:right;width:140px}.ps-tot{margin-top:14px;border:2px solid #000;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}.ps-tot .row{display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px dashed #aaa}.ps-tot .row.final{font-weight:bold;font-size:13px;border:none;border-top:2px solid #000;margin-top:4px;padding-top:6px}.ps-sign{margin-top:50px;display:grid;grid-template-columns:1fr 1fr;gap:40px;font-size:12px;text-align:center}.ps-sign .ln{border-top:1px solid #000;padding-top:5px}</style>';
@@ -8301,12 +8375,11 @@ function renderLiqEditor(){
     const snapshot = JSON.parse(JSON.stringify(state.liq.data));
     const adelantoIds = (state.liq.data.adelantoIds||[]).filter(id => {
       const a = (DB.adelantos||[]).find(x=>x.id===id);
-      return a && !a.descontado;  // sólo los nuevos a marcar
+      return a && !a.descontado;
     });
     try {
       const liqRes = await api('guardarLiquidacionRRHH', { liquidacion: { workerId: w.id, periodo: state.liq.periodo, fechaEmision, snapshot, totalHaberes: t.tH, totalDescuentos: t.tD, liquidoPago: t.liq } });
       await api('setConfigRRHH', { config: { afp: state.liq.data.afp, salud: state.liq.data.salud, afc: state.liq.data.afc } });
-      // Marcar adelantos como descontados (sólo los que no estaban ya marcados)
       if(adelantoIds.length){
         await api('marcarAdelantosDescontados', { ids: adelantoIds, liquidacionId: liqRes && liqRes.id ? String(liqRes.id) : '' });
         adelantoIds.forEach(id => {
@@ -8358,9 +8431,7 @@ function renderLiqEditor(){
     showCruceDetail, goToLiquidacionWith, _setCruceMes,
     onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab,
     openFeriadoForm, deleteFeriado, poblarFeriadosChile,
-    // Turnos: copia al mes
     copyToWholeMonth,
-    // Adelantos
     openAdelantoForm, deleteAdelanto, _toggleAdelanto
   };
 })();
