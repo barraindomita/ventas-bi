@@ -6855,7 +6855,8 @@ window.RRHH = (function(){
   let DB = {
     workers: [], shifts: {},
     payslipParams: { afp: 11.5, salud: 7.0, afc: 0.6 },
-    feriados: [] // [{id, fecha, nombre, tipo, irrenunciable, recargoPct}]
+    feriados: [], // [{id, fecha, nombre, tipo, irrenunciable, recargoPct}]
+    adelantos: [] // [{id, workerId, fecha, monto, descripcion, periodoDescuento, descontado, liquidacionId}]
   };
   let state = {
     currentSub: 'trabajadores',
@@ -6881,6 +6882,7 @@ window.RRHH = (function(){
       DB.shifts = d.shifts || {};
       DB.payslipParams = d.payslipParams || { afp: 11.5, salud: 7.0, afc: 0.6 };
       DB.feriados = d.feriados || [];
+      DB.adelantos = d.adelantos || [];
       // Reconstituir allMarcajes (con Date objects) para la vista de Marcajes/Cruce
       const rawMarcajes = d.marcajes || [];
       allMarcajes = rawMarcajes.map(m => {
@@ -7136,6 +7138,26 @@ window.RRHH = (function(){
         '<div class="flex items-center justify-between mb-3"><h4 class="font-semibold">Respaldos de contratos</h4><button class="btn btn-ghost text-sm" onclick="RRHH.addContract(\''+w.id+'\')">+ Agregar</button></div>'+
         (cts.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Documento</th><th class="text-left">Fecha</th><th class="text-left">Link</th><th></th></tr></thead><tbody>'+cts.map((c,i)=>'<tr class="border-t border-slate-100"><td class="py-2">'+escapeHtml(c.nombre||'Contrato')+'</td><td>'+(c.fecha?fmtDate(c.fecha):'–')+'</td><td><a href="'+escapeHtml(c.url)+'" target="_blank" class="text-blue-600 hover:underline">Abrir</a></td><td class="text-right"><button class="text-xs text-red-600 hover:underline" onclick="RRHH.deleteContract(\''+w.id+'\','+i+')">Eliminar</button></td></tr>').join('')+'</tbody></table></div><p class="text-xs text-slate-500 mt-3">Los contratos se almacenan como links a Google Drive. Sube el archivo a Drive con permiso "cualquiera con el enlace" y pega el link aquí.</p>':'<div class="text-sm text-slate-500 text-center py-4">Sin contratos cargados.</div>')+
       '</div>'+
+      '<div class="bg-white rounded-xl p-5 border border-slate-200 mb-3">'+
+        '<div class="flex items-center justify-between mb-3"><h4 class="font-semibold">Adelantos</h4><button class="btn btn-ghost text-sm" onclick="RRHH.openAdelantoForm(\''+w.id+'\')">+ Registrar adelanto</button></div>'+
+        (function(){
+          const ads = (DB.adelantos||[]).filter(a=>a.workerId===w.id).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+          if(!ads.length) return '<div class="text-sm text-slate-500 text-center py-4">Sin adelantos registrados.</div>';
+          return '<div class="overflow-x-auto"><table class="w-full text-sm">'+
+            '<thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Fecha</th><th class="text-left">Descripción</th><th class="text-right">Monto</th><th class="text-center">Descuento</th><th class="text-center">Estado</th><th></th></tr></thead>'+
+            '<tbody>'+ads.map(a=>'<tr class="border-t border-slate-100">'+
+              '<td class="py-2">'+(a.fecha?fmtDate(a.fecha):'–')+'</td>'+
+              '<td>'+escapeHtml(a.descripcion||'–')+'</td>'+
+              '<td class="text-right font-semibold">'+fmtCLP(a.monto)+'</td>'+
+              '<td class="text-center text-xs text-slate-500">'+(a.periodoDescuento?formatPeriodo(a.periodoDescuento):'–')+'</td>'+
+              '<td class="text-center">'+(a.descontado?'<span class="chip chip-ok">Descontado</span>':'<span class="chip chip-warn">Pendiente</span>')+'</td>'+
+              '<td class="text-right whitespace-nowrap">'+
+                (a.descontado?'':'<button class="text-xs text-blue-600 hover:underline mr-2" onclick="RRHH.openAdelantoForm(\''+w.id+'\',\''+a.id+'\')">Editar</button>')+
+                '<button class="text-xs text-red-600 hover:underline" onclick="RRHH.deleteAdelanto(\''+a.id+'\')">Eliminar</button>'+
+              '</td>'+
+            '</tr>').join('')+'</tbody></table></div>';
+        })()+
+      '</div>'+
       '<div class="bg-white rounded-xl p-5 border border-slate-200">'+
         '<h4 class="font-semibold mb-3">Liquidaciones generadas</h4>'+
         (liqs.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Período</th><th class="text-left">Emisión</th><th class="text-right">Líquido</th><th></th></tr></thead><tbody>'+liqs.map(l=>'<tr class="border-t border-slate-100"><td class="py-2">'+formatPeriodo(l.periodo)+'</td><td>'+fmtDate(l.fechaEmision)+'</td><td class="text-right font-semibold">'+fmtCLP(l.liquidoPago)+'</td><td class="text-right"><button class="text-xs text-blue-600 hover:underline" onclick="RRHH.reopenLiquidacion(\''+w.id+'\',\''+l.periodo+'\')">Ver</button></td></tr>').join('')+'</tbody></table></div>':'<div class="text-sm text-slate-500 text-center py-4">No hay liquidaciones generadas.</div>')+
@@ -7244,6 +7266,62 @@ window.RRHH = (function(){
       renderWorkers();
     } catch(err){ toast('Error: '+err.message,'err'); }
   }
+
+  /* ── Adelantos ── */
+  function openAdelantoForm(workerId, adelantoId){
+    const w = DB.workers.find(x=>x.id===workerId);
+    const a = adelantoId ? (DB.adelantos||[]).find(x=>x.id===adelantoId) : null;
+    const hoyISO = new Date().toISOString().slice(0,10);
+    const periodoDef = hoyISO.slice(0,7); // YYYY-MM mes actual por defecto
+    const html =
+      '<div class="p-6"><h3 class="text-lg font-bold mb-3" style="color:var(--brand-dark)">'+(a?'Editar adelanto':'Nuevo adelanto')+' · '+escapeHtml(w.nombre)+'</h3>'+
+      '<form id="rrhhAdelantoForm" class="space-y-3" autocomplete="off">'+
+        (a?'<input type="hidden" name="id" value="'+a.id+'">':'')+
+        '<div><label class="label">Fecha del adelanto *</label><input type="date" name="fecha" class="input" required value="'+(a?a.fecha:hoyISO)+'"></div>'+
+        '<div><label class="label">Monto (CLP) *</label><input type="number" name="monto" class="input" required min="1" step="1" value="'+(a?a.monto:'')+'"></div>'+
+        '<div><label class="label">Descripción</label><input type="text" name="descripcion" class="input" placeholder="Anticipo quincena, gasto médico, etc." value="'+escapeHtml(a?a.descripcion:'')+'"></div>'+
+        '<div><label class="label">Período en que se descuenta</label><input type="month" name="periodoDescuento" class="input" value="'+(a?a.periodoDescuento:periodoDef)+'"><p class="text-xs text-slate-500 mt-1">El adelanto se incluirá automáticamente como descuento en la liquidación de este mes.</p></div>'+
+        '<div class="flex gap-2 justify-end pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar</button></div>'+
+      '</form></div>';
+    openModal(html);
+    document.getElementById('rrhhAdelantoForm').addEventListener('submit', e => _lockSubmit(e, async ()=>{
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      const adelanto = {
+        id: data.id || undefined,
+        workerId: workerId,
+        fecha: data.fecha,
+        monto: parseFloat(data.monto)||0,
+        descripcion: (data.descripcion||'').trim(),
+        periodoDescuento: data.periodoDescuento || ''
+      };
+      try {
+        const res = await api('guardarAdelantoRRHH', { adelanto });
+        if(!DB.adelantos) DB.adelantos = [];
+        if(adelanto.id){
+          const idx = DB.adelantos.findIndex(x=>x.id===adelanto.id);
+          if(idx>=0) DB.adelantos[idx] = Object.assign({}, DB.adelantos[idx], adelanto);
+        } else {
+          DB.adelantos.push(Object.assign({ id: String(res.id), descontado: false, liquidacionId: '' }, adelanto));
+        }
+        closeModal();
+        renderWorkers();
+        toast('Adelanto guardado','ok');
+      } catch(err){ toast('Error: '+err.message,'err'); throw err; }
+    }, 'Guardando...'));
+  }
+
+  async function deleteAdelanto(id){
+    const a = (DB.adelantos||[]).find(x=>x.id===id);
+    if(!a) return;
+    if(a.descontado){ toast('No se puede eliminar un adelanto ya descontado en liquidación','err'); return; }
+    if(!confirm('¿Eliminar adelanto de '+fmtCLP(a.monto)+'?')) return;
+    try {
+      await api('eliminarAdelantoRRHH', { id });
+      DB.adelantos = DB.adelantos.filter(x=>x.id!==id);
+      renderWorkers();
+      toast('Adelanto eliminado','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
   function _updateAge(el){
     const f = el.form;
     const age = calcAge(el.value);
@@ -7299,6 +7377,7 @@ window.RRHH = (function(){
         '<button class="btn btn-ghost text-sm" onclick="RRHH.goToCurrentWeek()">Hoy</button>'+
         '<div class="flex-1"></div>'+
         '<button class="btn btn-ghost text-sm" onclick="RRHH.copyPreviousWeek()">↻ Copiar semana anterior</button>'+
+        '<button class="btn btn-ghost text-sm" onclick="RRHH.copyToWholeMonth()">📆 Copiar al mes completo</button>'+
         '<button class="btn btn-ghost text-sm text-red-600" onclick="RRHH.clearWeek()">Limpiar</button>'+
       '</div>'+
       '<div class="bg-white rounded-xl border border-slate-200 p-3 mb-3 flex items-center gap-2 flex-wrap">'+
@@ -7306,14 +7385,15 @@ window.RRHH = (function(){
         '<button class="btn '+(state.selectedShiftWorkerId===null?'btn-primary':'btn-ghost')+' text-sm" onclick="RRHH.filterShiftWorker(null)">Todos</button>'+
         DB.workers.map(w=>'<button class="btn '+(state.selectedShiftWorkerId===w.id?'btn-primary':'btn-ghost')+' text-sm" onclick="RRHH.filterShiftWorker(\''+w.id+'\')">'+escapeHtml(w.nombre.split(' ')[0])+'</button>').join('')+
       '</div>'+
-      '<div class="bg-slate-50 rounded-xl border border-slate-200 p-3 mb-3 grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">'+
+      '<div class="bg-slate-50 rounded-xl border border-slate-200 p-3 mb-3 grid grid-cols-1 sm:grid-cols-6 gap-2 items-end">'+
         '<div><label class="label">Trabajador</label><select id="rrhhAddShiftW" class="input">'+DB.workers.map(w=>'<option value="'+w.id+'">'+escapeHtml(w.nombre)+'</option>').join('')+'</select></div>'+
         '<div><label class="label">Día</label><select id="rrhhAddShiftD" class="input">'+DAY_NAMES_FULL.map((d,i)=>'<option value="'+i+'">'+d+' '+dates[i].getUTCDate()+'/'+(dates[i].getUTCMonth()+1)+'</option>').join('')+'</select></div>'+
         '<div><label class="label">Inicio</label><input type="time" id="rrhhAddShiftS" class="input" value="15:45"></div>'+
         '<div><label class="label">Fin</label><input type="time" id="rrhhAddShiftE" class="input" value="01:30"></div>'+
+        '<div><label class="label">Colación (min)</label><input type="number" id="rrhhAddShiftC" class="input" value="45" min="0" max="180"></div>'+
         '<button class="btn btn-primary" onclick="RRHH.addShiftFromForm()">+ Agregar</button>'+
       '</div>'+
-      '<p class="text-xs text-slate-500 mb-3">Si la hora fin es menor que inicio, se asume que termina al día siguiente (ej: 15:45 → 01:30).</p>';
+      '<p class="text-xs text-slate-500 mb-3">Si la hora fin es menor que inicio, se asume que termina al día siguiente (ej: 15:45 → 01:30). La colación se descuenta de la jornada para calcular horas netas (default 45 min, 0 si turno corto).</p>';
 
     // grid
     let header = '<div class="rrhh-shift-header"><div>Hora</div>'+
@@ -7343,6 +7423,51 @@ window.RRHH = (function(){
     });
     html += '<div class="rrhh-shift-grid">'+header+rows+blocks+'</div>';
 
+    // ─── Resumen semanal de horas programadas por trabajador ───
+    if(shifts.length){
+      const porTrabajador = {};
+      shifts.forEach(s => {
+        const dur = s.endMin - s.startMin;
+        // Colación del turno (descontada por defecto: 45 min si turno > 4h, o lo que diga el turno)
+        const colacion = (s.colacionMin !== undefined && s.colacionMin !== null)
+          ? Number(s.colacionMin)
+          : (dur > 4*60 ? 45 : 0);
+        const neta = dur - colacion;
+        if(!porTrabajador[s.workerId]) porTrabajador[s.workerId] = { bruta:0, neta:0, turnos:0 };
+        porTrabajador[s.workerId].bruta += dur;
+        porTrabajador[s.workerId].neta += neta;
+        porTrabajador[s.workerId].turnos++;
+      });
+      let totBruta = 0, totNeta = 0, totTurnos = 0;
+      Object.values(porTrabajador).forEach(t => { totBruta += t.bruta; totNeta += t.neta; totTurnos += t.turnos; });
+      html += '<div class="bg-white rounded-xl border border-slate-200 p-4 mt-4">'+
+        '<h4 class="font-semibold mb-2">Horas planificadas esta semana</h4>'+
+        '<div class="overflow-x-auto"><table class="w-full text-sm">'+
+          '<thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Trabajador</th><th class="text-center">Turnos</th><th class="text-right">Horas brutas</th><th class="text-right">Colación</th><th class="text-right">Horas netas</th></tr></thead>'+
+          '<tbody>'+
+            Object.entries(porTrabajador).map(([wid, t]) => {
+              const w = DB.workers.find(x=>x.id===wid);
+              return '<tr class="border-t border-slate-100">'+
+                '<td class="py-2 font-semibold">'+escapeHtml(w?w.nombre:'(desconocido)')+'</td>'+
+                '<td class="text-center">'+t.turnos+'</td>'+
+                '<td class="text-right">'+fmtDur(t.bruta)+'</td>'+
+                '<td class="text-right text-slate-400">-'+fmtDur(t.bruta-t.neta)+'</td>'+
+                '<td class="text-right font-semibold">'+fmtDur(t.neta)+'</td>'+
+              '</tr>';
+            }).join('')+
+            '<tr class="border-t-2 border-slate-300 bg-slate-50 font-bold">'+
+              '<td class="py-2">Total semana</td>'+
+              '<td class="text-center">'+totTurnos+'</td>'+
+              '<td class="text-right">'+fmtDur(totBruta)+'</td>'+
+              '<td class="text-right text-slate-500">-'+fmtDur(totBruta-totNeta)+'</td>'+
+              '<td class="text-right">'+fmtDur(totNeta)+'</td>'+
+            '</tr>'+
+          '</tbody>'+
+        '</table></div>'+
+        '<p class="text-xs text-slate-500 mt-2">Horas netas = brutas menos colación (default 45 min si turno > 4 h; editable al crear/editar el turno).</p>'+
+      '</div>';
+    }
+
     // past weeks
     const pastWeeks = Object.keys(DB.shifts).filter(k=>k!==state.currentWeekKey && (DB.shifts[k]||[]).length>0).sort().reverse();
     if(pastWeeks.length){
@@ -7367,10 +7492,12 @@ window.RRHH = (function(){
     const startMin = parseTimeToMin(document.getElementById('rrhhAddShiftS').value);
     let endMin = parseTimeToMin(document.getElementById('rrhhAddShiftE').value);
     if(endMin<=startMin) endMin += 24*60;
+    const colC = document.getElementById('rrhhAddShiftC');
+    const colacionMin = colC ? (parseInt(colC.value)||0) : 45;
     try {
-      const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin } });
+      const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin, colacionMin } });
       if(!DB.shifts[state.currentWeekKey]) DB.shifts[state.currentWeekKey]=[];
-      DB.shifts[state.currentWeekKey].push({ id:String(res.id), workerId:wid, day, startMin, endMin });
+      DB.shifts[state.currentWeekKey].push({ id:String(res.id), workerId:wid, day, startMin, endMin, colacionMin });
       renderShiftPlanner();
     } catch(err){ toast('Error guardando turno: '+err.message,'err'); }
   }
@@ -7379,11 +7506,11 @@ window.RRHH = (function(){
     const wid = state.selectedShiftWorkerId || document.getElementById('rrhhAddShiftW').value;
     const w = DB.workers.find(x=>x.id===wid);
     if(!confirm('¿Agregar turno de 6h a '+w.nombre.split(' ')[0]+' el '+DAY_NAMES_FULL[day]+' desde '+String(hour%24).padStart(2,'0')+':00?')) return;
-    const startMin = hour*60, endMin = (hour+6)*60;
+    const startMin = hour*60, endMin = (hour+6)*60, colacionMin = 45;
     try {
-      const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin } });
+      const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin, colacionMin } });
       if(!DB.shifts[state.currentWeekKey]) DB.shifts[state.currentWeekKey]=[];
-      DB.shifts[state.currentWeekKey].push({ id:String(res.id), workerId:wid, day, startMin, endMin });
+      DB.shifts[state.currentWeekKey].push({ id:String(res.id), workerId:wid, day, startMin, endMin, colacionMin });
       renderShiftPlanner();
     } catch(err){ toast('Error: '+err.message,'err'); }
   }
@@ -7392,7 +7519,8 @@ window.RRHH = (function(){
     const s = shifts.find(x=>x.id===id);
     if(!s) return;
     const w = DB.workers.find(x=>x.id===s.workerId);
-    const act = prompt('Turno de '+w.nombre+' - '+DAY_NAMES_FULL[s.day]+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'\n\nEscribe:\n  e = editar horario\n  d = eliminar\n  (vacío para cancelar)');
+    const colActual = (s.colacionMin!==undefined && s.colacionMin!==null) ? s.colacionMin : 45;
+    const act = prompt('Turno de '+w.nombre+' - '+DAY_NAMES_FULL[s.day]+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+' (colación '+colActual+' min)\n\nEscribe:\n  e = editar horario + colación\n  c = editar sólo colación\n  d = eliminar\n  (vacío para cancelar)');
     if(act==='d'){
       try {
         await api('eliminarTurnoRRHH', { id: s.id });
@@ -7404,12 +7532,24 @@ window.RRHH = (function(){
       if(!ns) return;
       const ne = prompt('Hora fin (HH:MM):', fmtTime(s.endMin%(24*60)));
       if(!ne) return;
+      const nc = prompt('Colación (minutos):', String(colActual));
+      if(nc===null) return;
       const newStart = parseTimeToMin(ns);
       let newEnd = parseTimeToMin(ne);
+      const newCol = parseInt(nc)||0;
       if(newEnd<=newStart) newEnd += 24*60;
       try {
-        await api('actualizarTurnoRRHH', { id: s.id, startMin: newStart, endMin: newEnd });
-        s.startMin = newStart; s.endMin = newEnd;
+        await api('actualizarTurnoRRHH', { id: s.id, startMin: newStart, endMin: newEnd, colacionMin: newCol });
+        s.startMin = newStart; s.endMin = newEnd; s.colacionMin = newCol;
+        renderShiftPlanner();
+      } catch(err){ toast('Error: '+err.message,'err'); }
+    } else if(act==='c'){
+      const nc = prompt('Colación (minutos):', String(colActual));
+      if(nc===null) return;
+      const newCol = parseInt(nc)||0;
+      try {
+        await api('actualizarTurnoRRHH', { id: s.id, colacionMin: newCol });
+        s.colacionMin = newCol;
         renderShiftPlanner();
       } catch(err){ toast('Error: '+err.message,'err'); }
     }
@@ -7424,6 +7564,38 @@ window.RRHH = (function(){
       DB.shifts[state.currentWeekKey] = res.turnos || [];
       renderShiftPlanner();
       toast('Turnos copiados','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+
+  // Copia los turnos de la semana actualmente seleccionada a TODAS las semanas
+  // del mes que contiene esa semana (basado en el día lunes de cada semana).
+  // Sobreescribe los turnos existentes en cada semana destino.
+  async function copyToWholeMonth(){
+    const sourceWk = state.currentWeekKey;
+    const source = DB.shifts[sourceWk]||[];
+    if(!source.length){ toast('La semana actual no tiene turnos para replicar','warn'); return; }
+    // Calcular las semanas del mes del lunes de la semana actual.
+    const sourceMonday = weekKeyToMonday(sourceWk);
+    const year = sourceMonday.getUTCFullYear();
+    const month = sourceMonday.getUTCMonth();
+    // Recorrer todos los días del mes y juntar los weekKeys únicos (excepto el source)
+    const destSet = new Set();
+    const lastDay = new Date(year, month+1, 0).getDate();
+    for(let d=1; d<=lastDay; d++){
+      const wk = getWeekKey(new Date(year, month, d));
+      if(wk !== sourceWk) destSet.add(wk);
+    }
+    const destWeekKeys = Array.from(destSet);
+    if(!destWeekKeys.length){ toast('No hay otras semanas en el mes','warn'); return; }
+    if(!confirm('Replicar la programación de esta semana ('+source.length+' turnos) a las otras '+destWeekKeys.length+' semanas del mes. Se sobreescriben los turnos existentes en esas semanas. ¿Continuar?')) return;
+    try {
+      const res = await api('copiarTurnosSemanaRRHH', { sourceWeekKey: sourceWk, destWeekKeys });
+      // Actualizar caché local
+      (destWeekKeys||[]).forEach(wk => {
+        DB.shifts[wk] = (res.porDestino && res.porDestino[wk]) || [];
+      });
+      renderShiftPlanner();
+      toast('Turnos replicados a '+destWeekKeys.length+' semanas','ok');
     } catch(err){ toast('Error: '+err.message,'err'); }
   }
   async function clearWeek(){
@@ -7658,7 +7830,11 @@ window.RRHH = (function(){
         const dk = fmtDateKey(cur);
         const marks = byDate[dk]||[];
         const turnoMin = se-ss;
-        const colacion = turnoMin>MIN_TURNO_COLACION?COLACION_PACTADA_MIN:0;
+        // Usar la colación específica del turno si está definida; si no, default
+        // automático: 45 min si turno > 4h, 0 si es corto.
+        const colacion = (sched.colacionMin !== undefined && sched.colacionMin !== null)
+          ? Number(sched.colacionMin)
+          : (turnoMin > MIN_TURNO_COLACION ? COLACION_PACTADA_MIN : 0);
         const jNet = turnoMin-colacion;
         let entrada=null,salida=null,colSal=null,colReg=null,colEstado=null,colTiempo=null;
         let horasTrab=null, atraso=null, extra=null, estado='ausente';
@@ -7791,7 +7967,9 @@ window.RRHH = (function(){
       const wk = getWeekKey(d);
       (DB.shifts[wk]||[]).filter(s=>s.workerId===workerId && s.day===dow).forEach(s=>{
         const dur = s.endMin-s.startMin;
-        const col = dur>MIN_TURNO_COLACION?COLACION_PACTADA_MIN:0;
+        const col = (s.colacionMin !== undefined && s.colacionMin !== null)
+          ? Number(s.colacionMin)
+          : (dur > MIN_TURNO_COLACION ? COLACION_PACTADA_MIN : 0);
         totalProg += dur-col; diasProg++;
       });
     }
@@ -7907,18 +8085,25 @@ window.RRHH = (function(){
     const c = computeCruceForWorker(w.id, state.liq.periodo);
     const valorHora = parseFloat(w.valorHora) || (w.tipoContrato==='full'?3572.4:3208);
     const sueldoBase = parseFloat(w.sueldoBase) || 0;
+    // Adelantos: los pendientes del período se incluyen automáticamente como descuento
+    const adelantosPeriodo = (DB.adelantos||[]).filter(a =>
+      a.workerId === w.id &&
+      a.periodoDescuento === state.liq.periodo &&
+      !a.descontado
+    );
     state.liq.data = {
       valorHora, sueldoBase,
       horasContabilizadas: round2(c?c.totalCont/60:0),
       horasFaltantes: round2(c?c.falta/60:0),
       horasExcesoNoCont: round2(c?c.exc/60:0),
-      horasFeriado: round2(c?c.totalContFeriado/60:0),  // horas trabajadas en feriados
-      recargoFeriadoPct: 50,                            // % de recargo sobre el valor hora (editable)
+      horasFeriado: round2(c?c.totalContFeriado/60:0),
+      recargoFeriadoPct: 50,
       horasExtraAutorizadas: 0,
       descuentoFaltantes: false,
       gratificacion: w.gratificacion==='si',
       afp: DB.payslipParams.afp, salud: DB.payslipParams.salud, afc: DB.payslipParams.afc,
-      otrosDescuentos: [], otrosHaberes: []
+      otrosDescuentos: [], otrosHaberes: [],
+      adelantoIds: adelantosPeriodo.map(a=>a.id)  // ids de los adelantos a descontar
     };
   }
   function calcLiqTotals(){
@@ -7974,6 +8159,11 @@ window.RRHH = (function(){
       {nombre:'Salud ('+d.salud+'%)', monto:dSal},
       {nombre:'AFC ('+d.afc+'%)', monto:dAFC}
     ];
+    // Adelantos seleccionados (uno por línea, fecha en la descripción)
+    (d.adelantoIds||[]).forEach(adId=>{
+      const a = (DB.adelantos||[]).find(x=>x.id===adId);
+      if(a) desc.push({nombre:'Adelanto '+(a.fecha?fmtDate(a.fecha):'')+(a.descripcion?' · '+a.descripcion:''), monto: a.monto});
+    });
     d.otrosDescuentos.forEach(x=>desc.push({nombre:x.nombre, monto:x.monto}));
     const tD = desc.reduce((s,x)=>s+x.monto,0);
     return { haberes, tH, imp, desc, tD, liq: tH-tD };
@@ -8007,6 +8197,25 @@ function renderLiqEditor(){
         '<div><label class="label">Salud %</label><input type="number" step="0.1" class="input" value="'+d.salud+'" oninput="RRHH._updLiq(\'salud\',this.value,true)"></div>'+
         '<div><label class="label">AFC %</label><input type="number" step="0.1" class="input" value="'+d.afc+'" oninput="RRHH._updLiq(\'afc\',this.value,true)"></div>'+
       '</div>'+
+      // Adelantos del período (auto-detectados, se pueden des-seleccionar individualmente)
+      (function(){
+        const todosAdelantos = (DB.adelantos||[]).filter(a => a.workerId===w.id && a.periodoDescuento===state.liq.periodo);
+        if(!todosAdelantos.length) return '';
+        return '<hr class="my-3 border-slate-200"><h5 class="font-semibold mb-2 text-sm">Adelantos del período ('+formatPeriodo(state.liq.periodo)+')</h5>'+
+          '<div class="overflow-x-auto"><table class="w-full text-sm">'+
+            '<thead><tr class="text-xs text-slate-500"><th class="text-center py-1 w-12">Incluir</th><th class="text-left">Fecha</th><th class="text-left">Descripción</th><th class="text-right">Monto</th><th class="text-center">Estado</th></tr></thead>'+
+            '<tbody>'+todosAdelantos.map(a=>{
+              const checked = (d.adelantoIds||[]).indexOf(a.id) >= 0;
+              return '<tr class="border-t border-slate-100">'+
+                '<td class="text-center py-1"><input type="checkbox" '+(checked?'checked':'')+' '+(a.descontado&&!checked?'disabled':'')+' onchange="RRHH._toggleAdelanto(\''+a.id+'\',this.checked)"></td>'+
+                '<td>'+(a.fecha?fmtDate(a.fecha):'–')+'</td>'+
+                '<td>'+escapeHtml(a.descripcion||'–')+'</td>'+
+                '<td class="text-right font-semibold">'+fmtCLP(a.monto)+'</td>'+
+                '<td class="text-center text-xs">'+(a.descontado?'<span class="chip chip-ok">Ya descontado</span>':'<span class="chip chip-warn">Pendiente</span>')+'</td>'+
+              '</tr>';
+            }).join('')+'</tbody></table></div>'+
+          '<p class="text-xs text-slate-500 mt-1">Los adelantos seleccionados se descuentan automáticamente del líquido a pago. Al guardar la liquidación quedan marcados como "descontados".</p>';
+      })()+
       '<hr class="my-3 border-slate-200"><div class="flex items-center justify-between mb-2"><h5 class="font-semibold text-sm">Otros descuentos</h5><button class="btn btn-ghost text-sm" onclick="RRHH.addOtroDescuento()">+ Agregar</button></div>'+
       (d.otrosDescuentos.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500"><th class="text-left py-1">Concepto</th><th class="text-left">Monto</th><th></th></tr></thead><tbody>'+d.otrosDescuentos.map((x,i)=>'<tr class="border-t border-slate-100"><td class="py-1"><input class="input" value="'+escapeHtml(x.nombre)+'" oninput="RRHH._updOtroDesc('+i+',\'nombre\',this.value)"></td><td><input type="number" class="input" value="'+x.monto+'" oninput="RRHH._updOtroDesc('+i+',\'monto\',this.value)"></td><td><button class="text-xs text-red-600 hover:underline" onclick="RRHH._delOtroDesc('+i+')">×</button></td></tr>').join('')+'</tbody></table></div>':'<p class="text-sm text-slate-500">Sin otros descuentos.</p>')+
       '<hr class="my-3 border-slate-200"><div class="flex items-center justify-between mb-2"><h5 class="font-semibold text-sm">Otros haberes</h5><button class="btn btn-ghost text-sm" onclick="RRHH.addOtroHaber()">+ Agregar</button></div>'+
@@ -8030,6 +8239,13 @@ function renderLiqEditor(){
   function _updOtroHab(i, k, v){ state.liq.data.otrosHaberes[i][k] = k==='monto'?(parseFloat(v)||0):v; if(k==='monto'||k==='imponible') renderLiqEditor(); }
   function _delOtroHab(i){ state.liq.data.otrosHaberes.splice(i,1); renderLiqEditor(); }
   function addOtroDescuento(){ state.liq.data.otrosDescuentos.push({nombre:'Préstamo / Anticipo', monto:0}); renderLiqEditor(); }
+  function _toggleAdelanto(id, checked){
+    if(!state.liq.data.adelantoIds) state.liq.data.adelantoIds = [];
+    const idx = state.liq.data.adelantoIds.indexOf(id);
+    if(checked && idx<0) state.liq.data.adelantoIds.push(id);
+    else if(!checked && idx>=0) state.liq.data.adelantoIds.splice(idx,1);
+    renderLiqEditor();
+  }
   function addOtroHaber(){ state.liq.data.otrosHaberes.push({nombre:'Bono / Asignación', monto:0, imponible:false}); renderLiqEditor(); }
 
   function generarLiquidacionPreview(){
@@ -8083,9 +8299,21 @@ function renderLiqEditor(){
     if(!w||!t||!state.liq.periodo){ toast('Completa los datos primero','err'); return; }
     const fechaEmision = new Date().toISOString();
     const snapshot = JSON.parse(JSON.stringify(state.liq.data));
+    const adelantoIds = (state.liq.data.adelantoIds||[]).filter(id => {
+      const a = (DB.adelantos||[]).find(x=>x.id===id);
+      return a && !a.descontado;  // sólo los nuevos a marcar
+    });
     try {
-      await api('guardarLiquidacionRRHH', { liquidacion: { workerId: w.id, periodo: state.liq.periodo, fechaEmision, snapshot, totalHaberes: t.tH, totalDescuentos: t.tD, liquidoPago: t.liq } });
+      const liqRes = await api('guardarLiquidacionRRHH', { liquidacion: { workerId: w.id, periodo: state.liq.periodo, fechaEmision, snapshot, totalHaberes: t.tH, totalDescuentos: t.tD, liquidoPago: t.liq } });
       await api('setConfigRRHH', { config: { afp: state.liq.data.afp, salud: state.liq.data.salud, afc: state.liq.data.afc } });
+      // Marcar adelantos como descontados (sólo los que no estaban ya marcados)
+      if(adelantoIds.length){
+        await api('marcarAdelantosDescontados', { ids: adelantoIds, liquidacionId: liqRes && liqRes.id ? String(liqRes.id) : '' });
+        adelantoIds.forEach(id => {
+          const a = DB.adelantos.find(x=>x.id===id);
+          if(a){ a.descontado = true; a.liquidacionId = liqRes && liqRes.id ? String(liqRes.id) : ''; }
+        });
+      }
       if(!w.liquidaciones) w.liquidaciones=[];
       w.liquidaciones = w.liquidaciones.filter(l=>l.periodo!==state.liq.periodo);
       w.liquidaciones.push({ periodo:state.liq.periodo, fechaEmision, snapshot, totalHaberes:t.tH, totalDescuentos:t.tD, liquidoPago:t.liq });
@@ -8129,7 +8357,11 @@ function renderLiqEditor(){
     togglePaste, loadMarcajesFromText, clearMarcajes, changeMarcajesPeriod, _setMarcWorker, _marcVerTodo,
     showCruceDetail, goToLiquidacionWith, _setCruceMes,
     onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab,
-    openFeriadoForm, deleteFeriado, poblarFeriadosChile
+    openFeriadoForm, deleteFeriado, poblarFeriadosChile,
+    // Turnos: copia al mes
+    copyToWholeMonth,
+    // Adelantos
+    openAdelantoForm, deleteAdelanto, _toggleAdelanto
   };
 })();
 </script>
