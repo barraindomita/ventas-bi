@@ -6920,7 +6920,9 @@ window.RRHH = (function(){
   const DAY_NAMES = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const DAY_NAMES_FULL = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
   const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const TOLERANCE_MIN = 15, DEDUP_MIN = 5, COLACION_PACTADA_MIN = 45, MIN_TURNO_COLACION = 4*60;
+  const TOLERANCE_MIN = 15, DEDUP_MIN = 5, COLACION_PACTADA_MIN = 60, MIN_TURNO_COLACION = 4*60;
+  // Límites legales/contractuales de horas semanales por tipo de contrato
+  const LIMITE_HRS_SEMANA = { full: 42, part: 30 };
 
   function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function fmtCLP(n){ if(n==null||isNaN(n)) return '$0'; return '$'+Math.round(n).toLocaleString('es-CL'); }
@@ -7387,6 +7389,8 @@ window.RRHH = (function(){
         '<div class="flex-1"></div>'+
         '<button class="btn btn-ghost text-sm" onclick="RRHH.copyPreviousWeek()">↻ Copiar semana anterior</button>'+
         '<button class="btn btn-ghost text-sm" onclick="RRHH.copyToWholeMonth()">📆 Copiar al mes completo</button>'+
+        '<button class="btn btn-ghost text-sm" onclick="RRHH.adjustColacionWeek()">⏱ Ajustar colación</button>'+
+        '<button class="btn btn-ghost text-sm" onclick="RRHH.cleanDuplicates()">🧹 Limpiar duplicados</button>'+
         '<button class="btn btn-ghost text-sm text-red-600" onclick="RRHH.clearWeek()">Limpiar</button>'+
       '</div>'+
       '<div class="bg-white rounded-xl border border-slate-200 p-3 mb-3 flex items-center gap-2 flex-wrap">'+
@@ -7399,7 +7403,7 @@ window.RRHH = (function(){
         '<div><label class="label">Día</label><select id="rrhhAddShiftD" class="input">'+DAY_NAMES_FULL.map((d,i)=>'<option value="'+i+'">'+d+' '+dates[i].getUTCDate()+'/'+(dates[i].getUTCMonth()+1)+'</option>').join('')+'</select></div>'+
         '<div><label class="label">Inicio</label><input type="time" id="rrhhAddShiftS" class="input" value="15:45"></div>'+
         '<div><label class="label">Fin</label><input type="time" id="rrhhAddShiftE" class="input" value="01:30"></div>'+
-        '<div><label class="label">Colación (min)</label><input type="number" id="rrhhAddShiftC" class="input" value="45" min="0" max="180"></div>'+
+        '<div><label class="label">Colación (min)</label><input type="number" id="rrhhAddShiftC" class="input" value="60" min="0" max="180"></div>'+
         '<div><label class="label">Inicio colación</label><input type="time" id="rrhhAddShiftCS" class="input" placeholder="(auto)" title="Vacío = punto medio del turno"></div>'+
         '<button class="btn btn-primary" onclick="RRHH.addShiftFromForm()">+ Agregar</button>'+
       '</div>'+
@@ -7455,7 +7459,7 @@ window.RRHH = (function(){
         // Colación del turno (descontada por defecto: 45 min si turno > 4h, o lo que diga el turno)
         const colacion = (s.colacionMin !== undefined && s.colacionMin !== null)
           ? Number(s.colacionMin)
-          : (dur > 4*60 ? 45 : 0);
+          : (dur > 4*60 ? COLACION_PACTADA_MIN : 0);
         const neta = dur - colacion;
         if(!porTrabajador[s.workerId]) porTrabajador[s.workerId] = { bruta:0, neta:0, turnos:0 };
         porTrabajador[s.workerId].bruta += dur;
@@ -7472,13 +7476,21 @@ window.RRHH = (function(){
             Object.entries(porTrabajador).map(([wid, t]) => {
               const w = DB.workers.find(x=>x.id===wid);
               const netH = t.neta/60;
-              const exceso = netH - 42; // Límite legal Chile (abril 2026)
+              // Límite según tipo de contrato. Full = 42h (Ley 21.561, abr 2026).
+              // Part-time = 30h (criterio interno del negocio).
+              const limite = (w && w.tipoContrato) ? (LIMITE_HRS_SEMANA[w.tipoContrato] || 42) : 42;
+              const exceso = netH - limite;
               const cls = exceso > 0 ? 'bg-red-50' : '';
+              const tooltipExc = w && w.tipoContrato==='part'
+                ? 'Excede el límite de 30h semanales para part-time'
+                : 'Excede el límite legal de 42h semanales (Ley 21.561, vigente desde abr-2026)';
               const chip = exceso > 0
-                ? '<span class="chip chip-danger" title="Excede el límite legal de 42h semanales (Ley 21.561, vigente desde abr-2026)">Excede +'+fmtDur(exceso*60)+'</span>'
-                : (netH >= 42 ? '<span class="chip chip-warn" title="Justo en el límite legal">En el límite</span>' : '<span class="chip chip-ok">Ok</span>');
+                ? '<span class="chip chip-danger" title="'+tooltipExc+'">Excede +'+fmtDur(exceso*60)+'</span>'
+                : (netH >= limite ? '<span class="chip chip-warn" title="Justo en el límite ('+limite+'h)">En el límite</span>' : '<span class="chip chip-ok">Ok</span>');
+              // Indicador del límite aplicado entre paréntesis
+              const limiteLbl = w && w.tipoContrato==='part' ? ' <span class="text-xs text-slate-400">(part-time, ≤'+limite+'h)</span>' : '';
               return '<tr class="border-t border-slate-100 '+cls+'">'+
-                '<td class="py-2 font-semibold">'+escapeHtml(w?w.nombre:'(desconocido)')+'</td>'+
+                '<td class="py-2 font-semibold">'+escapeHtml(w?w.nombre:'(desconocido)')+limiteLbl+'</td>'+
                 '<td class="text-center">'+t.turnos+'</td>'+
                 '<td class="text-right">'+fmtDur(t.bruta)+'</td>'+
                 '<td class="text-right text-slate-400">-'+fmtDur(t.bruta-t.neta)+'</td>'+
@@ -7496,7 +7508,7 @@ window.RRHH = (function(){
             '</tr>'+
           '</tbody>'+
         '</table></div>'+
-        '<p class="text-xs text-slate-500 mt-2">Horas netas = brutas menos colación. Límite legal: <strong>42h semanales por trabajador</strong> (Ley 21.561, vigente desde abril 2026 — bajará a 40h en 2028). Los excesos se marcan en rojo.</p>'+
+        '<p class="text-xs text-slate-500 mt-2">Horas netas = brutas menos colación. Límites: <strong>42h jornada completa</strong> (Ley 21.561, abr 2026; bajará a 40h en 2028), <strong>30h part-time</strong>. Los excesos se marcan en rojo.</p>'+
       '</div>';
     }
 
@@ -7565,7 +7577,7 @@ window.RRHH = (function(){
     const w = DB.workers.find(x=>x.id===wid);
     if(!confirm('¿Agregar turno de 6h a '+w.nombre.split(' ')[0]+' el '+DAY_NAMES_FULL[day]+' desde '+String(hour%24).padStart(2,'0')+':00?')) return;
     if(!(await _checkOverlapAndMaybeReplace(wid, day))) return;
-    const startMin = hour*60, endMin = (hour+6)*60, colacionMin = 45;
+    const startMin = hour*60, endMin = (hour+6)*60, colacionMin = COLACION_PACTADA_MIN;
     try {
       const res = await api('guardarTurnoRRHH', { turno:{ workerId:wid, weekKey:state.currentWeekKey, day, startMin, endMin, colacionMin } });
       if(!DB.shifts[state.currentWeekKey]) DB.shifts[state.currentWeekKey]=[];
@@ -7680,6 +7692,59 @@ window.RRHH = (function(){
       delete DB.shifts[state.currentWeekKey];
       renderShiftPlanner();
       toast('Turnos eliminados','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+
+  // Aplica una colación uniforme a todos los turnos de la semana actual.
+  async function adjustColacionWeek(){
+    const shifts = DB.shifts[state.currentWeekKey]||[];
+    if(!shifts.length){ toast('No hay turnos en esta semana','warn'); return; }
+    const val = prompt('Aplicar colación (en minutos) a TODOS los turnos de la semana actual.\n\nEj: 60 = 1 hora; 45 = default antiguo; 0 = sin colación.\n\nMinutos:', '60');
+    if(val === null) return;
+    const colNew = parseInt(val);
+    if(isNaN(colNew) || colNew < 0){ toast('Valor inválido','err'); return; }
+    try {
+      const res = await api('ajustarColacionSemanaRRHH', { weekKey: state.currentWeekKey, colacionMin: colNew });
+      // Actualizar caché local
+      DB.shifts[state.currentWeekKey] = shifts.map(s => Object.assign({}, s, { colacionMin: colNew }));
+      renderShiftPlanner();
+      toast('Colación actualizada en '+res.actualizados+' turnos','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+
+  // Detecta turnos duplicados (mismo workerId+día en la semana actual) y los
+  // elimina dejando sólo el más reciente (el de mayor ID numérico).
+  async function cleanDuplicates(){
+    const shifts = DB.shifts[state.currentWeekKey]||[];
+    if(!shifts.length){ toast('No hay turnos en esta semana','warn'); return; }
+    // Agrupar por (workerId, day)
+    const grupos = {};
+    shifts.forEach(s => {
+      const k = s.workerId+'|'+s.day;
+      if(!grupos[k]) grupos[k] = [];
+      grupos[k].push(s);
+    });
+    const toDelete = [];
+    Object.values(grupos).forEach(arr => {
+      if(arr.length <= 1) return;
+      // Ordenar por id descendente (más alto = más reciente, suponiendo IDs numéricos crecientes)
+      arr.sort((a,b) => Number(b.id) - Number(a.id));
+      // Conservar el primero, eliminar el resto
+      for(let i=1; i<arr.length; i++) toDelete.push(arr[i]);
+    });
+    if(!toDelete.length){ toast('No se detectaron duplicados','ok'); return; }
+    const resumen = toDelete.map(s => {
+      const w = DB.workers.find(x=>x.id===s.workerId);
+      return '  • '+(w?w.nombre.split(' ')[0]:'?')+' '+DAY_NAMES_FULL[s.day]+' '+fmtTime(s.startMin)+'-'+fmtTime(s.endMin);
+    }).join('\n');
+    if(!confirm('Se detectaron '+toDelete.length+' turnos duplicados (mismo trabajador+día):\n\n'+resumen+'\n\nSe conservará el más reciente de cada día. ¿Eliminar los duplicados?')) return;
+    const ids = toDelete.map(s => s.id);
+    try {
+      await api('eliminarTurnosRRHH', { ids });
+      const idSet = new Set(ids);
+      DB.shifts[state.currentWeekKey] = shifts.filter(s => !idSet.has(s.id));
+      renderShiftPlanner();
+      toast('Se eliminaron '+ids.length+' duplicados','ok');
     } catch(err){ toast('Error: '+err.message,'err'); }
   }
 
@@ -8431,7 +8496,7 @@ function downloadPayslipHtml(){
     showCruceDetail, goToLiquidacionWith, _setCruceMes,
     onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab,
     openFeriadoForm, deleteFeriado, poblarFeriadosChile,
-    copyToWholeMonth,
+    copyToWholeMonth, adjustColacionWeek, cleanDuplicates,
     openAdelantoForm, deleteAdelanto, _toggleAdelanto
   };
 })();
