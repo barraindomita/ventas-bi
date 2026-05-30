@@ -91,6 +91,17 @@
   .rrhh-c-4{background:#ec4899;}
   .rrhh-c-5{background:#8b5cf6;}
   .rrhh-c-6{background:#06b6d4;}
+  /* Color especial para turnos de full-time en día feriado (con recargo) */
+  .rrhh-c-feriado{background:repeating-linear-gradient(135deg,#dc2626 0 12px,#b91c1c 12px 24px);}
+  .rrhh-c-feriado::before{content:"★";position:absolute;top:2px;right:4px;color:#fde047;font-size:11px;text-shadow:0 1px 1px rgba(0,0,0,.4);}
+  /* Resalto de columnas de día feriado en el header del planner */
+  .rrhh-shift-header .h-feriado{background:#fef2f2 !important;color:#991b1b !important;
+    border-top:2px solid #dc2626;position:relative;}
+  .rrhh-shift-header .h-feriado .feriado-tag{display:block;font-size:9px;font-weight:600;
+    color:#dc2626;text-transform:none;letter-spacing:0;margin-top:2px;line-height:1.1;}
+  /* Banda vertical sutil en las celdas de día feriado */
+  .rrhh-shift-row .day-cell.feriado{background:rgba(254,242,242,.5);}
+  .rrhh-shift-row .day-cell.feriado:hover{background:rgba(254,226,226,.7);}
   /* Documento liquidación */
   .rrhh-payslip{background:#fff;color:#000;padding:30px;max-width:800px;margin:1rem auto;
     border:1px solid #cbd5e1;border-radius:8px;font-family:'Times New Roman',Times,serif;}
@@ -6873,6 +6884,7 @@ window.RRHH = (function(){
     editingWorkerId: null,
     currentWeekKey: getWeekKey(new Date()),
     selectedShiftWorkerId: null,
+    lastShiftWorkerId: null, // recuerda el último trabajador seleccionado en el form de agregar turno
     cruceMes: null,
     marcajesPeriod: null,
     marcajesWorker: null,
@@ -7399,7 +7411,7 @@ window.RRHH = (function(){
         DB.workers.map(w=>'<button class="btn '+(state.selectedShiftWorkerId===w.id?'btn-primary':'btn-ghost')+' text-sm" onclick="RRHH.filterShiftWorker(\''+w.id+'\')">'+escapeHtml(w.nombre.split(' ')[0])+'</button>').join('')+
       '</div>'+
       '<div class="bg-slate-50 rounded-xl border border-slate-200 p-3 mb-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 items-end">'+
-        '<div><label class="label">Trabajador</label><select id="rrhhAddShiftW" class="input">'+DB.workers.map(w=>'<option value="'+w.id+'">'+escapeHtml(w.nombre)+'</option>').join('')+'</select></div>'+
+        '<div><label class="label">Trabajador</label><select id="rrhhAddShiftW" class="input" onchange="RRHH._setLastShiftWorker(this.value)">'+DB.workers.map(w=>'<option value="'+w.id+'"'+(state.lastShiftWorkerId===w.id?' selected':'')+'>'+escapeHtml(w.nombre)+'</option>').join('')+'</select></div>'+
         '<div><label class="label">Día</label><select id="rrhhAddShiftD" class="input">'+DAY_NAMES_FULL.map((d,i)=>'<option value="'+i+'">'+d+' '+dates[i].getUTCDate()+'/'+(dates[i].getUTCMonth()+1)+'</option>').join('')+'</select></div>'+
         '<div><label class="label">Inicio</label><input type="time" id="rrhhAddShiftS" class="input" value="15:45"></div>'+
         '<div><label class="label">Fin</label><input type="time" id="rrhhAddShiftE" class="input" value="01:30"></div>'+
@@ -7409,17 +7421,35 @@ window.RRHH = (function(){
       '</div>'+
       '<p class="text-xs text-slate-500 mb-3">Si la hora fin es menor que inicio, se asume que termina al día siguiente (ej: 15:45 → 01:30). La colación se descuenta de la jornada (default 45 min). Si dejas "Inicio colación" vacío, se ubica en el punto medio del turno. <strong>Sólo se permite 1 turno por día por trabajador.</strong></p>';
 
-    // grid
+    // Calcular feriados por día de la semana (índice 0=Lun..6=Dom)
+    const fMap = feriadosMap();
+    const feriadoByDayIdx = dates.map(dt => {
+      const k = dt.getUTCFullYear()+'-'+String(dt.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt.getUTCDate()).padStart(2,'0');
+      return fMap[k] || null;
+    });
+
+    // grid: header con marca de feriado
     let header = '<div class="rrhh-shift-header"><div>Hora</div>'+
       DAY_NAMES.map((d,i)=>{
-        const dt = dates[i]; const isToday = new Date(dt).toDateString() === today.toDateString();
-        return '<div'+(isToday?' style="background:#e0e7ff;color:#1e293b"':'')+'>'+d+' '+String(dt.getUTCDate()).padStart(2,'0')+'/'+String(dt.getUTCMonth()+1).padStart(2,'0')+'</div>';
+        const dt = dates[i];
+        const isToday = new Date(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()).toDateString() === today.toDateString();
+        const feriado = feriadoByDayIdx[i];
+        let cls = '';
+        let style = '';
+        if(feriado) cls = 'h-feriado';
+        else if(isToday) style = ' style="background:#e0e7ff;color:#1e293b"';
+        const label = d+' '+String(dt.getUTCDate()).padStart(2,'0')+'/'+String(dt.getUTCMonth()+1).padStart(2,'0');
+        const tag = feriado ? '<span class="feriado-tag" title="'+escapeHtml(feriado.nombre)+(feriado.irrenunciable?' (irrenunciable)':'')+'">★ '+escapeHtml(feriado.nombre.substring(0,18))+(feriado.nombre.length>18?'…':'')+'</span>' : '';
+        return '<div class="'+cls+'"'+style+'>'+label+tag+'</div>';
       }).join('')+'</div>';
     let rows = '';
     for(let h=GRID_START_HOUR; h<GRID_END_HOUR; h++){
       const lbl = String(h%24).padStart(2,'0')+':00'+(h>=24?' +1':'');
       rows += '<div class="rrhh-shift-row"><div class="hour-lbl">'+lbl+'</div>'+
-        [0,1,2,3,4,5,6].map(d=>'<div class="day-cell" data-day="'+d+'" data-hour="'+h+'" onclick="RRHH.quickAddShift('+d+','+h+')"></div>').join('')+
+        [0,1,2,3,4,5,6].map(d=>{
+          const isFer = feriadoByDayIdx[d] ? ' feriado' : '';
+          return '<div class="day-cell'+isFer+'" data-day="'+d+'" data-hour="'+h+'" onclick="RRHH.quickAddShift('+d+','+h+')"></div>';
+        }).join('')+
         '</div>';
     }
     let blocks = '';
@@ -7441,15 +7471,34 @@ window.RRHH = (function(){
         colBand = '<div class="rrhh-colacion-band" style="top:'+colTop+'px;height:'+colHeight+'px;">'+
           '<span class="lbl">colación '+colMin+'m</span></div>';
       }
-      blocks += '<div class="rrhh-shift-block '+workerColor(s.workerId)+(dim?' muted':'')+'" '+
+      // Color especial: full-time + feriado → trabajo con recargo
+      const feriadoDelDia = feriadoByDayIdx[s.day];
+      const esFullTimeEnFeriado = feriadoDelDia && w.tipoContrato === 'full';
+      const colorClass = esFullTimeEnFeriado ? 'rrhh-c-feriado' : workerColor(s.workerId);
+      const titleExtra = esFullTimeEnFeriado
+        ? ' · FERIADO ('+feriadoDelDia.nombre+') — horas con recargo'
+        : (feriadoDelDia ? ' · Feriado: '+feriadoDelDia.nombre : '');
+      blocks += '<div class="rrhh-shift-block '+colorClass+(dim?' muted':'')+'" '+
         'style="top:'+(33+top)+'px;height:'+(height-2)+'px;left:calc(60px + '+s.day+' * ((100% - 60px) / 7) + 3px);width:calc((100% - 60px) / 7 - 6px);" '+
         'onclick="event.stopPropagation();RRHH.editShift(\''+s.id+'\')" '+
-        'title="'+escapeHtml(w.nombre)+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+(colMin>0?' (colación '+colMin+'m)':'')+'">'+
+        'title="'+escapeHtml(w.nombre)+' '+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+(colMin>0?' (colación '+colMin+'m)':'')+escapeHtml(titleExtra)+'">'+
         '<div>'+escapeHtml(w.nombre.split(' ')[0])+'</div><div class="t">'+fmtTime(s.startMin)+'–'+fmtTime(s.endMin)+'</div>'+
         colBand+
         '</div>';
     });
     html += '<div class="rrhh-shift-grid">'+header+rows+blocks+'</div>';
+    // Leyenda si hay feriados en la semana o turnos con recargo
+    const feriadosEnSemana = feriadoByDayIdx.filter(f=>f).length;
+    if(feriadosEnSemana > 0){
+      const tieneFullEnFeriado = shifts.some(s => {
+        const ww = DB.workers.find(x=>x.id===s.workerId);
+        return ww && ww.tipoContrato==='full' && feriadoByDayIdx[s.day];
+      });
+      html += '<p class="text-xs text-slate-500 mt-2">'+
+        '⓵ Los días marcados en rojo son feriados ('+feriadosEnSemana+' esta semana). '+
+        (tieneFullEnFeriado ? '<strong class="text-red-700">Los turnos rojos a rayas corresponden a trabajadores full-time programados en feriado y se pagan con recargo en la liquidación.</strong>' : '')+
+      '</p>';
+    }
 
     // ─── Resumen semanal de horas programadas por trabajador ───
     if(shifts.length){
@@ -7548,8 +7597,13 @@ window.RRHH = (function(){
     }
   }
 
+  // Recuerda el último trabajador seleccionado para que no se reinicie a Evelyn
+  // cada vez que el planner se re-renderiza al agregar un turno.
+  function _setLastShiftWorker(wid){ state.lastShiftWorkerId = wid; }
+
   async function addShiftFromForm(){
     const wid = document.getElementById('rrhhAddShiftW').value;
+    state.lastShiftWorkerId = wid;
     const day = parseInt(document.getElementById('rrhhAddShiftD').value);
     const startMin = parseTimeToMin(document.getElementById('rrhhAddShiftS').value);
     let endMin = parseTimeToMin(document.getElementById('rrhhAddShiftE').value);
@@ -7574,6 +7628,7 @@ window.RRHH = (function(){
   async function quickAddShift(day, hour){
     if(!DB.workers.length) return;
     const wid = state.selectedShiftWorkerId || document.getElementById('rrhhAddShiftW').value;
+    state.lastShiftWorkerId = wid;
     const w = DB.workers.find(x=>x.id===wid);
     if(!confirm('¿Agregar turno de 6h a '+w.nombre.split(' ')[0]+' el '+DAY_NAMES_FULL[day]+' desde '+String(hour%24).padStart(2,'0')+':00?')) return;
     if(!(await _checkOverlapAndMaybeReplace(wid, day))) return;
@@ -7980,11 +8035,19 @@ window.RRHH = (function(){
         const norm = new Date(cur); norm.setHours(0,0,0,0);
         const past = norm>limit;
         if(marks.length>=1){
+          // Primer y último marcaje = entrada y salida del turno (los del medio son colación).
           entrada = marks[0]; salida = marks[marks.length-1];
+          // Detección de marcajes intermedios para mostrar en detalle (no afecta el cálculo).
           if(marks.length===3){ colSal=marks[1]; colEstado='incompleta'; }
           else if(marks.length>=4){ colSal=marks[1]; colReg=marks[2]; colTiempo=colReg.shiftMin-colSal.shiftMin; colEstado='completa'; }
+          else if(marks.length===2 && colacion>0){ colEstado='no-marcada'; }
           const dur = salida.shiftMin-entrada.shiftMin;
-          horasTrab = dur-(colEstado==='completa'?colTiempo:0);
+          // El descuento de colación SIEMPRE usa la colación planificada del turno
+          // (no el tiempo real entre marcajes), siguiendo el criterio del negocio:
+          // si el turno define 60 min de colación, se descuentan 60 min aunque el
+          // trabajador haya marcado un tiempo distinto entre los marcajes intermedios.
+          horasTrab = dur - colacion;
+          if(horasTrab < 0) horasTrab = 0;
           const dA = entrada.shiftMin-ss;
           atraso = dA>TOLERANCE_MIN?dA:0;
           extra = horasTrab-jNet-atraso;
@@ -8043,13 +8106,34 @@ window.RRHH = (function(){
     const bd = {ok:'chip-ok',atraso:'chip-warn',ausente:'chip-danger',extra:'chip-info',incompleta:'chip-warn',pendiente:'chip-muted'};
     const bl = {ok:'Ok',atraso:'Atraso',ausente:'Ausente',extra:'Extra',incompleta:'Incompleta',pendiente:'Pendiente'};
     html += '<div class="bg-white rounded-xl border border-slate-200 overflow-x-auto"><table class="w-full text-sm">'+
-      '<thead><tr class="text-xs text-slate-500 uppercase bg-slate-50"><th class="text-left px-3 py-2">Fecha</th><th class="text-left">Día</th><th class="text-left">Pactado</th><th class="text-left">Entrada</th><th class="text-left">Salida</th><th class="text-left">Hrs trab</th><th class="text-left">Atraso</th><th class="text-left">Hrs extra</th><th class="text-left px-3">Estado</th></tr></thead><tbody>'+
+      '<thead><tr class="text-xs text-slate-500 uppercase bg-slate-50">'+
+        '<th class="text-left px-3 py-2">Fecha</th>'+
+        '<th class="text-left">Día</th>'+
+        '<th class="text-left">Pactado</th>'+
+        '<th class="text-left">Entrada</th>'+
+        '<th class="text-left">Sal. col.</th>'+
+        '<th class="text-left">Reg. col.</th>'+
+        '<th class="text-left">Col. desc.</th>'+
+        '<th class="text-left">Salida</th>'+
+        '<th class="text-left">Hrs trab</th>'+
+        '<th class="text-left">Atraso</th>'+
+        '<th class="text-left">Hrs extra</th>'+
+        '<th class="text-left px-3">Estado</th>'+
+      '</tr></thead><tbody>'+
       a.jornadas.map(j=>{
         if(j.estado==='pendiente'){
-          return '<tr class="border-t border-slate-100 opacity-50"><td class="px-3 py-2">'+fmtDate(j.date)+'</td><td>'+DAY_NAMES[j.dow]+'</td><td>'+fmtTime(j.schedStart)+'–'+fmtTime(j.schedEnd)+'</td><td colspan="5" class="italic text-slate-400">Sin marcajes aún</td><td class="px-3"><span class="chip chip-muted">Pendiente</span></td></tr>';
+          return '<tr class="border-t border-slate-100 opacity-50"><td class="px-3 py-2">'+fmtDate(j.date)+'</td><td>'+DAY_NAMES[j.dow]+'</td><td>'+fmtTime(j.schedStart)+'–'+fmtTime(j.schedEnd)+'</td><td colspan="8" class="italic text-slate-400">Sin marcajes aún</td><td class="px-3"><span class="chip chip-muted">Pendiente</span></td></tr>';
         }
         const ent = j.entrada?j.entrada.timeStr:'–';
         const sal = (j.salida && j.salida!==j.entrada)?j.salida.timeStr:(j.entrada?'<i class="text-slate-400">sin salida</i>':'–');
+        // Marcajes de colación (intermedios). Se muestran sólo para auditoría.
+        let colSal = '<span class="text-slate-300">–</span>';
+        let colReg = '<span class="text-slate-300">–</span>';
+        if(j.colSal) colSal = j.colSal.timeStr;
+        if(j.colReg) colReg = j.colReg.timeStr;
+        if(j.colEstado==='incompleta') colReg = '<span class="text-amber-600 italic">incompleta</span>';
+        // Colación descontada = la planificada (no el tiempo real entre marcajes)
+        const colDesc = j.colacion>0 ? '-'+fmtDur(j.colacion) : '<span class="text-slate-300">–</span>';
         const at = j.atraso>0?'<span class="text-amber-600 font-medium">+'+fmtDur(j.atraso)+'</span>':'<span class="text-slate-400">–</span>';
         let ex='<span class="text-slate-400">–</span>';
         if(j.extra!=null && j.horasTrab!=null){
@@ -8057,10 +8141,23 @@ window.RRHH = (function(){
           else if(j.extra<-5) ex='<span class="text-red-600 font-medium">'+fmtDur(j.extra)+'</span>';
           else ex='<span class="text-slate-400">'+fmtDur(j.extra)+'</span>';
         }
-        return '<tr class="border-t border-slate-100"><td class="px-3 py-2">'+fmtDate(j.date)+'</td><td>'+DAY_NAMES[j.dow]+'</td><td>'+fmtTime(j.schedStart)+'–'+fmtTime(j.schedEnd)+'</td><td>'+ent+'</td><td>'+sal+'</td><td>'+(j.horasTrab!=null?fmtDur(j.horasTrab):'–')+'</td><td>'+at+'</td><td>'+ex+'</td><td class="px-3"><span class="chip '+(bd[j.estado]||'chip-muted')+'">'+(bl[j.estado]||j.estado)+'</span></td></tr>';
+        return '<tr class="border-t border-slate-100">'+
+          '<td class="px-3 py-2">'+fmtDate(j.date)+'</td>'+
+          '<td>'+DAY_NAMES[j.dow]+'</td>'+
+          '<td>'+fmtTime(j.schedStart)+'–'+fmtTime(j.schedEnd)+'</td>'+
+          '<td>'+ent+'</td>'+
+          '<td class="text-slate-500">'+colSal+'</td>'+
+          '<td class="text-slate-500">'+colReg+'</td>'+
+          '<td class="text-slate-500">'+colDesc+'</td>'+
+          '<td>'+sal+'</td>'+
+          '<td class="font-semibold">'+(j.horasTrab!=null?fmtDur(j.horasTrab):'–')+'</td>'+
+          '<td>'+at+'</td>'+
+          '<td>'+ex+'</td>'+
+          '<td class="px-3"><span class="chip '+(bd[j.estado]||'chip-muted')+'">'+(bl[j.estado]||j.estado)+'</span></td>'+
+        '</tr>';
       }).join('')+
       '</tbody></table></div>'+
-      '<p class="text-xs text-slate-500 mt-2">Tolerancia atraso: 15 min. Colación 45 min se descuenta sólo si turno > 4h. Marcajes 00:00–02:59 se asignan al día anterior. Marcajes con ≤5 min se agrupan.</p>';
+      '<p class="text-xs text-slate-500 mt-2">Tolerancia atraso: 15 min. <strong>Col. desc.</strong> = colación descontada según lo planificado en el turno (no el tiempo real entre marcajes). Las columnas "Sal. col." y "Reg. col." son sólo para auditoría visual. Marcajes 00:00–02:59 se asignan al día anterior. Marcajes con ≤5 min se agrupan.</p>';
     root.innerHTML = html;
   }
   function changeMarcajesPeriod(delta){
@@ -8496,7 +8593,7 @@ function downloadPayslipHtml(){
     showCruceDetail, goToLiquidacionWith, _setCruceMes,
     onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab,
     openFeriadoForm, deleteFeriado, poblarFeriadosChile,
-    copyToWholeMonth, adjustColacionWeek, cleanDuplicates,
+    copyToWholeMonth, adjustColacionWeek, cleanDuplicates, _setLastShiftWorker,
     openAdelantoForm, deleteAdelanto, _toggleAdelanto
   };
 })();
