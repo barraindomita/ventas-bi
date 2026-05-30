@@ -6886,8 +6886,11 @@ window.RRHH = (function(){
     currentWeekKey: getWeekKey(new Date()),
     selectedShiftWorkerId: null,
     lastShiftWorkerId: null, // recuerda el último trabajador seleccionado en el form de agregar turno
-    isPropietario: true,     // true por defecto; el backend ajusta al cargar
+    isPropietario: false,    // deny por defecto — el backend habilita true sólo si el rol es propietario
     myWorkerId: null,        // ID del trabajador propio (para no-propietarios)
+    loadedForUserId: null,   // qué usuario hidrató la caché. Si cambia → recargar
+    accessDenied: false,     // true si el backend rechazó la carga (RUT sin trabajador, etc.)
+    accessDeniedMsg: '',     // mensaje específico del error
     cruceMes: null,
     marcajesPeriod: null,
     marcajesWorker: null,
@@ -7003,6 +7006,12 @@ window.RRHH = (function(){
     const target = document.getElementById('rrhhSub-'+sub);
     if(target) target.classList.remove('hidden');
     document.querySelectorAll('.rrhh-tab').forEach(b=>b.classList.toggle('active', b.dataset.sub===sub));
+    // Si la carga falló (RUT no matchea ningún trabajador), mostrar el mismo
+    // mensaje de "acceso denegado" sin importar qué pestaña haga click el usuario.
+    if(state.accessDenied){
+      _renderAccessDenied(state.accessDeniedMsg);
+      return;
+    }
     if(sub==='trabajadores') renderWorkers();
     if(sub==='turnos') renderShiftPlanner();
     if(sub==='marcajes') renderMarcajesView();
@@ -8637,14 +8646,62 @@ function downloadPayslipHtml(){
     },50);
   }
 
+  // Resetea toda la caché del módulo. Se llama al detectar cambio de usuario
+  // para evitar mostrar datos del usuario anterior (un vendedor logueado después
+  // de un propietario no debería ver la caché del propietario).
+function _resetCache(){
+    DB.workers = []; DB.shifts = {}; DB.adelantos = []; DB.feriados = [];
+    allMarcajes = [];
+    state.isPropietario = false;
+    state.myWorkerId = null;
+    state.selectedWorkerId = null;
+    state.loaded = false;
+    state.editingWorkerId = null;
+    state.liq = { workerId: null, periodo: null, data: null };
+    state.accessDenied = false;
+    state.accessDeniedMsg = '';
+  }
+
+  function _renderAccessDenied(msg){
+    const target = document.getElementById('rrhhSub-'+state.currentSub);
+    if(!target) return;
+    document.querySelectorAll('.rrhh-sub').forEach(el=>el.classList.add('hidden'));
+    target.classList.remove('hidden');
+    target.innerHTML =
+      '<div class="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center">'+
+        '<h4 class="font-semibold text-amber-900 mb-2 text-lg">No tienes acceso a Mi Información RRHH</h4>'+
+        '<p class="text-sm text-amber-800">'+escapeHtml(msg||'Error desconocido')+'</p>'+
+        '<p class="text-xs text-amber-700 mt-3">Si crees que esto es un error, pide al propietario que revise tu registro de trabajador en el módulo RRHH (verifica que el RUT que tienes registrado como usuario coincida con tu ficha de trabajador).</p>'+
+      '</div>';
+  }
+
   async function init(){
     if(!state.currentSub) state.currentSub = 'trabajadores';
-    goSub(state.currentSub);
+    const currentUid = (typeof S !== 'undefined' && S.usuario) ? String(S.usuario.id) : null;
+    if(state.loadedForUserId !== currentUid){
+      _resetCache();
+    }
+    if(!state.loaded){
+      const t = document.getElementById('rrhhSub-'+state.currentSub);
+      if(t){
+        document.querySelectorAll('.rrhh-sub').forEach(el=>el.classList.add('hidden'));
+        t.classList.remove('hidden');
+        t.innerHTML = '<div class="text-center text-slate-400 py-10">Cargando...</div>';
+      }
+    } else {
+      goSub(state.currentSub);
+    }
     if(!state.loaded){
       try {
         await loadFromBackend();
+        state.loadedForUserId = currentUid;
         goSub(state.currentSub);
-      } catch(e){}
+      } catch(e){
+        state.isPropietario = false;
+        state.accessDenied = true;
+        state.accessDeniedMsg = e.message;
+        _renderAccessDenied(e.message);
+      }
     }
   }
 
