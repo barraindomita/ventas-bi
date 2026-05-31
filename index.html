@@ -8105,11 +8105,19 @@ window.RRHH = (function(){
           if(horasTrab < 0) horasTrab = 0;
           const dA = entrada.shiftMin-ss;
           atraso = dA>TOLERANCE_MIN?dA:0;
-          extra = horasTrab-jNet-atraso;
-          // Estados: atraso > incompleta (faltan horas) > ok. Las horas en exceso
-          // ya no se categorizan como "extra" porque requieren autorización manual.
+          // Hrs Diferencia: medir horas EFECTIVAS dentro del rango pactado.
+          // Si el trabajador llegó tarde, esos minutos faltan. Si salió antes,
+          // también. Si se quedó MÁS allá del cierre pactado, esos minutos extra
+          // NO compensan los faltantes (las horas extra requieren autorización
+          // manual aparte). Por eso recortamos la entrada/salida al rango pactado.
+          const inicioEf = Math.max(entrada.shiftMin, ss);
+          const finEf = Math.min(salida.shiftMin, se);
+          const rangoEf = Math.max(0, finEf - inicioEf);
+          const horasEf = Math.max(0, rangoEf - colacion);
+          extra = horasEf - jNet;
+          // Estados: atraso > incompleta (faltan horas) > ok.
           if(dA>TOLERANCE_MIN) estado='atraso';
-          else if(horasTrab<jNet-30) estado='incompleta';
+          else if(extra < -30) estado='incompleta';
           else estado='ok';
         } else if(past){
           estado='pendiente';
