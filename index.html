@@ -6946,7 +6946,8 @@ window.RRHH = (function(){
   const DAY_NAMES = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const DAY_NAMES_FULL = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
   const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const TOLERANCE_MIN = 15, DEDUP_MIN = 5, COLACION_PACTADA_MIN = 60, MIN_TURNO_COLACION = 4*60;
+  // TOLERANCE_MIN = 0 → cualquier minuto de atraso se contabiliza
+  const TOLERANCE_MIN = 0, DEDUP_MIN = 5, COLACION_PACTADA_MIN = 60, MIN_TURNO_COLACION = 4*60;
   // Límites legales/contractuales de horas semanales por tipo de contrato
   const LIMITE_HRS_SEMANA = { full: 42, part: 30 };
 
@@ -8202,10 +8203,10 @@ window.RRHH = (function(){
         // Colación descontada = la planificada (no el tiempo real entre marcajes)
         const colDesc = j.colacion>0 ? '-'+fmtDur(j.colacion) : '<span class="text-slate-300">–</span>';
         const at = j.atraso>0?'<span class="text-amber-600 font-medium">+'+fmtDur(j.atraso)+'</span>':'<span class="text-slate-400">–</span>';
-        // Hrs Diferencia: SÓLO mostrar cuando hay diferencia negativa (faltan horas).
+        // Hrs Diferencia: mostrar desde minuto 1 cuando hay diferencia negativa.
         // Las horas en exceso requieren autorización manual y NO se contabilizan automáticamente.
         let ex='<span class="text-slate-400">–</span>';
-        if(j.extra!=null && j.horasTrab!=null && j.extra<-5){
+        if(j.extra!=null && j.horasTrab!=null && j.extra<0){
           ex='<span class="text-red-600 font-medium">'+fmtDur(j.extra)+'</span>';
         }
         return '<tr class="border-t border-slate-100">'+
@@ -8278,7 +8279,7 @@ window.RRHH = (function(){
     }
     const a = analyzeWorker(workerId, periodKey);
     const fMap = feriadosMap();
-    let totalTrab=0, totalCont=0, totalContFeriado=0, falta=0, exc=0, diasTrab=0, aus=0, det=[], diasFeriado=0;
+    let totalTrab=0, totalCont=0, totalContFeriado=0, falta=0, atrasos=0, diasTrab=0, aus=0, det=[], diasFeriado=0;
     if(a){
       a.jornadas.forEach(j=>{
         if(j.estado==='pendiente') return;
@@ -8287,23 +8288,25 @@ window.RRHH = (function(){
         const feriado = fMap[dk] || null;
         if(j.estado==='ausente'){
           aus++; falta += j.jNet||0;
-          det.push({fecha:j.date, dow:j.dow, programado:j.jNet, trabajado:0, contabilizado:0, falta:j.jNet, exceso:0, estado:'ausente', feriado});
+          det.push({fecha:j.date, dow:j.dow, programado:j.jNet, trabajado:0, contabilizado:0, falta:j.jNet, atraso:0, estado:'ausente', feriado});
           return;
         }
         diasTrab++;
         const tr = j.horasTrab||0;
         totalTrab += tr;
         const pr = j.jNet||0;
-        const c = Math.min(tr,pr);
-        totalCont += c;
-        if(feriado){ totalContFeriado += c; diasFeriado++; }
-        const f = Math.max(0,pr-tr);
-        const e = Math.max(0,tr-pr);
-        falta += f; exc += e;
-        det.push({fecha:j.date, dow:j.dow, programado:pr, trabajado:tr, contabilizado:c, falta:f, exceso:e, estado:j.estado, feriado});
+        // Usar la misma fórmula que marcajes: j.extra ya está clipped al rango pactado.
+        // Si j.extra < 0 → faltan esos minutos. Si >= 0 → cumplió (no se suma exceso).
+        const dif = (j.extra != null && j.extra < 0) ? -j.extra : 0;
+        const contab = pr - dif;  // horas efectivamente cumplidas dentro del pactado
+        totalCont += contab;
+        if(feriado){ totalContFeriado += contab; diasFeriado++; }
+        falta += dif;
+        atrasos += (j.atraso || 0);
+        det.push({fecha:j.date, dow:j.dow, programado:pr, trabajado:tr, contabilizado:contab, falta:dif, atraso:(j.atraso||0), estado:j.estado, feriado});
       });
     }
-    return { worker:w, diasProg, diasTrab, aus, totalProg, totalTrab, totalCont, totalContFeriado, diasFeriado, falta, exc, det };
+    return { worker:w, diasProg, diasTrab, aus, totalProg, totalTrab, totalCont, totalContFeriado, diasFeriado, falta, atrasos, det };
   }
   function renderCruceContent(){
     const root = document.getElementById('rrhhCruceContent');
@@ -8312,23 +8315,24 @@ window.RRHH = (function(){
       '<thead><tr class="text-xs text-slate-500 uppercase bg-slate-50">'+
         '<th class="text-left px-3 py-2">Trabajador</th><th class="text-center">Días prog</th><th class="text-center">Días trab</th>'+
         '<th class="text-right">Hrs prog</th><th class="text-right">Hrs trab</th>'+
-        '<th class="text-right">Hrs contabilizadas</th><th class="text-right">Hrs faltantes</th><th class="text-right">Exceso (no cuenta)</th><th class="px-3"></th>'+
+        '<th class="text-right">Hrs contabilizadas</th><th class="text-right">Hrs faltantes</th><th class="text-right">Atrasos</th><th class="px-3"></th>'+
       '</tr></thead><tbody>';
     DB.workers.forEach(w=>{
       const c = computeCruceForWorker(w.id, state.cruceMes); if(!c) return;
       const tf = c.falta>0;
+      const ta = c.atrasos>0;
       html += '<tr class="border-t border-slate-100">'+
         '<td class="px-3 py-2 font-semibold">'+escapeHtml(w.nombre)+'</td>'+
         '<td class="text-center">'+c.diasProg+'</td><td class="text-center">'+c.diasTrab+'</td>'+
         '<td class="text-right">'+fmtDur(c.totalProg)+'</td><td class="text-right">'+fmtDur(c.totalTrab)+'</td>'+
         '<td class="text-right font-semibold">'+fmtDur(c.totalCont)+'</td>'+
         '<td class="text-right">'+(tf?'<span class="text-red-600 font-medium">'+fmtDur(c.falta)+'</span>':'<span class="text-slate-400">0m</span>')+'</td>'+
-        '<td class="text-right text-slate-400">'+(c.exc>0?fmtDur(c.exc):'0m')+'</td>'+
+        '<td class="text-right">'+(ta?'<span class="text-amber-600 font-medium">'+fmtDur(c.atrasos)+'</span>':'<span class="text-slate-400">0m</span>')+'</td>'+
         '<td class="px-3 text-right"><button class="text-xs text-blue-600 hover:underline" onclick="RRHH.showCruceDetail(\''+w.id+'\')">Detalle</button></td>'+
       '</tr>';
     });
     html += '</tbody></table></div>'+
-      '<p class="text-xs text-slate-500 mt-3"><b>Hrs contabilizadas</b> = mínimo entre programado y trabajado por jornada (las horas en exceso no se contabilizan automáticamente como extra; se ven aparte). Para autorizar horas extra al full-time, ingrésalas manualmente al generar la liquidación.</p>'+
+      '<p class="text-xs text-slate-500 mt-3"><b>Hrs contabilizadas</b> = horas efectivas dentro del rango pactado de cada jornada (clipped a inicio/fin del turno, menos colación). <b>Hrs faltantes</b> = lo que el trabajador no cumplió respecto a lo pactado. <b>Atrasos</b> = suma de minutos de atraso del periodo. Las horas trabajadas en exceso después del fin pactado no se contabilizan automáticamente — para pagar horas extra al full-time, prográmalas como turnos adicionales o ingrésalas manualmente al generar la liquidación.</p>'+
       '<div id="rrhhCruceDetail" class="mt-4"></div>';
     root.innerHTML = html;
   }
@@ -8338,12 +8342,13 @@ window.RRHH = (function(){
     const bd = {ok:'chip-ok',atraso:'chip-warn',ausente:'chip-danger',extra:'chip-info',incompleta:'chip-warn'};
     let html = '<div class="bg-white rounded-xl border border-slate-200 p-4">'+
       '<div class="flex items-center justify-between mb-3"><h4 class="font-semibold">Detalle diario — '+escapeHtml(c.worker.nombre)+' · '+formatPeriodo(state.cruceMes)+'</h4><button class="btn btn-ghost text-sm" onclick="document.getElementById(\'rrhhCruceDetail\').innerHTML=\'\'">Cerrar</button></div>'+
-      '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Fecha</th><th class="text-left">Día</th><th class="text-right">Programado</th><th class="text-right">Trabajado</th><th class="text-right">Contabilizado</th><th class="text-right">Falta</th><th class="text-right">Exceso</th><th class="text-left px-3">Estado</th></tr></thead><tbody>'+
-      c.det.map(d=>'<tr class="border-t border-slate-100"><td class="py-2">'+fmtDate(d.fecha)+'</td><td>'+DAY_NAMES[d.dow]+'</td><td class="text-right">'+fmtDur(d.programado)+'</td><td class="text-right">'+(d.trabajado?fmtDur(d.trabajado):'–')+'</td><td class="text-right">'+fmtDur(d.contabilizado)+'</td><td class="text-right">'+(d.falta>0?'<span class="text-red-600">'+fmtDur(d.falta)+'</span>':'–')+'</td><td class="text-right text-slate-400">'+(d.exceso>0?fmtDur(d.exceso):'–')+'</td><td class="px-3"><span class="chip '+(bd[d.estado]||'chip-muted')+'">'+d.estado+'</span></td></tr>').join('')+
+      '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Fecha</th><th class="text-left">Día</th><th class="text-right">Programado</th><th class="text-right">Trabajado</th><th class="text-right">Contabilizado</th><th class="text-right">Falta</th><th class="text-right">Atraso</th><th class="text-left px-3">Estado</th></tr></thead><tbody>'+
+      c.det.map(d=>'<tr class="border-t border-slate-100"><td class="py-2">'+fmtDate(d.fecha)+'</td><td>'+DAY_NAMES[d.dow]+'</td><td class="text-right">'+fmtDur(d.programado)+'</td><td class="text-right">'+(d.trabajado?fmtDur(d.trabajado):'–')+'</td><td class="text-right">'+fmtDur(d.contabilizado)+'</td><td class="text-right">'+(d.falta>0?'<span class="text-red-600">'+fmtDur(d.falta)+'</span>':'–')+'</td><td class="text-right">'+(d.atraso>0?'<span class="text-amber-600">+'+fmtDur(d.atraso)+'</span>':'–')+'</td><td class="px-3"><span class="chip '+(bd[d.estado]||'chip-muted')+'">'+d.estado+'</span></td></tr>').join('')+
       '</tbody></table></div>'+
       '<hr class="my-3 border-slate-200"><div class="flex justify-between items-center gap-2 flex-wrap text-sm">'+
         '<div><b>Total contabilizado:</b> '+fmtDur(c.totalCont)+'</div>'+
         '<div><b>Total faltante:</b> '+fmtDur(c.falta)+'</div>'+
+        '<div><b>Total atrasos:</b> '+fmtDur(c.atrasos)+'</div>'+
         (state.isPropietario ? '<button class="btn btn-primary text-sm" onclick="RRHH.goToLiquidacionWith(\''+workerId+'\',\''+state.cruceMes+'\')">Generar liquidación →</button>' : '')+
       '</div></div>';
     document.getElementById('rrhhCruceDetail').innerHTML = html;
@@ -8415,7 +8420,7 @@ window.RRHH = (function(){
       valorHora, sueldoBase,
       horasContabilizadas: round2(c?c.totalCont/60:0),
       horasFaltantes: round2(c?c.falta/60:0),
-      horasExcesoNoCont: round2(c?c.exc/60:0),
+      horasAtrasos: round2(c?c.atrasos/60:0),
       horasFeriado: round2(c?c.totalContFeriado/60:0),
       recargoFeriadoPct: 50,
       horasExtraAutorizadas: 0,
@@ -8505,7 +8510,7 @@ function renderLiqEditor(){
       '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">'+
         '<div><label class="label">Hrs contabilizadas</label><div class="font-semibold">'+d.horasContabilizadas+'h</div></div>'+
         '<div><label class="label">Hrs faltantes</label><div class="font-semibold '+(d.horasFaltantes>0?'text-red-600':'')+'">'+d.horasFaltantes+'h</div></div>'+
-        '<div><label class="label">Hrs exceso (no auto)</label><div class="text-slate-500">'+d.horasExcesoNoCont+'h</div></div>'+
+        '<div><label class="label">Atrasos del período</label><div class="text-amber-600 font-semibold">'+(d.horasAtrasos||0)+'h</div></div>'+
         (isFull?'<div><label class="label">¿Descontar faltantes?</label><select class="input" onchange="RRHH._updLiq(\'descuentoFaltantes\',this.value===\'si\',false)"><option value="no" '+(!d.descuentoFaltantes?'selected':'')+'>No</option><option value="si" '+(d.descuentoFaltantes?'selected':'')+'>Sí ('+fmtCLP(d.horasFaltantes*d.valorHora)+')</option></select></div>':'')+
         '<div><label class="label">Hrs extra autorizadas (1.5×)</label><input type="number" step="0.1" min="0" class="input" value="'+d.horasExtraAutorizadas+'" oninput="RRHH._updLiq(\'horasExtraAutorizadas\',this.value,true)"></div>'+
         '<div><label class="label">Hrs trabajadas en feriado</label><input type="number" step="0.1" min="0" class="input" value="'+(d.horasFeriado||0)+'" oninput="RRHH._updLiq(\'horasFeriado\',this.value,true)"><p class="text-xs text-slate-500 mt-1">'+(d.horasFeriado>0?'Detectadas automáticamente del cruce':'No se detectaron horas en feriado')+'</p></div>'+
