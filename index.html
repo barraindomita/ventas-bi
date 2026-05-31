@@ -8003,8 +8003,13 @@ window.RRHH = (function(){
     const assigned = [];
     for(const r of raw){
       let shiftDate, shiftMin;
+      // Marcajes entre 12:00 y 24:00 → jornada del día actual.
+      // Marcajes entre 00:00 y 04:00 → jornada del día anterior (cierre nocturno).
+      //   Antes el límite era 03:00 pero turnos que terminaban exactamente a las
+      //   03:00 (ej. Carlos, Javiera) dejaban su marcaje de salida fuera de rango.
+      //   Lo extendí a 04:00 para incluir 03:00-03:59 con margen de gracia.
       if(r.clockMin>=12*60){ shiftDate=new Date(r.y, r.m-1, r.d); shiftMin=r.clockMin; }
-      else if(r.clockMin<3*60){ shiftDate=new Date(r.y, r.m-1, r.d); shiftDate.setDate(shiftDate.getDate()-1); shiftMin=r.clockMin+24*60; }
+      else if(r.clockMin<4*60){ shiftDate=new Date(r.y, r.m-1, r.d); shiftDate.setDate(shiftDate.getDate()-1); shiftMin=r.clockMin+24*60; }
       else continue;
       assigned.push(Object.assign({},r,{shiftDate, shiftDateKey:fmtDateKey(shiftDate), shiftMin}));
     }
@@ -8101,8 +8106,9 @@ window.RRHH = (function(){
           const dA = entrada.shiftMin-ss;
           atraso = dA>TOLERANCE_MIN?dA:0;
           extra = horasTrab-jNet-atraso;
+          // Estados: atraso > incompleta (faltan horas) > ok. Las horas en exceso
+          // ya no se categorizan como "extra" porque requieren autorización manual.
           if(dA>TOLERANCE_MIN) estado='atraso';
-          else if(extra>30) estado='extra';
           else if(horasTrab<jNet-30) estado='incompleta';
           else estado='ok';
         } else if(past){
@@ -8118,9 +8124,12 @@ window.RRHH = (function(){
       totalJornadas: ef.length,
       totalAusencias: ef.filter(j=>j.estado==='ausente').length,
       totalAtrasos: ef.filter(j=>j.estado==='atraso').length,
-      totalExtra: ef.filter(j=>j.estado==='extra').length,
+      totalIncompletas: ef.filter(j=>j.extra!=null && j.extra<-5).length,
       totalMinAtraso: ef.reduce((s,j)=>s+(j.atraso||0),0),
-      totalMinExtra: ef.reduce((s,j)=>s+(j.extra>0?j.extra:0),0),
+      // Suma del valor absoluto de las diferencias NEGATIVAS (horas faltantes).
+      // Las positivas (extras) no se contabilizan automáticamente — requieren
+      // autorización manual al generar la liquidación.
+      totalMinDiferencia: ef.reduce((s,j)=>s+(j.extra<0?-j.extra:0),0),
       totalMinTrabajados: ef.reduce((s,j)=>s+(j.horasTrab||0),0),
       totalMinProgramados: ef.reduce((s,j)=>s+(j.jNet||0),0)
     };
@@ -8151,7 +8160,7 @@ window.RRHH = (function(){
       '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Jornadas</div><div class="text-2xl font-bold" style="color:var(--brand-dark)">'+a.totalJornadas+'</div></div>'+
       '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Ausencias</div><div class="text-2xl font-bold '+(a.totalAusencias>0?'text-red-600':'')+'">'+a.totalAusencias+'</div></div>'+
       '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Atrasos</div><div class="text-xl font-bold '+(a.totalMinAtraso>0?'text-amber-600':'')+'">'+fmtDur(a.totalMinAtraso)+'</div></div>'+
-      '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Hrs extra</div><div class="text-xl font-bold text-blue-600">'+fmtDur(a.totalMinExtra)+'</div></div>'+
+      '<div class="bg-white rounded-xl p-4 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Hrs faltantes</div><div class="text-xl font-bold '+(a.totalMinDiferencia>0?'text-red-600':'')+'">'+fmtDur(a.totalMinDiferencia)+'</div></div>'+
     '</div>';
     const bd = {ok:'chip-ok',atraso:'chip-warn',ausente:'chip-danger',extra:'chip-info',incompleta:'chip-warn',pendiente:'chip-muted'};
     const bl = {ok:'Ok',atraso:'Atraso',ausente:'Ausente',extra:'Extra',incompleta:'Incompleta',pendiente:'Pendiente'};
@@ -8167,7 +8176,7 @@ window.RRHH = (function(){
         '<th class="text-left">Salida</th>'+
         '<th class="text-left">Hrs trab</th>'+
         '<th class="text-left">Atraso</th>'+
-        '<th class="text-left">Hrs extra</th>'+
+        '<th class="text-left">Hrs diferencia</th>'+
         '<th class="text-left px-3">Estado</th>'+
       '</tr></thead><tbody>'+
       a.jornadas.map(j=>{
@@ -8185,11 +8194,11 @@ window.RRHH = (function(){
         // Colación descontada = la planificada (no el tiempo real entre marcajes)
         const colDesc = j.colacion>0 ? '-'+fmtDur(j.colacion) : '<span class="text-slate-300">–</span>';
         const at = j.atraso>0?'<span class="text-amber-600 font-medium">+'+fmtDur(j.atraso)+'</span>':'<span class="text-slate-400">–</span>';
+        // Hrs Diferencia: SÓLO mostrar cuando hay diferencia negativa (faltan horas).
+        // Las horas en exceso requieren autorización manual y NO se contabilizan automáticamente.
         let ex='<span class="text-slate-400">–</span>';
-        if(j.extra!=null && j.horasTrab!=null){
-          if(j.extra>5) ex='<span class="text-blue-600 font-medium">+'+fmtDur(j.extra)+'</span>';
-          else if(j.extra<-5) ex='<span class="text-red-600 font-medium">'+fmtDur(j.extra)+'</span>';
-          else ex='<span class="text-slate-400">'+fmtDur(j.extra)+'</span>';
+        if(j.extra!=null && j.horasTrab!=null && j.extra<-5){
+          ex='<span class="text-red-600 font-medium">'+fmtDur(j.extra)+'</span>';
         }
         return '<tr class="border-t border-slate-100">'+
           '<td class="px-3 py-2">'+fmtDate(j.date)+'</td>'+
