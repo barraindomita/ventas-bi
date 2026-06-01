@@ -8418,13 +8418,14 @@ window.RRHH = (function(){
     );
     state.liq.data = {
       valorHora, sueldoBase,
+      horasProgramadas: round2(c?c.totalProg/60:0),
       horasContabilizadas: round2(c?c.totalCont/60:0),
       horasFaltantes: round2(c?c.falta/60:0),
       horasAtrasos: round2(c?c.atrasos/60:0),
       horasFeriado: round2(c?c.totalContFeriado/60:0),
       recargoFeriadoPct: 50,
       horasExtraAutorizadas: 0,
-      descuentoFaltantes: false,
+      descuentoFaltantes: false,  // por defecto NO descontar — pago por jornada pactada completa
       gratificacion: w.gratificacion==='si',
       afp: DB.payslipParams.afp, salud: DB.payslipParams.salud, afc: DB.payslipParams.afc,
       otrosDescuentos: [], otrosHaberes: [],
@@ -8436,6 +8437,8 @@ window.RRHH = (function(){
     const d = state.liq.data;
     if(!w||!d) return null;
     let haberes=[], imp=0;
+    // Valor hora con recargo de feriado (1 + recargo%/100). Ej: 50% → 1.5×.
+    const valorHoraFer = d.valorHora * (1 + (d.recargoFeriadoPct||0)/100);
     if(w.tipoContrato==='full'){
       haberes.push({nombre:'Sueldo base', monto:d.sueldoBase, imp:true});
       imp += d.sueldoBase;
@@ -8449,11 +8452,12 @@ window.RRHH = (function(){
         haberes.push({nombre:'Horas extra ('+d.horasExtraAutorizadas+'h × '+fmtCLP(vh)+')', monto:tot, imp:true});
         imp += tot;
       }
-      // Recargo por horas trabajadas en feriado (se suma sólo el recargo, no el valor normal de la hora — ese ya está en el sueldo base).
+      // Horas trabajadas en feriado: se paga el VALOR HORA COMPLETO con recargo
+      // (ej 1.5× normal), adicional al sueldo base.
       if(d.horasFeriado>0 && d.recargoFeriadoPct>0){
-        const recargo = d.horasFeriado * d.valorHora * (d.recargoFeriadoPct/100);
-        haberes.push({nombre:'Recargo feriados ('+d.horasFeriado+'h × '+fmtCLP(d.valorHora)+' × '+d.recargoFeriadoPct+'%)', monto:recargo, imp:true});
-        imp += recargo;
+        const tot = d.horasFeriado * valorHoraFer;
+        haberes.push({nombre:'Horas en feriado ('+d.horasFeriado+'h × '+fmtCLP(valorHoraFer)+' c/u, +'+d.recargoFeriadoPct+'%)', monto:tot, imp:true});
+        imp += tot;
       }
       if(d.gratificacion){
         const g = imp*0.25;
@@ -8461,8 +8465,14 @@ window.RRHH = (function(){
         imp += g;
       }
     } else if(w.tipoContrato==='part'){
-      const t = d.horasContabilizadas, sh = t*d.valorHora;
-      haberes.push({nombre:'Pago por hora ('+t+'h × '+fmtCLP(d.valorHora)+')', monto:sh, imp:true});
+      // Por defecto: pagar horas PROGRAMADAS (jornada pactada completa).
+      // Si descuentoFaltantes=true, pagar sólo las efectivamente trabajadas (contabilizadas).
+      const horasPagables = d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas;
+      const sh = horasPagables * d.valorHora;
+      const lblBase = d.descuentoFaltantes
+        ? 'Pago por hora ('+horasPagables+'h trab × '+fmtCLP(d.valorHora)+')'
+        : 'Pago por hora ('+horasPagables+'h prog × '+fmtCLP(d.valorHora)+')';
+      haberes.push({nombre:lblBase, monto:sh, imp:true});
       imp += sh;
       if(d.horasExtraAutorizadas>0){
         const vh = d.valorHora*1.5, tot = d.horasExtraAutorizadas*vh;
@@ -8470,10 +8480,16 @@ window.RRHH = (function(){
         imp += tot;
       }
       if(d.horasFeriado>0 && d.recargoFeriadoPct>0){
-        // En part-time las horas en feriado ya están pagadas como horas normales — sumamos sólo el recargo.
-        const recargo = d.horasFeriado * d.valorHora * (d.recargoFeriadoPct/100);
-        haberes.push({nombre:'Recargo feriados ('+d.horasFeriado+'h × '+fmtCLP(d.valorHora)+' × '+d.recargoFeriadoPct+'%)', monto:recargo, imp:true});
-        imp += recargo;
+        // Horas en feriado al valor completo con recargo, ADICIONAL al pago por hora base.
+        const tot = d.horasFeriado * valorHoraFer;
+        haberes.push({nombre:'Horas en feriado ('+d.horasFeriado+'h × '+fmtCLP(valorHoraFer)+' c/u, +'+d.recargoFeriadoPct+'%)', monto:tot, imp:true});
+        imp += tot;
+      }
+      // Gratificación 25% — también aplicable a part-time si está configurada en la ficha.
+      if(d.gratificacion){
+        const g = imp*0.25;
+        haberes.push({nombre:'Gratificación legal (25%)', monto:g, imp:true});
+        imp += g;
       }
     }
     d.otrosHaberes.forEach(h=>{ haberes.push({nombre:h.nombre, monto:h.monto, imp:!!h.imponible}); if(h.imponible) imp += h.monto; });
@@ -8499,22 +8515,29 @@ function renderLiqEditor(){
     const d = state.liq.data;
     const isFull = w.tipoContrato==='full';
     const t = calcLiqTotals();
+    // Para part-time, las "horas ordinarias" son las programadas (o contabilizadas si descontoFaltantes está activo).
+    const horasOrdinarias = isFull ? null : (d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas);
+    const valorHoraFer = d.valorHora * (1 + (d.recargoFeriadoPct||0)/100);
     let html = '<div class="bg-white rounded-xl border border-slate-200 p-5 mb-3">'+
       '<h4 class="font-semibold mb-3">Cálculo de la liquidación</h4>'+
       '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">'+
         '<div><label class="label">Tipo contrato</label><div class="font-semibold">'+(isFull?'Jornada completa':'Part-time')+'</div></div>'+
-        '<div><label class="label">Valor hora</label><input type="number" step="0.01" class="input" value="'+d.valorHora+'" oninput="RRHH._updLiq(\'valorHora\',this.value,true)"></div>'+
-        (isFull?'<div><label class="label">Sueldo bruto</label><input type="number" step="1" class="input" value="'+d.sueldoBase+'" oninput="RRHH._updLiq(\'sueldoBase\',this.value,true)"></div><div><label class="label">Gratificación 25%</label><select class="input" onchange="RRHH._updLiq(\'gratificacion\',this.value===\'si\',false)"><option value="si" '+(d.gratificacion?'selected':'')+'>Sí</option><option value="no" '+(!d.gratificacion?'selected':'')+'>No</option></select></div>':'')+
+        '<div><label class="label">Valor hora ordinaria</label><input type="number" step="0.01" class="input" value="'+d.valorHora+'" oninput="RRHH._updLiq(\'valorHora\',this.value,true)"></div>'+
+        (isFull
+          ? '<div><label class="label">Sueldo bruto</label><input type="number" step="1" class="input" value="'+d.sueldoBase+'" oninput="RRHH._updLiq(\'sueldoBase\',this.value,true)"></div>'
+          : '<div><label class="label">Hrs ordinarias a pagar</label><div class="font-semibold">'+horasOrdinarias+'h</div><p class="text-xs text-slate-500 mt-1">'+(d.descuentoFaltantes?'Contabilizadas (con descuento)':'Programadas (jornada pactada)')+'</p></div>')+
+        '<div><label class="label">Gratificación 25%</label><select class="input" onchange="RRHH._updLiq(\'gratificacion\',this.value===\'si\',false)"><option value="si" '+(d.gratificacion?'selected':'')+'>Sí</option><option value="no" '+(!d.gratificacion?'selected':'')+'>No</option></select></div>'+
       '</div>'+
       '<hr class="my-3 border-slate-200"><h5 class="font-semibold mb-2 text-sm">Horas del período</h5>'+
       '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">'+
+        '<div><label class="label">Hrs programadas</label><div class="font-semibold">'+(d.horasProgramadas||0)+'h</div></div>'+
         '<div><label class="label">Hrs contabilizadas</label><div class="font-semibold">'+d.horasContabilizadas+'h</div></div>'+
         '<div><label class="label">Hrs faltantes</label><div class="font-semibold '+(d.horasFaltantes>0?'text-red-600':'')+'">'+d.horasFaltantes+'h</div></div>'+
         '<div><label class="label">Atrasos del período</label><div class="text-amber-600 font-semibold">'+(d.horasAtrasos||0)+'h</div></div>'+
-        (isFull?'<div><label class="label">¿Descontar faltantes?</label><select class="input" onchange="RRHH._updLiq(\'descuentoFaltantes\',this.value===\'si\',false)"><option value="no" '+(!d.descuentoFaltantes?'selected':'')+'>No</option><option value="si" '+(d.descuentoFaltantes?'selected':'')+'>Sí ('+fmtCLP(d.horasFaltantes*d.valorHora)+')</option></select></div>':'')+
+        '<div><label class="label">¿Descontar faltantes?</label><select class="input" onchange="RRHH._updLiq(\'descuentoFaltantes\',this.value===\'si\',false)"><option value="no" '+(!d.descuentoFaltantes?'selected':'')+'>No</option><option value="si" '+(d.descuentoFaltantes?'selected':'')+'>Sí ('+fmtCLP(d.horasFaltantes*d.valorHora)+')</option></select><p class="text-xs text-slate-500 mt-1">'+(isFull?'Resta del sueldo base':'Cambia el pago de programadas a contabilizadas')+'</p></div>'+
         '<div><label class="label">Hrs extra autorizadas (1.5×)</label><input type="number" step="0.1" min="0" class="input" value="'+d.horasExtraAutorizadas+'" oninput="RRHH._updLiq(\'horasExtraAutorizadas\',this.value,true)"></div>'+
-        '<div><label class="label">Hrs trabajadas en feriado</label><input type="number" step="0.1" min="0" class="input" value="'+(d.horasFeriado||0)+'" oninput="RRHH._updLiq(\'horasFeriado\',this.value,true)"><p class="text-xs text-slate-500 mt-1">'+(d.horasFeriado>0?'Detectadas automáticamente del cruce':'No se detectaron horas en feriado')+'</p></div>'+
-        '<div><label class="label">Recargo feriado %</label><input type="number" step="1" min="0" max="200" class="input" value="'+(d.recargoFeriadoPct||50)+'" oninput="RRHH._updLiq(\'recargoFeriadoPct\',this.value,true)"><p class="text-xs text-slate-500 mt-1">+50% típico. 100% para recargo doble.</p></div>'+
+        '<div><label class="label">Hrs en feriado (con recargo)</label><input type="number" step="0.1" min="0" class="input" value="'+(d.horasFeriado||0)+'" oninput="RRHH._updLiq(\'horasFeriado\',this.value,true)"><p class="text-xs text-slate-500 mt-1">'+(d.horasFeriado>0?'Valor hora con recargo: '+fmtCLP(valorHoraFer):'No se detectaron horas en feriado')+'</p></div>'+
+        '<div><label class="label">Recargo feriado %</label><input type="number" step="1" min="0" max="200" class="input" value="'+(d.recargoFeriadoPct||50)+'" oninput="RRHH._updLiq(\'recargoFeriadoPct\',this.value,true)"><p class="text-xs text-slate-500 mt-1">+50% típico → 1.5×. +100% → 2×.</p></div>'+
       '</div>'+
       '<hr class="my-3 border-slate-200"><h5 class="font-semibold mb-2 text-sm">Descuentos legales (%)</h5>'+
       '<div class="grid grid-cols-3 gap-3">'+
