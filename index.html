@@ -6050,7 +6050,7 @@ function renderVentasPorVendedor(){
       if(v.medio_pago_2) medios.push(`${medioIcon(v.medio_pago_2)} ${medioLabel(v.medio_pago_2)} ${fmt(v.monto_pago_2)}`);
       const items = (v.items||[]).map(it=>`${esc(it.nombre)} ×${it.cantidad}`).join(' · ');
       const cantItems = (v.items||[]).length;
-      return `<tr class="cursor-pointer hover:bg-blue-50 transition" onclick="__verDetalleVenta(${i})" title="Clic para ver el detalle completo de la venta">
+      return `<tr class="cursor-pointer hover:bg-blue-50 transition" onclick="__verDetalleVenta(${v.id})" title="Clic para ver el detalle completo de la venta">
         <td class="font-mono text-xs">#${v.id}</td>
         <td class="text-xs">${fmtFechaCorta(v.fecha_hora)}</td>
         <td class="text-xs">${fmtHora(v.fecha_hora)}</td>
@@ -6067,8 +6067,11 @@ function renderVentasPorVendedor(){
    no caben en la celda truncada de la tabla. Muestra cabecera (id, fecha,
    vendedor, totales, descuentos, medios de pago) y tabla con TODOS los items
    con código, cantidad, precio, descuento, subtotal. */
-window.__verDetalleVenta = (idx) => {
-  const v = _repDetalle.ventas[idx];
+window.__verDetalleVenta = (ventaId) => {
+  // Bugfix: el reporte filtra por vendedor, pero _repDetalle.ventas guarda
+  // TODAS las ventas del rango. Si recibimos un índice del array filtrado,
+  // mostraríamos una venta distinta. Por eso buscamos por ID.
+  const v = _repDetalle.ventas.find(x => Number(x.id) === Number(ventaId));
   if(!v) return;
   const items = v.items || [];
   const medios = [];
@@ -6085,8 +6088,8 @@ window.__verDetalleVenta = (idx) => {
         <div class="text-xs text-slate-500">${fmtFechaCorta(v.fecha_hora)} · ${fmtHora(v.fecha_hora)} · Vendedor: <b>${esc(v.vendedor_nombre)||'—'}</b></div>
       </div>
       <div class="flex gap-2 flex-wrap">
-        <button class="btn btn-ghost text-xs" onclick="__copiarDetalleVenta(${idx})" title="Copiar resumen al portapapeles">📋 Copiar</button>
-        ${puedeAnular ? `<button class="btn btn-danger text-xs" onclick="__abrirAnularVenta(${idx})" title="Anular esta venta (revierte stock e ingresos)">🚫 Anular venta</button>` : ''}
+        <button class="btn btn-ghost text-xs" onclick="__copiarDetalleVenta(${v.id})" title="Copiar resumen al portapapeles">📋 Copiar</button>
+        ${puedeAnular ? `<button class="btn btn-danger text-xs" onclick="__abrirAnularVenta(${v.id})" title="Anular esta venta (revierte stock e ingresos)">🚫 Anular venta</button>` : ''}
       </div>
     </div>
 
@@ -6147,8 +6150,8 @@ window.__verDetalleVenta = (idx) => {
   </div>`);
 };
 
-window.__copiarDetalleVenta = (idx) => {
-  const v = _repDetalle.ventas[idx];
+window.__copiarDetalleVenta = (ventaId) => {
+  const v = _repDetalle.ventas.find(x => Number(x.id) === Number(ventaId));
   if(!v) return;
   const items = v.items || [];
   const lineas = [
@@ -6167,8 +6170,8 @@ window.__copiarDetalleVenta = (idx) => {
 
 /* Modal para anular una venta. Pide motivo obligatorio (mín. 4 chars).
    Sólo se llama desde __verDetalleVenta cuando isAdmin() y v.anulada===false. */
-window.__abrirAnularVenta = (idx) => {
-  const v = _repDetalle.ventas[idx];
+window.__abrirAnularVenta = (ventaId) => {
+  const v = _repDetalle.ventas.find(x => Number(x.id) === Number(ventaId));
   if(!v) return;
   if(!isAdmin()){ toast('No tienes permisos para anular ventas','err'); return; }
   openModal(`<div class="p-6 max-w-md mx-auto">
