@@ -713,6 +713,25 @@
           </div>
         </div>
 
+        <!-- Mi historial de ventas — visible para todos (vendedor incluido).
+             Permite corroborar si una venta anterior se cursó. -->
+        <div id="cajaMisVentasPanel" class="hidden mt-4 bg-white rounded-xl p-5 border border-slate-200">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div>
+              <h3 class="font-bold text-lg" style="color:var(--brand-dark)">🧾 Mis ventas</h3>
+              <p class="text-xs text-slate-500 mt-1">Historial de las ventas que has registrado. Útil para confirmar si una venta quedó procesada.</p>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <label class="text-xs text-slate-500 flex items-center gap-1">
+                <input id="cajaMisVentasSoloCaja" type="checkbox" checked> Sólo mi caja activa
+              </label>
+              <button class="btn btn-ghost" onclick="cargarMisVentas()">🔄 Refrescar</button>
+            </div>
+          </div>
+          <div id="cajaMisVentasResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs"></div>
+          <div id="cajaMisVentasTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg"></div>
+        </div>
+
         <!-- Sólo admin: panel de cajas abiertas por otros vendedores -->
         <div id="cajaAdminPanel" class="hidden mt-4 bg-white rounded-xl p-5 border border-slate-200">
           <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -819,6 +838,17 @@
                 <p class="text-xs text-slate-500 mb-3">Historial de aperturas y cierres de caja — usa las fechas y horas de arriba para acotar el rango. Incluye monto inicial, totales por medio de pago y estado.</p>
                 <div id="repCajasResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
                 <div id="repCajasTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg bg-white"></div>
+              </div>
+
+              <!-- Reporte de Ventas Anuladas -->
+              <div id="repAnuladasBox" class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <h4 class="font-semibold" style="color:var(--brand-dark)">🚫 Ventas anuladas</h4>
+                  <button class="btn btn-ghost text-xs" onclick="cargarVentasAnuladas()">🔄 Refrescar</button>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Ventas anuladas en el rango seleccionado. Muestra quién anuló, motivo y monto revertido. El stock e ingresos ya fueron descontados de los reportes.</p>
+                <div id="repAnuladasResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
+                <div id="repAnuladasTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg bg-white"></div>
               </div>
             </div>
           </details>
@@ -3854,6 +3884,19 @@ function renderCajaStatus(){
       panelAdmin.classList.add('hidden');
     }
   }
+  // Panel "Mis ventas" — visible siempre (cualquier rol, con o sin caja activa).
+  // Lo cargamos en segundo plano para no bloquear el render principal.
+  const misPanel = $('#cajaMisVentasPanel');
+  if(misPanel){
+    misPanel.classList.remove('hidden');
+    if(!misPanel.dataset.cargado){
+      misPanel.dataset.cargado = '1';
+      // Sólo enganchamos el checkbox una vez
+      const chk = $('#cajaMisVentasSoloCaja');
+      if(chk) chk.addEventListener('change', () => cargarMisVentas());
+      cargarMisVentas();
+    }
+  }
   if(!S.caja){
     $('#cajaEmpty').classList.remove('hidden'); $('#cajaStatus').classList.add('hidden'); return;
   }
@@ -3870,6 +3913,122 @@ function renderCajaStatus(){
       <div class="font-bold">${fmt(S.caja['total_'+m])}</div>
     </div>`).join('');
 }
+
+/* Carga el historial de ventas del vendedor logueado para el módulo Caja.
+   Si "Sólo mi caja activa" está tildado y hay caja abierta → filtra por caja_id.
+   Si no, trae las últimas 50 ventas del vendedor (con corte de turno 03:30). */
+let _misVentasCache = [];
+async function cargarMisVentas(){
+  const tbl = $('#cajaMisVentasTbl');
+  const resumen = $('#cajaMisVentasResumen');
+  if(!tbl) return;
+  tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">Cargando…</div>';
+  if(resumen) resumen.innerHTML = '';
+  try{
+    const soloCaja = $('#cajaMisVentasSoloCaja')?.checked;
+    const params = { limit: 50 };
+    if(soloCaja && S.caja?.id) params.caja_id = S.caja.id;
+    else params.solo_hoy = true;
+    const d = await api('historialVentasVendedor', params);
+    const ventas = d.ventas || [];
+    _misVentasCache = ventas;
+    if(!ventas.length){
+      tbl.innerHTML = '<div class="text-slate-400 py-8 text-center text-sm">Aún no hay ventas registradas en este filtro.</div>';
+      return;
+    }
+    // Resumen rápido
+    const totalActivas = ventas.filter(v => !v.anulada).reduce((s,v) => s + (Number(v.total)||0), 0);
+    const cantActivas = ventas.filter(v => !v.anulada).length;
+    const cantAnuladas = ventas.filter(v => v.anulada).length;
+    if(resumen){
+      resumen.innerHTML = `
+        <div class="bg-emerald-50 border border-emerald-200 rounded p-2"><div class="text-emerald-700">Ventas válidas</div><div class="text-lg font-bold text-emerald-700">${cantActivas}</div></div>
+        <div class="bg-emerald-50 border border-emerald-200 rounded p-2"><div class="text-emerald-700">Total ingresos</div><div class="text-lg font-bold text-emerald-700">${fmt(totalActivas)}</div></div>
+        <div class="bg-rose-50 border border-rose-200 rounded p-2"><div class="text-rose-700">Anuladas</div><div class="text-lg font-bold text-rose-700">${cantAnuladas}</div></div>
+        <div class="bg-slate-50 border border-slate-200 rounded p-2"><div class="text-slate-500">Mostrando</div><div class="text-lg font-bold">${ventas.length}</div></div>
+      `;
+    }
+    tbl.innerHTML = `<table class="w-full text-sm">
+      <thead><tr class="bg-slate-50 text-left text-slate-500 text-xs">
+        <th class="py-2 px-3">#</th><th class="py-2 px-3">Hora</th>
+        <th class="py-2 px-3">Artículos</th><th class="py-2 px-3">Pago</th>
+        <th class="py-2 px-3 text-right">Total</th><th class="py-2 px-3"></th>
+      </tr></thead>
+      <tbody>
+        ${ventas.map((v,i) => {
+          const items = (v.items||[]).map(it => `${esc(it.nombre)} ×${it.cantidad}`).join(' · ');
+          const cantItems = (v.items||[]).length;
+          const medio = v.medio_pago_1 ? `${medioIcon(v.medio_pago_1)} ${medioLabel(v.medio_pago_1)}` : '—';
+          const anulado = v.anulada
+            ? '<span class="ml-1 inline-block text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">ANULADA</span>'
+            : '';
+          return `<tr class="border-t border-slate-100 hover:bg-blue-50 cursor-pointer transition ${v.anulada?'opacity-60':''}" onclick="__verDetalleMiVenta(${i})">
+            <td class="py-1 px-3 font-mono text-xs">#${v.id}${anulado}</td>
+            <td class="py-1 px-3 text-xs">${fmtHora(v.fecha_hora)} <span class="text-slate-400">${fmtFechaCorta(v.fecha_hora)}</span></td>
+            <td class="py-1 px-3 text-xs max-w-[20rem] truncate">${items}${cantItems>3?` <span class="text-blue-600 font-semibold">(${cantItems})</span>`:''}</td>
+            <td class="py-1 px-3 text-xs">${medio}</td>
+            <td class="py-1 px-3 text-right font-semibold ${v.anulada?'line-through text-slate-400':''}">${fmt(v.total)}</td>
+            <td class="py-1 px-3 text-blue-500">🔍</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  }catch(err){
+    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar el historial: ${esc(err.message||err)}</div>`;
+  }
+}
+
+/* Modal con el detalle completo de una venta propia (vendedor). Reutiliza
+   el mismo formato del detalle que usan los reportes. */
+window.__verDetalleMiVenta = (idx) => {
+  const v = _misVentasCache[idx];
+  if(!v) return;
+  const items = v.items || [];
+  const medios = [];
+  if(v.medio_pago_1) medios.push({m: v.medio_pago_1, monto: v.monto_pago_1});
+  if(v.medio_pago_2) medios.push({m: v.medio_pago_2, monto: v.monto_pago_2});
+  openModal(`<div class="p-6 max-w-3xl mx-auto">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div>
+        <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🧾 Venta #${v.id}
+          ${v.anulada ? '<span class="ml-2 text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">ANULADA</span>' : ''}
+        </h3>
+        <div class="text-xs text-slate-500">${fmtFechaCorta(v.fecha_hora)} · ${fmtHora(v.fecha_hora)}</div>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs">
+      <div class="bg-slate-50 rounded p-2 border border-slate-200"><div class="text-slate-500">Ítems</div><div class="text-lg font-bold">${items.length}</div></div>
+      <div class="bg-slate-50 rounded p-2 border border-slate-200"><div class="text-slate-500">Subtotal</div><div class="text-lg font-bold">${fmt(v.subtotal||0)}</div></div>
+      <div class="bg-slate-50 rounded p-2 border border-slate-200"><div class="text-slate-500">Descuento</div><div class="text-lg font-bold text-red-600">-${fmt(v.descuento_monto||0)}</div></div>
+      <div class="bg-emerald-50 rounded p-2 border border-emerald-200"><div class="text-slate-500">Total</div><div class="text-lg font-bold ${v.anulada?'line-through text-slate-400':'text-emerald-700'}">${fmt(v.total)}</div></div>
+    </div>
+    <div class="text-xs font-semibold text-slate-600 mb-1">Medio(s) de pago:</div>
+    <div class="text-sm mb-3">
+      ${medios.map(p => `<div class="inline-block px-2 py-1 mr-1 mb-1 rounded bg-slate-100">${medioIcon(p.m)} ${medioLabel(p.m)}: <b>${fmt(p.monto)}</b></div>`).join('') || '<span class="text-slate-400">—</span>'}
+      ${v.cliente_fiado ? `<div class="text-xs text-amber-700 mt-1">🧾 Cliente fiado: <b>${esc(v.cliente_fiado)}</b></div>` : ''}
+    </div>
+    <div class="text-xs font-semibold text-slate-600 mb-1">Detalle de productos (${items.length}):</div>
+    <div class="max-h-[45vh] overflow-auto border border-slate-200 rounded">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-slate-50 text-left text-slate-500 text-xs">
+          <th class="py-1 px-2">Código</th><th class="py-1 px-2">Producto</th>
+          <th class="py-1 px-2 text-right">Cant.</th><th class="py-1 px-2 text-right">P. unit.</th>
+          <th class="py-1 px-2 text-right">Subtotal</th>
+        </tr></thead>
+        <tbody>${items.length ? items.map(it => `
+          <tr class="border-t border-slate-100">
+            <td class="py-1 px-2 font-mono text-xs text-slate-500">${esc(it.codigo_barra)||'—'}</td>
+            <td class="py-1 px-2 font-semibold">${esc(it.nombre)}</td>
+            <td class="py-1 px-2 text-right">${it.cantidad}</td>
+            <td class="py-1 px-2 text-right">${fmt(it.precio_unitario)}</td>
+            <td class="py-1 px-2 text-right font-semibold">${fmt(it.subtotal)}</td>
+          </tr>`).join('') : '<tr><td colspan="5" class="text-center text-slate-400 py-4">Sin items</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Cerrar</button></div>
+  </div>`);
+};
 
 /* VENTAS / CARRO ────────────────────────────────────────────────── */
 function renderVentas(){
@@ -5361,6 +5520,7 @@ async function cargarReportes(){
   if(isAdmin()){
     cargarVentasDetalladas(params);
     cargarReporteCajas(params);
+    cargarVentasAnuladas(params);
     cargarReporteVencimientos();
   }
   try{
@@ -5616,6 +5776,73 @@ window.__repVencDescargarExcel = () => {
   toast('Excel descargado','ok');
 };
 
+/* Carga la lista de ventas anuladas para el rango actual (sólo admin).
+   Usa los mismos parámetros desde/hasta/hora de los demás reportes. */
+async function cargarVentasAnuladas(params){
+  const tbl = $('#repAnuladasTbl');
+  const resumen = $('#repAnuladasResumen');
+  if(!tbl) return;
+  if(!params){
+    params = {
+      desde: $('#repDesde')?.value || '',
+      hasta: $('#repHasta')?.value || '',
+      hora_desde: $('#repHoraDesde')?.value || '00:00',
+      hora_hasta: $('#repHoraHasta')?.value || '23:59'
+    };
+  }
+  tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">Cargando…</div>';
+  if(resumen) resumen.innerHTML = '';
+  try{
+    const d = await api('listarVentasAnuladas', params);
+    const anuladas = d.anuladas || [];
+    if(!anuladas.length){
+      tbl.innerHTML = '<div class="text-emerald-700 py-6 text-center text-sm">✓ No hay ventas anuladas en este rango.</div>';
+      if(resumen){
+        resumen.innerHTML = `<div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3"><div class="text-xs text-emerald-700 uppercase font-semibold">✓ Anulaciones</div><div class="text-lg font-bold text-emerald-700">0</div></div>`;
+      }
+      return;
+    }
+    const totalAnulado = anuladas.reduce((s,a) => s + (Number(a.total_anulado)||0), 0);
+    const porQuien = {};
+    anuladas.forEach(a => {
+      const k = a.anulada_por_nombre || '—';
+      porQuien[k] = (porQuien[k]||0) + 1;
+    });
+    if(resumen){
+      const top = Object.entries(porQuien).sort((a,b)=>b[1]-a[1])[0];
+      resumen.innerHTML = `
+        <div class="bg-rose-50 border border-rose-200 rounded-lg p-3"><div class="text-xs text-rose-700 uppercase font-semibold">Anulaciones</div><div class="text-lg font-bold text-rose-700">${anuladas.length}</div></div>
+        <div class="bg-rose-50 border border-rose-200 rounded-lg p-3"><div class="text-xs text-rose-700 uppercase font-semibold">Total revertido</div><div class="text-lg font-bold text-rose-700">${fmt(totalAnulado)}</div></div>
+        <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Quien más anula</div><div class="text-sm font-bold">${top ? esc(top[0]) : '—'}</div><div class="text-xs text-slate-400">${top ? top[1] + ' anulaciones' : ''}</div></div>
+        <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-500 uppercase">Rango</div><div class="text-xs font-semibold">${(params.desde||'—')} → ${(params.hasta||'—')}</div></div>
+      `;
+    }
+    tbl.innerHTML = `<table class="w-full text-sm">
+      <thead><tr class="bg-slate-50 text-left text-slate-500 text-xs">
+        <th class="py-2 px-3">Venta #</th>
+        <th class="py-2 px-3">Fecha anulación</th>
+        <th class="py-2 px-3">Vendedor original</th>
+        <th class="py-2 px-3">Anulada por</th>
+        <th class="py-2 px-3">Motivo</th>
+        <th class="py-2 px-3 text-right">Total revertido</th>
+      </tr></thead>
+      <tbody>
+        ${anuladas.map(a => `
+          <tr class="border-t border-slate-100">
+            <td class="py-2 px-3 font-mono text-xs">#${a.venta_id}</td>
+            <td class="py-2 px-3 text-xs">${fmtFechaCorta(a.fecha_anulacion)} ${fmtHora(a.fecha_anulacion)}</td>
+            <td class="py-2 px-3 text-xs">${esc(a.venta_vendedor_nombre)||'—'}</td>
+            <td class="py-2 px-3 text-xs font-semibold">${esc(a.anulada_por_nombre)||'—'}</td>
+            <td class="py-2 px-3 text-xs max-w-[24rem]">${esc(a.motivo)||'—'}</td>
+            <td class="py-2 px-3 text-right font-semibold text-rose-700">-${fmt(a.total_anulado)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }catch(err){
+    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar: ${esc(err.message||err)}</div>`;
+  }
+}
+
 async function cargarReporteCajas(params){
   const tbl = $('#repCajasTbl');
   const resumen = $('#repCajasResumen');
@@ -5848,13 +6075,19 @@ window.__verDetalleVenta = (idx) => {
   if(v.medio_pago_1) medios.push({m: v.medio_pago_1, monto: v.monto_pago_1});
   if(v.medio_pago_2) medios.push({m: v.medio_pago_2, monto: v.monto_pago_2});
   const subtotalItems = items.reduce((s,it) => s + (Number(it.subtotal)||0), 0);
+  const puedeAnular = isAdmin() && !v.anulada;
   openModal(`<div class="p-6 max-w-3xl mx-auto">
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <div>
-        <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🧾 Venta #${v.id}</h3>
+        <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🧾 Venta #${v.id}
+          ${v.anulada ? '<span class="ml-2 text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">ANULADA</span>' : ''}
+        </h3>
         <div class="text-xs text-slate-500">${fmtFechaCorta(v.fecha_hora)} · ${fmtHora(v.fecha_hora)} · Vendedor: <b>${esc(v.vendedor_nombre)||'—'}</b></div>
       </div>
-      <button class="btn btn-ghost text-xs" onclick="__copiarDetalleVenta(${idx})" title="Copiar resumen al portapapeles">📋 Copiar</button>
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn btn-ghost text-xs" onclick="__copiarDetalleVenta(${idx})" title="Copiar resumen al portapapeles">📋 Copiar</button>
+        ${puedeAnular ? `<button class="btn btn-danger text-xs" onclick="__abrirAnularVenta(${idx})" title="Anular esta venta (revierte stock e ingresos)">🚫 Anular venta</button>` : ''}
+      </div>
     </div>
 
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-xs">
@@ -5930,6 +6163,53 @@ window.__copiarDetalleVenta = (idx) => {
     () => toast('Resumen copiado','ok'),
     () => toast('No se pudo copiar','err')
   );
+};
+
+/* Modal para anular una venta. Pide motivo obligatorio (mín. 4 chars).
+   Sólo se llama desde __verDetalleVenta cuando isAdmin() y v.anulada===false. */
+window.__abrirAnularVenta = (idx) => {
+  const v = _repDetalle.ventas[idx];
+  if(!v) return;
+  if(!isAdmin()){ toast('No tienes permisos para anular ventas','err'); return; }
+  openModal(`<div class="p-6 max-w-md mx-auto">
+    <h3 class="text-lg font-bold mb-1" style="color:var(--err)">🚫 Anular venta #${v.id}</h3>
+    <p class="text-xs text-slate-500 mb-3">
+      Esta acción <b>revierte el stock</b> de cada producto al inventario,
+      <b>descuenta el ingreso</b> de los reportes y, si la caja sigue abierta,
+      ajusta también sus totales. Queda registro de quién la anuló y por qué.
+    </p>
+    <div class="bg-slate-50 border border-slate-200 rounded p-3 text-xs mb-3">
+      <div><span class="text-slate-500">Fecha:</span> <b>${fmtFechaCorta(v.fecha_hora)} ${fmtHora(v.fecha_hora)}</b></div>
+      <div><span class="text-slate-500">Vendedor:</span> <b>${esc(v.vendedor_nombre)||'—'}</b></div>
+      <div><span class="text-slate-500">Total:</span> <b class="text-emerald-700">${fmt(v.total)}</b></div>
+      <div><span class="text-slate-500">Ítems:</span> <b>${(v.items||[]).length}</b></div>
+    </div>
+    <form id="formAnularVenta" class="space-y-3">
+      <div>
+        <label class="label">Motivo de la anulación *</label>
+        <textarea id="anularMotivo" class="input" rows="3" required minlength="4"
+          placeholder="Ej: cobro duplicado, error en el producto, cliente devolvió la compra…"></textarea>
+        <div class="text-[11px] text-slate-400 mt-1">Mínimo 4 caracteres. Quedará registrado en el reporte de ventas anuladas.</div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn btn-danger">🚫 Anular venta</button>
+      </div>
+    </form>
+  </div>`);
+  $('#formAnularVenta').addEventListener('submit', e => _lockSubmit(e, async () => {
+    const motivo = String($('#anularMotivo').value||'').trim();
+    if(motivo.length < 4){ toast('Indica el motivo (mín. 4 caracteres)','err'); return; }
+    try{
+      await api('anularVenta', { venta_id: v.id, motivo });
+      toast('Venta anulada','ok');
+      closeModal();
+      // Recargar reportes para reflejar el cambio
+      cargarReportes();
+      // Si hay sección de anuladas visible, refrescar
+      if(typeof cargarVentasAnuladas === 'function') cargarVentasAnuladas();
+    }catch(err){ toast('No se pudo anular: '+err.message,'err'); }
+  }, 'Anulando venta…'));
 };
 
 function descargarSabanaExcel(){
@@ -8467,11 +8747,13 @@ window.RRHH = (function(){
     } else if(w.tipoContrato==='part'){
       // Por defecto: pagar horas PROGRAMADAS (jornada pactada completa).
       // Si descuentoFaltantes=true, pagar sólo las efectivamente trabajadas (contabilizadas).
-      const horasPagables = d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas;
-      const sh = horasPagables * d.valorHora;
+      // Las horas en feriado se pagan APARTE con recargo, NO como ordinarias.
+      const basePagables = d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas;
+      const horasOrdinarias = Math.max(0, round2(basePagables - (d.horasFeriado||0)));
+      const sh = horasOrdinarias * d.valorHora;
       const lblBase = d.descuentoFaltantes
-        ? 'Pago por hora ('+horasPagables+'h trab × '+fmtCLP(d.valorHora)+')'
-        : 'Pago por hora ('+horasPagables+'h prog × '+fmtCLP(d.valorHora)+')';
+        ? 'Hrs ordinarias ('+horasOrdinarias+'h trab × '+fmtCLP(d.valorHora)+')'
+        : 'Hrs ordinarias ('+horasOrdinarias+'h prog × '+fmtCLP(d.valorHora)+')';
       haberes.push({nombre:lblBase, monto:sh, imp:true});
       imp += sh;
       if(d.horasExtraAutorizadas>0){
@@ -8515,8 +8797,10 @@ function renderLiqEditor(){
     const d = state.liq.data;
     const isFull = w.tipoContrato==='full';
     const t = calcLiqTotals();
-    // Para part-time, las "horas ordinarias" son las programadas (o contabilizadas si descontoFaltantes está activo).
-    const horasOrdinarias = isFull ? null : (d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas);
+    // Para part-time: hrs ordinarias = programadas - feriado (o contabilizadas - feriado si descontando).
+    // Las hrs feriado se pagan aparte con recargo, no como ordinarias.
+    const baseHorasPagables = d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas;
+    const horasOrdinarias = isFull ? null : Math.max(0, round2(baseHorasPagables - (d.horasFeriado||0)));
     const valorHoraFer = d.valorHora * (1 + (d.recargoFeriadoPct||0)/100);
     let html = '<div class="bg-white rounded-xl border border-slate-200 p-5 mb-3">'+
       '<h4 class="font-semibold mb-3">Cálculo de la liquidación</h4>'+
@@ -8525,7 +8809,7 @@ function renderLiqEditor(){
         '<div><label class="label">Valor hora ordinaria</label><input type="number" step="0.01" class="input" value="'+d.valorHora+'" oninput="RRHH._updLiq(\'valorHora\',this.value,true)"></div>'+
         (isFull
           ? '<div><label class="label">Sueldo bruto</label><input type="number" step="1" class="input" value="'+d.sueldoBase+'" oninput="RRHH._updLiq(\'sueldoBase\',this.value,true)"></div>'
-          : '<div><label class="label">Hrs ordinarias a pagar</label><div class="font-semibold">'+horasOrdinarias+'h</div><p class="text-xs text-slate-500 mt-1">'+(d.descuentoFaltantes?'Contabilizadas (con descuento)':'Programadas (jornada pactada)')+'</p></div>')+
+          : '<div><label class="label">Hrs ordinarias a pagar</label><div class="font-semibold">'+horasOrdinarias+'h</div><p class="text-xs text-slate-500 mt-1">'+(d.descuentoFaltantes?'Contabilizadas':'Programadas')+' menos hrs feriado ('+(d.horasFeriado||0)+'h)</p></div>')+
         '<div><label class="label">Gratificación 25%</label><select class="input" onchange="RRHH._updLiq(\'gratificacion\',this.value===\'si\',false)"><option value="si" '+(d.gratificacion?'selected':'')+'>Sí</option><option value="no" '+(!d.gratificacion?'selected':'')+'>No</option></select></div>'+
       '</div>'+
       '<hr class="my-3 border-slate-200"><h5 class="font-semibold mb-2 text-sm">Horas del período</h5>'+
