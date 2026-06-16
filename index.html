@@ -124,11 +124,12 @@
   .rrhh-payslip .ps-conf{font-size:11px;margin:8px 0 24px;}
   .rrhh-payslip table.ps-firma{width:100%;border-collapse:collapse;margin-top:24px;font-size:11px;}
   .rrhh-payslip table.ps-firma td{border:1px solid #888;padding:14px 10px;width:50%;vertical-align:top;text-align:center;}
-  .rrhh-payslip table.ps-firma td .ln{border-top:1px solid #000;margin-bottom:8px;width:80%;margin-left:auto;margin-right:auto;height:30px;}
+  /* Espacio para firmar ARRIBA de la línea. La línea va abajo del área en blanco. */
+  .rrhh-payslip table.ps-firma td .ln{border-bottom:1px solid #000;margin-bottom:6px;width:85%;margin-left:auto;margin-right:auto;height:42px;}
   .rrhh-payslip .ps-cierre{font-size:11px;text-align:left;margin-top:18px;}
   @media print{
-    /* Configurar página A4 con márgenes reducidos para que el documento quepa */
-    @page{size:A4;margin:10mm 12mm;}
+    /* Configurar página A4 con márgenes mínimos para que el documento quepa en 1 hoja */
+    @page{size:A4;margin:8mm 10mm;}
     /* Ocultar TODO en pantalla */
     body * { visibility: hidden !important; }
     /* Sólo mostrar el documento del payslip */
@@ -136,16 +137,16 @@
     .rrhh-payslip{position:absolute !important;left:0;top:0;width:100%;
       border:none !important;margin:0 !important;padding:0 !important;
       max-width:none !important;box-shadow:none !important;}
-    /* Compactar fuente y espaciados para impresión */
-    .rrhh-payslip .ps-title{font-size:16px !important;margin-bottom:2px !important;}
-    .rrhh-payslip .ps-empresa{font-size:13px !important;margin-bottom:2px !important;}
-    .rrhh-payslip .ps-periodo{font-size:11px !important;margin-bottom:8px !important;}
-    .rrhh-payslip .ps-sec-title{font-size:11px !important;padding:4px 8px !important;margin-top:8px !important;}
-    .rrhh-payslip table.ps-tbl{font-size:10.5px !important;margin-bottom:4px !important;}
-    .rrhh-payslip table.ps-tbl td{padding:3px 6px !important;}
-    .rrhh-payslip table.ps-tbl-detalle th{font-size:10.5px !important;padding:3px 6px !important;}
-    .rrhh-payslip table.ps-tbl-detalle tr.sec td{padding:4px 6px !important;}
-    .rrhh-payslip table.ps-tbl-detalle tr.grand td{padding:6px 8px !important;font-size:11.5px !important;
+    /* Compactar fuente y espaciados para impresión (caber en 1 hoja A4) */
+    .rrhh-payslip .ps-title{font-size:14px !important;margin-bottom:1px !important;}
+    .rrhh-payslip .ps-empresa{font-size:12px !important;margin-bottom:1px !important;}
+    .rrhh-payslip .ps-periodo{font-size:10px !important;margin-bottom:4px !important;}
+    .rrhh-payslip .ps-sec-title{font-size:10px !important;padding:3px 6px !important;margin-top:5px !important;}
+    .rrhh-payslip table.ps-tbl{font-size:9.5px !important;margin-bottom:2px !important;}
+    .rrhh-payslip table.ps-tbl td{padding:2px 5px !important;line-height:1.25 !important;}
+    .rrhh-payslip table.ps-tbl-detalle th{font-size:9.5px !important;padding:2px 5px !important;}
+    .rrhh-payslip table.ps-tbl-detalle tr.sec td{padding:3px 5px !important;}
+    .rrhh-payslip table.ps-tbl-detalle tr.grand td{padding:4px 6px !important;font-size:10.5px !important;
       background:#10b981 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .rrhh-payslip .ps-sec-title{
       background:#222 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -157,13 +158,14 @@
       background:#e8e8e8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     .rrhh-payslip table.ps-tbl-detalle tr.tot td{
       background:#f5f5f5 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .rrhh-payslip .ps-nota{font-size:10px !important;margin:6px 0 !important;padding:4px 8px !important;
+    .rrhh-payslip .ps-nota{font-size:9px !important;margin:4px 0 !important;padding:3px 6px !important;
       background:#fff8e1 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .rrhh-payslip .ps-conf{font-size:10px !important;margin:4px 0 12px !important;}
-    .rrhh-payslip table.ps-firma{margin-top:14px !important;font-size:10px !important;}
-    .rrhh-payslip table.ps-firma td{padding:8px 8px !important;}
-    .rrhh-payslip table.ps-firma td .ln{height:20px !important;margin-bottom:4px !important;}
-    .rrhh-payslip .ps-cierre{font-size:10px !important;margin-top:10px !important;}
+    .rrhh-payslip .ps-conf{font-size:9px !important;margin:3px 0 8px !important;}
+    .rrhh-payslip table.ps-firma{margin-top:8px !important;font-size:9.5px !important;}
+    .rrhh-payslip table.ps-firma td{padding:6px 8px 8px !important;line-height:1.25 !important;}
+    .rrhh-payslip table.ps-firma td .ln{height:32px !important;margin-bottom:3px !important;
+      border-bottom:1px solid #000 !important;border-top:none !important;width:85% !important;}
+    .rrhh-payslip .ps-cierre{font-size:9.5px !important;margin-top:6px !important;}
     /* Evitar saltos de página dentro de tablas */
     .rrhh-payslip table{page-break-inside:avoid;}
     .rrhh-payslip tr{page-break-inside:avoid;}
@@ -7543,7 +7545,7 @@ window.RRHH = (function(){
               '<td>'+escapeHtml(a.descripcion||'–')+'</td>'+
               '<td class="text-right font-semibold">'+fmtCLP(a.monto)+'</td>'+
               '<td class="text-center text-xs text-slate-500">'+(a.periodoDescuento?formatPeriodo(a.periodoDescuento):'–')+'</td>'+
-              '<td class="text-center">'+(a.descontado?'<span class="chip chip-ok">Descontado</span>':'<span class="chip chip-warn">Pendiente</span>')+'</td>'+
+              '<td class="text-center">'+(a.descontado?'<span class="chip chip-ok">Pagado</span>':'<span class="chip chip-warn">Pendiente</span>')+'</td>'+
               (canEdit?'<td class="text-right whitespace-nowrap">'+
                 (a.descontado?'':'<button class="text-xs text-blue-600 hover:underline mr-2" onclick="RRHH.openAdelantoForm(\''+w.id+'\',\''+a.id+'\')">Editar</button>')+
                 '<button class="text-xs text-red-600 hover:underline" onclick="RRHH.deleteAdelanto(\''+a.id+'\')">Eliminar</button>'+
@@ -8769,7 +8771,11 @@ window.RRHH = (function(){
       horasExtraAutorizadas: 0,
       descuentoFaltantes: false,  // por defecto NO descontar — pago por jornada pactada completa
       gratificacion: w.gratificacion==='si',
-      afp: DB.payslipParams.afp, salud: DB.payslipParams.salud, afc: DB.payslipParams.afc,
+      // % AFP/Salud/AFC: usar valores específicos del trabajador si están definidos,
+      // sino caer al default global (DB.payslipParams).
+      afp: (w.afpPct != null ? Number(w.afpPct) : DB.payslipParams.afp),
+      salud: (w.saludPct != null ? Number(w.saludPct) : DB.payslipParams.salud),
+      afc: (w.afcPct != null ? Number(w.afcPct) : DB.payslipParams.afc),
       otrosDescuentos: [], otrosHaberes: [],
       adelantoIds: adelantosPeriodo.map(a=>a.id)  // ids de los adelantos a descontar
     };
@@ -8905,7 +8911,7 @@ function renderLiqEditor(){
                 '<td>'+(a.fecha?fmtDate(a.fecha):'–')+'</td>'+
                 '<td>'+escapeHtml(a.descripcion||'–')+'</td>'+
                 '<td class="text-right font-semibold">'+fmtCLP(a.monto)+'</td>'+
-                '<td class="text-center text-xs">'+(a.descontado?'<span class="chip chip-ok">Ya descontado</span>':'<span class="chip chip-warn">Pendiente</span>')+'</td>'+
+                '<td class="text-center text-xs">'+(a.descontado?'<span class="chip chip-ok">Pagado</span>':'<span class="chip chip-warn">Pendiente</span>')+'</td>'+
               '</tr>';
             }).join('')+'</tbody></table></div>'+
           '<p class="text-xs text-slate-500 mt-1">Los adelantos seleccionados se descuentan automáticamente del líquido a pago. Al guardar la liquidación quedan marcados como "descontados".</p>';
@@ -9187,7 +9193,16 @@ function downloadPayslipHtml(){
     });
     try {
       const liqRes = await api('guardarLiquidacionRRHH', { liquidacion: { workerId: w.id, periodo: state.liq.periodo, fechaEmision, snapshot, totalHaberes: t.tH, totalDescuentos: t.tD, liquidoPago: t.liq } });
-      await api('setConfigRRHH', { config: { afp: state.liq.data.afp, salud: state.liq.data.salud, afc: state.liq.data.afc } });
+      // Guardar los % usados en este liq EN EL TRABAJADOR (no en config global).
+      // Cada trabajador puede tener su propia AFP, Isapre, AFC distinta.
+      await api('actualizarTrabajadorRRHH', { id: w.id, trabajador: {
+        afpPct: state.liq.data.afp,
+        saludPct: state.liq.data.salud,
+        afcPct: state.liq.data.afc
+      } });
+      w.afpPct = state.liq.data.afp;
+      w.saludPct = state.liq.data.salud;
+      w.afcPct = state.liq.data.afc;
       if(adelantoIds.length){
         await api('marcarAdelantosDescontados', { ids: adelantoIds, liquidacionId: liqRes && liqRes.id ? String(liqRes.id) : '' });
         adelantoIds.forEach(id => {
