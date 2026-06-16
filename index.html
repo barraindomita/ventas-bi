@@ -7233,6 +7233,10 @@ window.RRHH = (function(){
   function newId(prefix){ return (prefix||'i_')+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3); }
 
   /* ── Utilidades ── */
+  // Constantes del empleador. Fijas por decisión del negocio.
+  const EMPRESA_RAZON_SOCIAL = 'Punto & Copa SpA';
+  const EMPRESA_DIRECCION = 'Esmeralda 686, Valdivia';
+  const EMPRESA_CIUDAD = 'Valdivia';
   const DAY_NAMES = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   const DAY_NAMES_FULL = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
   const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -7477,6 +7481,10 @@ window.RRHH = (function(){
         '<hr class="my-4 border-slate-200"><div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">'+
           '<div><div class="text-xs text-slate-500 uppercase">Teléfono</div><div>'+escapeHtml(w.telefono||'–')+'</div></div>'+
           '<div><div class="text-xs text-slate-500 uppercase">Fecha nacimiento</div><div>'+(w.fechaNacimiento?fmtDate(w.fechaNacimiento):'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">Cargo</div><div>'+escapeHtml(w.cargo||'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">Jornada</div><div>'+escapeHtml(w.jornada||'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">Previsión salud</div><div>'+escapeHtml(w.prevision||'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">AFP</div><div>'+escapeHtml(w.afpNombre||'–')+'</div></div>'+
           '<div><div class="text-xs text-slate-500 uppercase">Sueldo bruto mensual</div><div class="font-semibold">'+(w.sueldoBase?fmtCLP(w.sueldoBase):'–')+'</div></div>'+
           '<div><div class="text-xs text-slate-500 uppercase">Valor hora</div><div class="font-semibold">'+(w.valorHora?fmtCLP(w.valorHora):'–')+'</div></div>'+
           '<div><div class="text-xs text-slate-500 uppercase">Gratificación 25%</div><div>'+(w.gratificacion==='si'?'Sí':'No')+'</div></div>'+
@@ -7536,7 +7544,14 @@ window.RRHH = (function(){
           '</select></div>'+
           '<div><label class="label">Sueldo bruto mensual (CLP)</label><input type="number" name="sueldoBase" class="input" min="0" placeholder="Ej: 500000" value="'+(w?.sueldoBase||'')+'"></div>'+
           '<div><label class="label">Valor hora ordinaria (CLP)</label><input type="number" name="valorHora" class="input" step="0.01" min="0" placeholder="3572.4 ó 3208" value="'+(w?.valorHora||'')+'"></div>'+
-          '<div><label class="label">Gratificación 25% (full-time)</label><select name="gratificacion" class="input"><option value="si" '+(w?.gratificacion==='si'?'selected':'')+'>Sí, sumar 25%</option><option value="no" '+(w?.gratificacion==='no'?'selected':'')+'>No</option></select></div>'+
+          '<div><label class="label">Gratificación 25%</label><select name="gratificacion" class="input"><option value="si" '+(w?.gratificacion==='si'?'selected':'')+'>Sí, sumar 25%</option><option value="no" '+(w?.gratificacion==='no'?'selected':'')+'>No</option></select></div>'+
+        '</div>'+
+        '<hr class="my-3 border-slate-200"><h5 class="text-sm font-semibold mb-2 text-slate-600">Datos para la liquidación</h5>'+
+        '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">'+
+          '<div><label class="label">Cargo</label><input type="text" name="cargo" class="input" placeholder="Administradora, Vendedor, etc." value="'+escapeHtml(w?.cargo||'')+'"></div>'+
+          '<div><label class="label">Jornada</label><input type="text" name="jornada" class="input" placeholder="42 horas semanales (jornada completa)" value="'+escapeHtml(w?.jornada||'')+'"></div>'+
+          '<div><label class="label">Previsión de salud</label><input type="text" name="prevision" class="input" placeholder="FONASA / Isapre Banmédica / etc." value="'+escapeHtml(w?.prevision||'')+'"></div>'+
+          '<div><label class="label">AFP</label><input type="text" name="afpNombre" class="input" placeholder="AFP Modelo / Capital / etc." value="'+escapeHtml(w?.afpNombre||'')+'"></div>'+
         '</div>'+
         '<div class="flex gap-2 justify-end pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar</button></div>'+
       '</form></div>';
@@ -8680,42 +8695,18 @@ window.RRHH = (function(){
     const def = periods.length?periods[periods.length-1]:new Date().toISOString().slice(0,7);
     root.innerHTML =
       '<div class="bg-white rounded-xl border border-slate-200 p-5 mb-3"><h4 class="font-semibold mb-3">Datos de la liquidación</h4>'+
-        '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">'+
+        '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">'+
           '<div><label class="label">Trabajador</label><select id="rrhhLiqWorker" class="input" onchange="RRHH.onLiqWorkerOrPeriodoChange()"><option value="">Seleccionar...</option>'+DB.workers.map(w=>'<option value="'+w.id+'">'+escapeHtml(w.nombre)+'</option>').join('')+'</select></div>'+
           '<div><label class="label">Período</label><input type="month" id="rrhhLiqPeriodo" class="input" value="'+def+'" onchange="RRHH.onLiqWorkerOrPeriodoChange()"></div>'+
-          '<div><label class="label">Razón social</label><input type="text" id="rrhhLiqEmpresa" class="input" value="'+escapeHtml(localStorage.getItem('rrhh_empresa')||'Barra Indómita')+'" oninput="localStorage.setItem(\'rrhh_empresa\',this.value)"></div>'+
           '<div><label class="label">RUT empleador</label><input type="text" id="rrhhLiqRutEmpresa" class="input" placeholder="76.123.456-7" value="'+escapeHtml(localStorage.getItem('rrhh_rut_empresa')||'')+'" oninput="localStorage.setItem(\'rrhh_rut_empresa\',this.value)"></div>'+
-          '<div><label class="label">Dirección empresa</label><input type="text" id="rrhhLiqDireccion" class="input" placeholder="Calle 123, Ciudad" value="'+escapeHtml(localStorage.getItem('rrhh_direccion_empresa')||'')+'" oninput="localStorage.setItem(\'rrhh_direccion_empresa\',this.value)"></div>'+
-          '<div><label class="label">Ciudad emisión</label><input type="text" id="rrhhLiqCiudad" class="input" placeholder="Valdivia" value="'+escapeHtml(localStorage.getItem('rrhh_ciudad_empresa')||'')+'" oninput="localStorage.setItem(\'rrhh_ciudad_empresa\',this.value)"></div>'+
         '</div>'+
-        '<details class="mt-3"><summary class="text-sm font-semibold text-slate-600 cursor-pointer">Datos del trabajador para el documento</summary>'+
-          '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3" id="rrhhLiqExtrasGrid">'+
-            '<div><label class="label">Cargo</label><input type="text" id="rrhhLiqCargo" class="input" placeholder="Administradora, Vendedor, etc."></div>'+
-            '<div><label class="label">Jornada</label><input type="text" id="rrhhLiqJornada" class="input" placeholder="42 horas semanales"></div>'+
-            '<div><label class="label">Previsión salud</label><input type="text" id="rrhhLiqPrevision" class="input" placeholder="FONASA / Isapre X"></div>'+
-            '<div><label class="label">AFP</label><input type="text" id="rrhhLiqAfp" class="input" placeholder="AFP Modelo"></div>'+
-          '</div>'+
-          '<p class="text-xs text-slate-500 mt-2">Estos campos se guardan por trabajador y se reutilizan en la próxima liquidación.</p>'+
-        '</details>'+
+        '<p class="text-xs text-slate-500 mt-3"><strong>Empleador:</strong> '+escapeHtml(EMPRESA_RAZON_SOCIAL)+' · '+escapeHtml(EMPRESA_DIRECCION)+'. Los datos del trabajador (cargo, jornada, previsión, AFP) se cargan desde su ficha en la pestaña Trabajadores.</p>'+
       '</div>'+
       '<div id="rrhhLiqEditor"></div>';
   }
   function onLiqWorkerOrPeriodoChange(){
     state.liq.workerId = document.getElementById('rrhhLiqWorker').value || null;
     state.liq.periodo = document.getElementById('rrhhLiqPeriodo').value || null;
-    // Cargar los datos extras del trabajador (cargo, jornada, previsión, AFP) desde localStorage.
-    if(state.liq.workerId){
-      const extras = JSON.parse(localStorage.getItem('rrhh_liq_extras_'+state.liq.workerId) || '{}');
-      ['Cargo','Jornada','Prevision','Afp'].forEach(k=>{
-        const el = document.getElementById('rrhhLiq'+k);
-        if(el) el.value = extras[k.toLowerCase()] || '';
-        if(el) el.oninput = ()=>{
-          const cur = JSON.parse(localStorage.getItem('rrhh_liq_extras_'+state.liq.workerId) || '{}');
-          cur[k.toLowerCase()] = el.value;
-          localStorage.setItem('rrhh_liq_extras_'+state.liq.workerId, JSON.stringify(cur));
-        };
-      });
-    }
     if(state.liq.workerId && state.liq.periodo){ computeLiqInitial(); renderLiqEditor(); }
     else document.getElementById('rrhhLiqEditor').innerHTML = '';
   }
@@ -8889,10 +8880,10 @@ function renderLiqEditor(){
     '</div>'+
     '<div class="bg-white rounded-xl border border-slate-200 p-5 mb-3"><h4 class="font-semibold mb-3">Resumen</h4>'+
       '<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">'+
-        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Total haberes</div><div class="text-xl font-bold">'+fmtCLP(t.tH)+'</div></div>'+
-        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Imponible</div><div class="text-xl font-bold">'+fmtCLP(t.imp)+'</div></div>'+
-        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Descuentos</div><div class="text-xl font-bold text-red-600">'+fmtCLP(t.tD)+'</div></div>'+
-        '<div class="rounded-lg p-3 border-2 border-green-600 bg-green-50"><div class="text-xs text-green-700 uppercase">Líquido a pago</div><div class="text-2xl font-bold text-green-700">'+fmtCLP(t.liq)+'</div></div>'+
+        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Total haberes</div><div class="text-xl font-bold" id="rrhhLiqTH">'+fmtCLP(t.tH)+'</div></div>'+
+        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Imponible</div><div class="text-xl font-bold" id="rrhhLiqImp">'+fmtCLP(t.imp)+'</div></div>'+
+        '<div class="bg-slate-50 rounded-lg p-3 border border-slate-200"><div class="text-xs text-slate-500 uppercase">Descuentos</div><div class="text-xl font-bold text-red-600" id="rrhhLiqTD">'+fmtCLP(t.tD)+'</div></div>'+
+        '<div class="rounded-lg p-3 border-2 border-green-600 bg-green-50"><div class="text-xs text-green-700 uppercase">Líquido a pago</div><div class="text-2xl font-bold text-green-700" id="rrhhLiqLiq">'+fmtCLP(t.liq)+'</div></div>'+
       '</div>'+
       '<div class="flex gap-2 flex-wrap"><button class="btn btn-primary" onclick="RRHH.generarLiquidacionPreview()">📄 Generar liquidación</button><button class="btn btn-ghost" onclick="RRHH.saveLiquidacion()">💾 Guardar en historial</button></div>'+
     '</div>'+
@@ -8901,26 +8892,31 @@ function renderLiqEditor(){
   }
   function _updLiq(field, val, num){
     state.liq.data[field] = num?(parseFloat(val)||0):val;
-    // Preservar el foco del input que está siendo editado: el render destruye
-    // el DOM completo, lo que hace que el browser pierda el cursor mientras
-    // el usuario está escribiendo. Guardamos qué input estaba activo y su
-    // posición de cursor antes del render, luego los restauramos.
-    const active = document.activeElement;
-    const focusedField = (active && active.dataset && active.dataset.liqField) ? active.dataset.liqField : null;
-    let cursorPos = null;
-    if(focusedField && active.selectionStart != null){
-      try { cursorPos = active.selectionStart; } catch(e){}
+    // Cambios estructurales (selects de gratificación/descuentoFaltantes) requieren
+    // re-renderizar todo el editor porque afectan qué campos se muestran.
+    // Cambios numéricos (typing en inputs) NO deben re-renderizar — los inputs
+    // type=number no exponen selectionStart, así que el browser resetea el cursor
+    // al inicio al re-renderizar. En su lugar, sólo actualizamos el resumen.
+    const fullRender = ['gratificacion','descuentoFaltantes','horasFeriado'];
+    if(fullRender.indexOf(field) >= 0){
+      renderLiqEditor();
+    } else {
+      _refreshLiqSummary();
     }
-    renderLiqEditor();
-    if(focusedField){
-      const restored = document.querySelector('[data-liq-field="'+focusedField+'"]');
-      if(restored){
-        restored.focus();
-        if(cursorPos != null){
-          try { restored.setSelectionRange(cursorPos, cursorPos); } catch(e){}
-        }
-      }
-    }
+  }
+  function _refreshLiqSummary(){
+    const t = calcLiqTotals(); if(!t) return;
+    const map = {
+      rrhhLiqTH: t.tH, rrhhLiqImp: t.imp,
+      rrhhLiqTD: t.tD, rrhhLiqLiq: t.liq
+    };
+    Object.keys(map).forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.textContent = fmtCLP(map[id]);
+    });
+    // Si hay preview generado, refrescarlo también
+    const prev = document.getElementById('rrhhLiqDocPreview');
+    if(prev && prev.querySelector('.rrhh-payslip')) generarLiquidacionPreview();
   }
   function _updOtroDesc(i, k, v){ state.liq.data.otrosDescuentos[i][k] = k==='monto'?(parseFloat(v)||0):v; if(k==='monto') renderLiqEditor(); }
   function _delOtroDesc(i){ state.liq.data.otrosDescuentos.splice(i,1); renderLiqEditor(); }
@@ -8940,14 +8936,15 @@ function renderLiqEditor(){
     const w = DB.workers.find(x=>x.id===state.liq.workerId);
     const t = calcLiqTotals(); if(!w||!t) return;
     const d = state.liq.data;
-    const empresa = document.getElementById('rrhhLiqEmpresa').value || 'Barra Indómita';
-    const rutE = document.getElementById('rrhhLiqRutEmpresa').value || '–';
-    const direccion = document.getElementById('rrhhLiqDireccion').value || '';
-    const ciudad = document.getElementById('rrhhLiqCiudad').value || '';
-    const cargoEl = document.getElementById('rrhhLiqCargo'); const cargo = cargoEl ? cargoEl.value : '';
-    const jornadaEl = document.getElementById('rrhhLiqJornada'); const jornada = jornadaEl ? jornadaEl.value : '';
-    const previsionEl = document.getElementById('rrhhLiqPrevision'); const prevision = previsionEl ? previsionEl.value : '';
-    const afpEl = document.getElementById('rrhhLiqAfp'); const afpNombre = afpEl ? afpEl.value : '';
+    const empresa = EMPRESA_RAZON_SOCIAL;
+    const rutE = (document.getElementById('rrhhLiqRutEmpresa') && document.getElementById('rrhhLiqRutEmpresa').value) || '–';
+    const direccion = EMPRESA_DIRECCION;
+    const ciudad = EMPRESA_CIUDAD;
+    // Datos del trabajador: vienen de su ficha (w.cargo, w.jornada, w.prevision, w.afpNombre)
+    const cargo = w.cargo || '';
+    const jornada = w.jornada || '';
+    const prevision = w.prevision || '';
+    const afpNombre = w.afpNombre || '';
     const fe = new Date();
     const isFull = w.tipoContrato==='full';
 
