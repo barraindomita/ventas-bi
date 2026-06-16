@@ -127,9 +127,46 @@
   .rrhh-payslip table.ps-firma td .ln{border-top:1px solid #000;margin-bottom:8px;width:80%;margin-left:auto;margin-right:auto;height:30px;}
   .rrhh-payslip .ps-cierre{font-size:11px;text-align:left;margin-top:18px;}
   @media print{
-    .topbar-main,.sidebar,.no-print,#rrhhTabs{display:none !important;}
-    .rrhh-payslip{border:none;margin:0;padding:0;}
-    main{padding:0 !important;}
+    /* Configurar página A4 con márgenes reducidos para que el documento quepa */
+    @page{size:A4;margin:10mm 12mm;}
+    /* Ocultar TODO en pantalla */
+    body * { visibility: hidden !important; }
+    /* Sólo mostrar el documento del payslip */
+    .rrhh-payslip, .rrhh-payslip * { visibility: visible !important; }
+    .rrhh-payslip{position:absolute !important;left:0;top:0;width:100%;
+      border:none !important;margin:0 !important;padding:0 !important;
+      max-width:none !important;box-shadow:none !important;}
+    /* Compactar fuente y espaciados para impresión */
+    .rrhh-payslip .ps-title{font-size:16px !important;margin-bottom:2px !important;}
+    .rrhh-payslip .ps-empresa{font-size:13px !important;margin-bottom:2px !important;}
+    .rrhh-payslip .ps-periodo{font-size:11px !important;margin-bottom:8px !important;}
+    .rrhh-payslip .ps-sec-title{font-size:11px !important;padding:4px 8px !important;margin-top:8px !important;}
+    .rrhh-payslip table.ps-tbl{font-size:10.5px !important;margin-bottom:4px !important;}
+    .rrhh-payslip table.ps-tbl td{padding:3px 6px !important;}
+    .rrhh-payslip table.ps-tbl-detalle th{font-size:10.5px !important;padding:3px 6px !important;}
+    .rrhh-payslip table.ps-tbl-detalle tr.sec td{padding:4px 6px !important;}
+    .rrhh-payslip table.ps-tbl-detalle tr.grand td{padding:6px 8px !important;font-size:11.5px !important;
+      background:#10b981 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .rrhh-payslip .ps-sec-title{
+      background:#222 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .rrhh-payslip table.ps-tbl-detalle th{
+      background:#222 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .rrhh-payslip table.ps-tbl-data td.lbl{
+      background:#f1f1f1 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .rrhh-payslip table.ps-tbl-detalle tr.sec td{
+      background:#e8e8e8 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .rrhh-payslip table.ps-tbl-detalle tr.tot td{
+      background:#f5f5f5 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .rrhh-payslip .ps-nota{font-size:10px !important;margin:6px 0 !important;padding:4px 8px !important;
+      background:#fff8e1 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .rrhh-payslip .ps-conf{font-size:10px !important;margin:4px 0 12px !important;}
+    .rrhh-payslip table.ps-firma{margin-top:14px !important;font-size:10px !important;}
+    .rrhh-payslip table.ps-firma td{padding:8px 8px !important;}
+    .rrhh-payslip table.ps-firma td .ln{height:20px !important;margin-bottom:4px !important;}
+    .rrhh-payslip .ps-cierre{font-size:10px !important;margin-top:10px !important;}
+    /* Evitar saltos de página dentro de tablas */
+    .rrhh-payslip table{page-break-inside:avoid;}
+    .rrhh-payslip tr{page-break-inside:avoid;}
   }
   /* Sub-stats dentro de la card combinada Bajo/Sin Stock */
   .dash-substats{display:flex;gap:14px;margin-top:2px;font-size:13px;font-weight:600;opacity:.95;}
@@ -9077,10 +9114,64 @@ function downloadPayslipHtml(){
   function shareWhatsApp(){
     const w = DB.workers.find(x=>x.id===state.liq.workerId);
     const t = calcLiqTotals(); if(!w||!t) return;
+    const d = state.liq.data;
     const phone = (w.telefono||'').replace(/[^0-9]/g,'');
-    const msg = 'Hola '+w.nombre.split(' ')[0]+', te comparto tu liquidación de '+formatPeriodo(state.liq.periodo)+'.\n\nTotal haberes: '+fmtCLP(t.tH)+'\nTotal descuentos: '+fmtCLP(t.tD)+'\n*Líquido a pago: '+fmtCLP(t.liq)+'*\n\nEnviaré el documento por separado para tu firma.';
+    const isFull = w.tipoContrato==='full';
+
+    // Calcular horas ordinarias mostradas en el mensaje
+    const horasOrd = isFull
+      ? (d.horasProgramadas||0)
+      : Math.max(0, round2((d.descuentoFaltantes?d.horasContabilizadas:d.horasProgramadas) - (d.horasFeriado||0)));
+    const horasFer = d.horasFeriado || 0;
+
+    // Buscar montos específicos
+    let sueldoBruto = 0, gratif = 0;
+    t.haberes.forEach(h=>{
+      const n = h.nombre.toLowerCase();
+      if(n.startsWith('gratificación')) gratif = h.monto;
+      else sueldoBruto += h.monto;  // todo lo demás es bruto antes de gratif
+    });
+
+    // Descuentos por tipo
+    let dAFP = 0, dSalud = 0, dAFC = 0;
+    t.desc.forEach(x => {
+      const n = x.nombre.toLowerCase();
+      if(n.startsWith('afp')) dAFP = x.monto;
+      else if(n.startsWith('salud')) dSalud = x.monto;
+      else if(n.startsWith('afc')) dAFC = x.monto;
+    });
+
+    // Adelantos del período (los incluidos en la liquidación)
+    const adelantosLineas = (d.adelantoIds||[]).map(id=>{
+      const a = (DB.adelantos||[]).find(x=>x.id===id);
+      if(!a) return null;
+      const f = a.fecha?new Date(a.fecha+'T12:00:00'):null;
+      const fLabel = f ? f.getDate()+' de '+['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][f.getMonth()] : '';
+      return '• Anticipo '+fLabel+': -'+fmtCLP(a.monto);
+    }).filter(Boolean);
+
+    // Construir mensaje
+    const lineas = [
+      'Hola '+w.nombre.split(' ')[0]+' 👋 Te comparto el detalle de tu liquidación de '+formatPeriodo(state.liq.periodo)+'.',
+      '',
+      '• '+horasOrd+' horas ordinarias trabajadas'
+    ];
+    if(horasFer>0) lineas.push('• '+horasFer+' horas con recargo (días feriados)');
+    lineas.push('• Sueldo bruto: '+fmtCLP(sueldoBruto));
+    if(gratif>0) lineas.push('• 25% gratificación: '+fmtCLP(gratif));
+    if(dAFP>0) lineas.push('• Descuento AFP: -'+fmtCLP(dAFP));
+    if(dSalud>0){
+      const prevLabel = (w.prevision||'').toLowerCase().includes('fonasa') ? 'Fonasa' : (w.prevision||'Salud');
+      lineas.push('• Descuento '+prevLabel+': -'+fmtCLP(dSalud));
+    }
+    if(dAFC>0) lineas.push('• Descuento AFC: -'+fmtCLP(dAFC));
+    adelantosLineas.forEach(l => lineas.push(l));
+    lineas.push('💰 *Líquido a Pago: '+fmtCLP(t.liq)+'*');
+    lineas.push('');
+    lineas.push('Cualquier duda quedo atento');
+
+    const msg = lineas.join('\n');
     const url = phone?'https://wa.me/'+phone+'?text='+encodeURIComponent(msg):'https://wa.me/?text='+encodeURIComponent(msg);
-    alert('Se abrirá WhatsApp con el mensaje. Recuerda adjuntar manualmente el PDF/HTML descargado.');
     window.open(url,'_blank');
   }
 
