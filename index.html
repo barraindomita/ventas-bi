@@ -1399,6 +1399,13 @@ const medioIcon  = m => MEDIO_ICON[m] || '•';
    "monto picker" se dispara para todos ellos. */
 const esDeliveryEfectivo = m =>
   m === 'delivery_efectivo' || m === 'rappi_efectivo' || m === 'pedidos_ya_efectivo';
+/* Delivery online: la app cobra al cliente por su canal (no entra cash a la caja).
+   También admite "monto cobrado por la app" para evidenciar la diferencia
+   contra el precio del local, sin sumarla como ingreso. */
+const esDeliveryOnline = m =>
+  m === 'delivery_online' || m === 'rappi_online' || m === 'pedidos_ya_online';
+/* Cualquier medio de delivery con campo "monto cobrado" (efectivo u online). */
+const esDeliveryConPicker = m => esDeliveryEfectivo(m) || esDeliveryOnline(m);
 
 function toast(msg, type='info'){
   const el = document.createElement('div');
@@ -3087,13 +3094,44 @@ async function eliminarProductoConfirm(id, btn){
 
 function openActualizarStock(id){
   const p = S.productos.find(x=>Number(x.id)===id); if(!p) return;
+  const vcAct = Number(p.valor_compra) || 0;
+  const vvAct = Number(p.valor_venta) || 0;
+  const margenAct = vcAct > 0 ? Math.round(((vvAct - vcAct)/vcAct) * 10000) / 100 : 0;
   openModal(`
     <div class="p-6" data-persistent="1">
       <h3 class="text-lg font-bold mb-1" style="color:var(--brand-dark)">Actualizar stock</h3>
-      <p class="text-sm text-slate-500 mb-4">${p.nombre} — Stock actual: <b>${p.stock_actual}</b></p>
+      <p class="text-sm text-slate-500 mb-4">${esc(p.nombre)} — Stock actual: <b>${p.stock_actual}</b></p>
       <form id="formStk" class="space-y-3">
-        <div><label class="label">Cantidad a sumar</label>
+        <div><label class="label">Cantidad a sumar *</label>
           <input name="cantidad" type="number" min="1" class="input" required autofocus></div>
+
+        <!-- Precios actuales del producto, editables por si la nueva partida
+             trae otros valores (es lo más común cuando sube el proveedor). -->
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+          <div class="text-xs font-semibold mb-2" style="color:var(--brand-dark)">💰 Valores actuales del producto <span class="text-slate-400 font-normal">(opcional: actualízalos si la nueva partida cambió)</span></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label">Precio de compra</label>
+              <input id="stkValorCompra" name="valor_compra" type="text" inputmode="numeric" class="input"
+                value="${fmtMoney(vcAct)}"
+                oninput="this.value=fmtMoney(parseMoney(this.value));__recalcMargenStk()">
+            </div>
+            <div>
+              <label class="label">Precio de venta</label>
+              <input id="stkValorVenta" name="valor_venta" type="text" inputmode="numeric" class="input"
+                value="${fmtMoney(vvAct)}"
+                oninput="this.value=fmtMoney(parseMoney(this.value));__recalcMargenStk()">
+            </div>
+          </div>
+          <div class="mt-2 p-2 rounded bg-white border border-slate-200">
+            <div class="flex justify-between items-center text-sm">
+              <span class="text-slate-500">Margen calculado</span>
+              <span id="stkMargenTxt" class="font-bold" style="color:var(--ok)">${margenAct}%</span>
+            </div>
+            <div id="stkMargenSubtxt" class="text-xs text-slate-400 mt-1">El margen se recalcula automáticamente al cambiar los precios.</div>
+          </div>
+        </div>
+
         <div><label class="label">Fecha de vencimiento <span class="text-xs text-slate-400">(opcional, actualiza la del producto)</span></label>
           <input name="fecha_vencimiento" type="date" class="input"
             value="${p.fecha_vencimiento ? String(p.fecha_vencimiento).slice(0,10) : ''}">
@@ -3107,9 +3145,35 @@ function openActualizarStock(id){
         </div>
       </form>
     </div>`);
+  // Recalcula el margen al editar precios.
+  window.__recalcMargenStk = () => {
+    const vc = parseMoney($('#stkValorCompra')?.value);
+    const vv = parseMoney($('#stkValorVenta')?.value);
+    const margen = vc > 0 ? Math.round(((vv - vc)/vc) * 10000) / 100 : 0;
+    const txt = $('#stkMargenTxt');
+    const sub = $('#stkMargenSubtxt');
+    if(txt){
+      txt.textContent = (isFinite(margen) ? margen : 0) + '%';
+      txt.style.color = margen < 0 ? 'var(--err)' : (margen < 20 ? 'var(--warn,#d97706)' : 'var(--ok)');
+    }
+    const cambio = (vc !== vcAct) || (vv !== vvAct);
+    if(sub){
+      sub.textContent = cambio
+        ? '⚠️ Valores modificados: al sumar stock también se actualizarán en el producto.'
+        : 'El margen se recalcula automáticamente al cambiar los precios.';
+      sub.className = cambio ? 'text-xs text-amber-700 font-semibold mt-1' : 'text-xs text-slate-400 mt-1';
+    }
+  };
   $('#formStk').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.producto_id = id;
+    // Convertir montos formateados → enteros
+    if(data.valor_compra !== undefined) data.valor_compra = parseMoney(data.valor_compra);
+    if(data.valor_venta !== undefined) data.valor_venta = parseMoney(data.valor_venta);
+    // Sólo enviamos los precios si cambiaron (evita escribir si el cajero no
+    // tocó nada — backend igualmente protege rol admin).
+    if(Number(data.valor_compra) === vcAct) delete data.valor_compra;
+    if(Number(data.valor_venta) === vvAct) delete data.valor_venta;
     try{ await api('actualizarStock', data); toast('Stock actualizado','ok'); closeModal(); cargarInventario(); }
     catch(err){ toast(err.message,'err'); throw err; }
   }, 'Actualizando stock…'));
@@ -3781,7 +3845,12 @@ function confirmCerrarCaja(){
   if(!S.caja) return;
   const montoInicial = Number(S.caja.monto_inicial) || 0;
   const totalEfectivo = Number(S.caja.total_efectivo) || 0;
-  const efectivoEsperado = montoInicial + totalEfectivo;
+  const comDelivery = Number(S.caja.total_comision_delivery) || 0;
+  const comDeliveryOnline = Number(S.caja.total_comision_delivery_online) || 0;
+  // El efectivo esperado incluye la comisión delivery EFECTIVO (cash extra
+  // entregado por el picker). La comisión ONLINE NO suma al efectivo: queda
+  // sólo evidenciada para cuadrar boletas/depósitos contra la app.
+  const efectivoEsperado = montoInicial + totalEfectivo + comDelivery;
   openModal(`
     <div class="p-6">
       <h3 class="text-lg font-bold mb-3" style="color:var(--err)">Cerrar caja</h3>
@@ -3794,12 +3863,19 @@ function confirmCerrarCaja(){
         ${MEDIOS_PAGO.map(m=>`<div class="flex justify-between text-slate-600"><span>${medioLabel(m)}</span><span>${fmt(S.caja['total_'+m])}</span></div>`).join('')}
       </div>
 
+      ${(comDelivery || comDeliveryOnline) ? `
+      <div class="rounded-lg p-3 mb-3 border border-indigo-200 bg-indigo-50 text-sm">
+        <div class="font-semibold text-indigo-900 mb-2">🛵 Diferencias delivery (precio app − precio local)</div>
+        ${comDelivery ? `<div class="flex justify-between text-indigo-900"><span>Cash extra entregado por picker <span class="text-xs text-indigo-700">(suma a efectivo esperado)</span></span><b>${fmt(comDelivery)}</b></div>` : ''}
+        ${comDeliveryOnline ? `<div class="flex justify-between text-indigo-900 mt-1"><span>Cobrado por la app — Delivery Online <span class="text-xs text-indigo-700">(no entra a caja, sólo evidencia)</span></span><b>${fmt(comDeliveryOnline)}</b></div>` : ''}
+      </div>` : ''}
+
       <!-- Efectivo esperado, calculado y destacado -->
       <div class="rounded-lg p-4 mb-3 border-2 border-emerald-300 bg-emerald-50">
         <div class="text-xs text-emerald-800 uppercase font-semibold mb-1">💵 Efectivo que debería quedar en caja</div>
         <div class="text-3xl font-bold text-emerald-700">${fmt(efectivoEsperado)}</div>
         <div class="text-xs text-emerald-700 mt-1">
-          Monto inicial <b>${fmt(montoInicial)}</b> + Ventas en efectivo <b>${fmt(totalEfectivo)}</b>
+          Monto inicial <b>${fmt(montoInicial)}</b> + Ventas en efectivo <b>${fmt(totalEfectivo)}</b>${comDelivery ? ` + Cash delivery <b>${fmt(comDelivery)}</b>` : ''}
         </div>
       </div>
 
@@ -3835,10 +3911,22 @@ function confirmCerrarCaja(){
           <label class="label">💼 Monto al sobre para depósito</label>
           <input id="inpSobreDeposito" name="monto_sobre_deposito" type="text" inputmode="numeric"
             class="input" placeholder="${fmtMoney(efectivoEsperado)}"
-            value="${fmtMoney(efectivoEsperado)}"
-            oninput="this.value=fmtMoney(parseMoney(this.value))">
+            value=""
+            oninput="this.value=fmtMoney(parseMoney(this.value));__recalcQuedaEnCaja()">
           <div class="text-xs text-slate-600 mt-1">
-            Cuánto efectivo se traspasa al sobre para llevar al banco. Por defecto se asume todo lo que quedó en caja. Si dejas algo de fondo para el siguiente turno, ingresa solo lo que va al sobre.
+            Cuánto efectivo se traspasa al sobre para llevar al banco. Si dejas algo de fondo para el siguiente turno, ingresa solo lo que va al sobre.
+          </div>
+          <!-- Monto que queda en caja después del retiro al sobre.
+               No editable: se autocalcula a partir del monto real (si el cajero
+               marcó "no coincide") o del efectivo esperado, menos el sobre. -->
+          <div class="mt-3 p-2 rounded border border-slate-300 bg-white">
+            <div class="flex justify-between items-center">
+              <div>
+                <div class="text-xs text-slate-500 uppercase font-semibold">Monto que queda en caja</div>
+                <div class="text-[11px] text-slate-400" id="quedaEnCajaSubtxt">Tras retirar el sobre — se autocalcula.</div>
+              </div>
+              <div id="quedaEnCajaTxt" class="text-xl font-bold text-slate-700">${fmt(efectivoEsperado)}</div>
+            </div>
           </div>
         </div>
 
@@ -3867,11 +3955,13 @@ function confirmCerrarCaja(){
       inpNota.required = true;
       if(!inpMonto.value) inpMonto.value = fmtMoney(efectivoEsperado);
       __recalcDiferencia();
+      __recalcQuedaEnCaja();
       inpMonto.focus();
     } else {
       box.classList.add('hidden');
       inpMonto.required = false;
       inpNota.required = false;
+      __recalcQuedaEnCaja();
     }
   });
   window.__recalcDiferencia = () => {
@@ -3891,6 +3981,41 @@ function confirmCerrarCaja(){
     } else {
       txt.innerHTML = `⬆️ <b>Sobra</b>: ${fmt(dif)} respecto al esperado (${fmt(efectivoEsperado)}).`;
       txt.className = 'text-xs mt-1 text-blue-700 font-semibold';
+    }
+    // Si el cajero ajusta el monto real, también afecta lo que queda en caja.
+    __recalcQuedaEnCaja();
+  };
+
+  /* Recalcula "Monto que queda en caja" = base - sobre.
+     base = monto_real (si "no coincide" está marcado y trae valor válido)
+     base = efectivoEsperado (caso normal) */
+  window.__recalcQuedaEnCaja = () => {
+    const sobreInp = document.getElementById('inpSobreDeposito');
+    const txt = document.getElementById('quedaEnCajaTxt');
+    const sub = document.getElementById('quedaEnCajaSubtxt');
+    if(!txt || !sobreInp) return;
+    const sobre = parseMoney(sobreInp.value) || 0;
+    let base = efectivoEsperado;
+    let baseTipo = 'esperado';
+    if(chk.checked){
+      const real = parseMoney(inpMonto.value);
+      if(Number.isFinite(real) && inpMonto.value !== ''){
+        base = real;
+        baseTipo = 'real';
+      }
+    }
+    const queda = base - sobre;
+    txt.textContent = fmt(queda);
+    if(queda < 0){
+      txt.style.color = 'var(--err)';
+    } else if(queda === 0){
+      txt.style.color = 'var(--ok)';
+    } else {
+      txt.style.color = 'var(--brand-dark)';
+    }
+    if(sub){
+      const baseLabel = baseTipo === 'real' ? 'monto real en caja' : 'efectivo esperado';
+      sub.textContent = `${fmt(base)} (${baseLabel}) − ${fmt(sobre)} (sobre).`;
     }
   };
 
@@ -5085,7 +5210,7 @@ function openPago(){
                   : `⚠️ Falta: <b>${fmt((Number(pago1.monto)||0) - pagaCon1)}</b>`}
               </div>` : ''}
           </div>` : ''}
-        ${esDeliveryEfectivo(pago1.medio) ? _renderPickerInput(1, pago1) : ''}
+        ${esDeliveryConPicker(pago1.medio) ? _renderPickerInput(1, pago1) : ''}
       </div>
       <label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" ${pago2?'checked':''} onchange="__togglePago2(this.checked)"> Usar 2 medios de pago</label>
       ${pago2 ? `
@@ -5114,7 +5239,7 @@ function openPago(){
                     : `⚠️ Falta: <b>${fmt((Number(pago2.monto)||0) - pagaCon2)}</b>`}
                 </div>` : ''}
             </div>` : ''}
-          ${esDeliveryEfectivo(pago2.medio) ? _renderPickerInput(2, pago2) : ''}
+          ${esDeliveryConPicker(pago2.medio) ? _renderPickerInput(2, pago2) : ''}
         </div>` : ''}
       ${(pago1.medio==='fiado'||(pago2&&pago2.medio==='fiado')) ? `
         <div class="mb-3"><label class="label">Cliente (fiado)</label>
@@ -5161,14 +5286,14 @@ function openPago(){
   window.__setMedio1 = m => {
     pago1.medio = m;
     if(m !== 'efectivo') pagaCon1 = 0;   // limpiar vuelto si cambió de efectivo
-    // Si pasamos de delivery_efectivo a otro medio, limpiamos monto_picker.
-    if(!esDeliveryEfectivo(m)) delete pago1.monto_picker;
+    // Si pasamos de un medio delivery con picker a otro distinto, limpiamos monto_picker.
+    if(!esDeliveryConPicker(m)) delete pago1.monto_picker;
     ajustar(); render();
   };
   window.__setMedio2 = m => {
     if(pago2) pago2.medio = m;
     if(m !== 'efectivo') pagaCon2 = 0;
-    if(pago2 && !esDeliveryEfectivo(m)) delete pago2.monto_picker;
+    if(pago2 && !esDeliveryConPicker(m)) delete pago2.monto_picker;
     ajustar(); render();
   };
   window.__setMonto1 = v => {
@@ -5200,11 +5325,16 @@ function openPago(){
   window.__setPagaCon1 = v => { pagaCon1 = Number(v)||0; render(); };
   window.__setPagaCon2 = v => { pagaCon2 = Number(v)||0; render(); };
   window.__setCliente = v => { cliente_fiado = v; };
-  /* Renderiza el panel "Monto que paga el picker" para delivery en efectivo.
-     El monto del PICKER puede diferir del precio del local: la app publica
-     con margen para cubrir su comisión, así que el picker entrega más en
-     efectivo. La diferencia queda registrada como comisión de delivery. */
+  /* Renderiza el panel "Monto cobrado por la app/picker" para pagos delivery.
+     Aplica a delivery_efectivo (picker entrega cash) y delivery_online (app
+     cobra al cliente online). La app publica con margen para cubrir comisión
+     + IVA → el monto cobrado suele ser MAYOR que el precio del local.
+     - delivery_efectivo: la diferencia QUEDA físicamente en la caja → suma
+       a "comisión delivery" y al efectivo esperado al cierre.
+     - delivery_online: la diferencia NO entra a la caja física, sólo se
+       evidencia en el cierre para cuadrar con boletas/depósitos de la app. */
   window._renderPickerInput = (idx, pago) => {
+    const online = esDeliveryOnline(pago.medio);
     const total = Number(pago.monto) || 0;
     const picker = pago.monto_picker !== undefined && pago.monto_picker !== null && pago.monto_picker !== ''
       ? Number(pago.monto_picker)
@@ -5213,19 +5343,25 @@ function openPago(){
     const colorChip = delta > 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                     : (delta < 0 ? 'bg-red-50 text-red-700 border-red-200'
                                  : 'bg-slate-50 text-slate-600 border-slate-200');
-    const labelDelta = delta > 0 ? `Comisión a favor del local: +${fmt(delta)}`
-                     : (delta < 0 ? `Comisión en contra del local: ${fmt(delta)}`
-                                  : 'Sin diferencia: monto picker = precio local');
-    return `<div class="mt-2 p-2 rounded border border-amber-300 bg-amber-50">
-      <label class="label">🛵 Monto que paga el picker</label>
+    const labelDelta = online
+      ? (delta > 0 ? `Diferencia app (no entra a caja): +${fmt(delta)}`
+                   : (delta < 0 ? `Diferencia app: ${fmt(delta)}`
+                                : 'Sin diferencia: monto app = precio local'))
+      : (delta > 0 ? `Comisión a favor del local (cash extra en caja): +${fmt(delta)}`
+                   : (delta < 0 ? `Comisión en contra del local: ${fmt(delta)}`
+                                : 'Sin diferencia: monto picker = precio local'));
+    const titulo = online ? '🌐 Monto cobrado por la app' : '🛵 Monto que paga el picker';
+    const ayuda = online
+      ? `Precio del local: <b>${fmt(total)}</b>. Es lo que la app cobró al cliente (sale más caro para cubrir comisión + IVA). <b>No entra a la caja</b> — sólo se evidencia en el cierre para cuadrar.`
+      : `Precio del local: <b>${fmt(total)}</b>. Si la app publica con margen para cubrir su comisión, el picker entrega más en efectivo.`;
+    return `<div class="mt-2 p-2 rounded border ${online?'border-indigo-300 bg-indigo-50':'border-amber-300 bg-amber-50'}">
+      <label class="label">${titulo}</label>
       <input type="text" inputmode="numeric" class="input"
         value="${fmtMoney(picker)}"
         placeholder="${fmtMoney(total)}"
         oninput="this.value=fmtMoney(parseMoney(this.value))"
         onchange="__setPicker(${idx}, parseMoney(this.value))">
-      <div class="text-xs text-slate-600 mt-1">
-        Precio del local: <b>${fmt(total)}</b>. Si la app publica con margen para cubrir su comisión, el picker entrega más en efectivo.
-      </div>
+      <div class="text-xs text-slate-600 mt-1">${ayuda}</div>
       <div class="mt-2 p-2 rounded border ${colorChip} text-xs font-semibold">
         ${labelDelta}
       </div>
