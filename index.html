@@ -824,8 +824,17 @@
               <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por día</h4><canvas id="chartDia" height="120"></canvas></div>
                 <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por mes</h4><canvas id="chartMes" height="120"></canvas></div>
-                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por hora</h4><canvas id="chartHora" height="120"></canvas></div>
-                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 class="font-semibold mb-3">Ventas por día de la semana</h4><canvas id="chartSemana" height="120"></canvas></div>
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                    <h4 class="font-semibold">Ventas por hora</h4>
+                    <div id="chartHoraChip" class="hidden text-xs"></div>
+                  </div>
+                  <canvas id="chartHora" height="120"></canvas>
+                </div>
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <h4 class="font-semibold mb-3">Ventas por día de la semana <span class="text-xs font-normal text-slate-400">(haz clic en un día para filtrar el gráfico de horas)</span></h4>
+                  <canvas id="chartSemana" height="120"></canvas>
+                </div>
                 <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 lg:col-span-2"><h4 class="font-semibold mb-3">Medios de pago</h4><div class="mx-auto" style="max-width:390px;aspect-ratio:1/1;"><canvas id="chartPagos"></canvas></div></div>
               </div>
             </div>
@@ -843,9 +852,27 @@
               <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
                 <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
                   <h4 class="font-semibold">Top 20 productos más vendidos</h4>
-                  <select id="topProdCategoria" class="input text-sm max-w-xs" onchange="recargarTopProductos()" title="Ver los productos más vendidos de una categoría puntual">
-                    <option value="">Todas las categorías</option>
-                  </select>
+                  <!-- Multi-select de categorías: botón que abre un dropdown
+                       con checkboxes. El estado vive en S.topProdCats (Set). -->
+                  <div class="relative">
+                    <button id="topProdCatBtn" type="button"
+                      class="input text-sm max-w-xs text-left flex items-center justify-between gap-2 cursor-pointer"
+                      style="min-width:240px"
+                      onclick="_toggleTopProdCatMenu(event)">
+                      <span id="topProdCatBtnLbl">Todas las categorías</span>
+                      <span class="text-slate-400">▾</span>
+                    </button>
+                    <div id="topProdCatMenu" class="hidden absolute right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-[70vh] overflow-auto" style="min-width:260px;">
+                      <div class="p-2 sticky top-0 bg-white border-b border-slate-100 flex items-center justify-between">
+                        <button type="button" class="text-xs text-blue-600 hover:underline" onclick="_topProdCatToggleAll(true)">Marcar todas</button>
+                        <button type="button" class="text-xs text-slate-500 hover:underline" onclick="_topProdCatToggleAll(false)">Quitar todas</button>
+                      </div>
+                      <div id="topProdCatList" class="p-2 space-y-1"></div>
+                      <div class="p-2 sticky bottom-0 bg-white border-t border-slate-100 flex justify-end">
+                        <button type="button" class="btn btn-primary text-xs px-3 py-1" onclick="_topProdCatApply()">Aplicar</button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div id="topProdSubtitulo" class="text-xs text-slate-500 mb-2"></div>
                 <div class="overflow-auto"><table><thead><tr><th>#</th><th>Producto</th><th>Categoría</th><th class="text-right">Cantidad</th><th class="text-right">Total</th></tr></thead><tbody id="topProductosTbody"></tbody></table></div>
@@ -886,6 +913,31 @@
                 <p class="text-xs text-slate-500 mb-3">Historial de aperturas y cierres de caja — usa las fechas y horas de arriba para acotar el rango. Incluye monto inicial, totales por medio de pago y estado.</p>
                 <div id="repCajasResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
                 <div id="repCajasTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg bg-white"></div>
+              </div>
+
+              <!-- Reporte de Sobres para depósito -->
+              <div id="repSobresBox" class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                  <h4 class="font-semibold" style="color:var(--brand-dark)">💼 Sobres para depósito</h4>
+                  <button class="btn btn-ghost text-xs" onclick="cargarReporteSobres()">🔄 Refrescar</button>
+                </div>
+                <p class="text-xs text-slate-500 mb-3">Suma de todos los sobres declarados en los cierres de caja del rango. Úsalo para conciliar cuánto efectivo deberías estar depositando contra lo que realmente llevas al banco.</p>
+                <div id="repSobresResumen" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3"></div>
+
+                <!-- Campo de conciliación: cuánto se depositó realmente -->
+                <div class="bg-white border border-blue-200 rounded-lg p-3 mb-3">
+                  <label class="label">🏦 Monto efectivamente depositado en el banco <span class="text-xs text-slate-400">(opcional, para conciliar)</span></label>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input id="repSobresDepositado" type="text" inputmode="numeric" class="input"
+                      placeholder="$0"
+                      oninput="this.value=fmtMoney(parseMoney(this.value));__recalcConciliacionSobres()">
+                    <div id="repSobresConciliacion" class="flex items-center text-sm">
+                      <span class="text-slate-400">Ingresa el monto para ver si calza.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="repSobresTbl" class="overflow-auto max-h-[60vh] border border-slate-200 rounded-lg bg-white"></div>
               </div>
 
               <!-- Reporte de Ventas Anuladas -->
@@ -1157,7 +1209,10 @@ const S = {
   tuuLastDocType: localStorage.getItem('bi_tuu_last_doctype') || 'boleta',
   /* Promociones activas (cargadas al login). Se evalúan en el cliente
      contra el carrito en cada render para descontar automáticamente. */
-  promocionesActivas: []
+  promocionesActivas: [],
+  /* Filtros del módulo Reportes — viven aquí para sobrevivir a re-renders. */
+  repFiltroDow: '',           // 'Lun'..'Dom' — filtra "Ventas por hora"; '' = todos
+  topProdCats: new Set()      // categorías seleccionadas para Top productos
 };
 
 /* Mapeo de tipos de documento.
@@ -5691,11 +5746,55 @@ function setRango(tipo){
   $('#repHasta').value = hoy.toISOString().slice(0,10);
   cargarReportes();
 }
+/* Cache + helpers para el filtro de "Ventas por hora" según día de la semana.
+   El backend devuelve `porHora` (agregado) y `porHoraDia` (por día semana).
+   Al hacer clic en el chartSemana se alterna `S.repFiltroDow` y se redibuja
+   chartHora sin re-pedir al backend. */
+let _repHorasCache = { porHora: {}, porHoraDia: {} };
+function _renderChartHora(){
+  const horas = Array.from({length:24},(_,i)=>i);
+  const dow = S.repFiltroDow || '';
+  let datos;
+  if(dow){
+    const hd = (_repHorasCache.porHoraDia && _repHorasCache.porHoraDia[dow]) || {};
+    datos = horas.map(h => Number(hd[h]||0));
+  } else {
+    const ph = _repHorasCache.porHora || {};
+    datos = horas.map(h => Number(ph[h]||0));
+  }
+  const labelChart = 'Ventas por hora' + (dow ? ` — ${dow}` : '');
+  _chart('chartHora','bar', horas.map(h=>h+'h'), datos, labelChart);
+}
+function _renderFiltroDowChip(){
+  const chip = $('#chartHoraChip');
+  if(!chip) return;
+  const dow = S.repFiltroDow || '';
+  if(!dow){
+    chip.classList.add('hidden');
+    chip.innerHTML = '';
+    return;
+  }
+  chip.classList.remove('hidden');
+  chip.innerHTML = `
+    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800 font-semibold">
+      Filtrando: ${dow}
+      <button type="button" class="ml-1 text-blue-600 hover:text-blue-900" title="Quitar filtro" onclick="_quitarFiltroDow()">✕</button>
+    </span>`;
+}
+window._quitarFiltroDow = () => {
+  S.repFiltroDow = '';
+  _renderChartHora();
+  _renderFiltroDowChip();
+};
+
 async function cargarReportes(){
   const desde = $('#repDesde').value, hasta = $('#repHasta').value;
   const hora_desde = $('#repHoraDesde')?.value || '00:00';
   const hora_hasta = $('#repHoraHasta')?.value || '23:59';
   const params = {desde, hasta, hora_desde, hora_hasta};
+  // Si cambia el rango, reseteo el filtro de día de la semana (puede no
+  // tener sentido para el rango nuevo).
+  S.repFiltroDow = '';
   // Categorías visibles sólo para administradores
   const catPerfilCaja = $('#repCatPerfilCaja');
   if(catPerfilCaja) catPerfilCaja.classList.toggle('hidden', !isAdmin());
@@ -5704,6 +5803,7 @@ async function cargarReportes(){
   if(isAdmin()){
     cargarVentasDetalladas(params);
     cargarReporteCajas(params);
+    cargarReporteSobres(params);
     cargarVentasAnuladas(params);
     cargarReporteVencimientos();
   }
@@ -5722,9 +5822,26 @@ async function cargarReportes(){
     _chart('chartDia','line', Object.keys(v.porDia).sort(), Object.entries(v.porDia).sort().map(([k,v])=>v), 'Ventas por día');
     _chart('chartMes','bar', Object.keys(v.porMes).sort(), Object.entries(v.porMes).sort().map(([k,v])=>v), 'Ventas por mes');
     const horas = Array.from({length:24},(_,i)=>i);
-    _chart('chartHora','bar', horas.map(h=>h+'h'), horas.map(h=>v.porHora[h]||0), 'Ventas por hora');
     const semanaOrden = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-    _chart('chartSemana','bar', semanaOrden, semanaOrden.map(d=>v.porDiaSemana[d]||0), 'Ventas por día');
+
+    // Guardamos los datasets en un cache para poder redibujar chartHora al
+    // alternar el filtro por día de la semana sin volver a pedir al backend.
+    _repHorasCache = {
+      porHora: v.porHora || {},
+      porHoraDia: v.porHoraDia || {}
+    };
+    _renderChartHora();
+
+    // chartSemana clickeable: alterna el filtro del día y vuelve a dibujar chartHora.
+    _chart('chartSemana','bar', semanaOrden, semanaOrden.map(d=>v.porDiaSemana[d]||0),
+      'Ventas por día', {
+        onClick: (idx, lbl) => {
+          S.repFiltroDow = (S.repFiltroDow === lbl) ? '' : lbl;
+          _renderChartHora();
+          _renderFiltroDowChip();
+        }
+      });
+    _renderFiltroDowChip();
     const mp = v.resumen.mediosPago || {};
     const mpLabels = MEDIOS_PAGO.filter(k => (Number(mp[k])||0) > 0).map(medioLabel);
     const mpValues = MEDIOS_PAGO.filter(k => (Number(mp[k])||0) > 0).map(k => Number(mp[k])||0);
@@ -5733,19 +5850,92 @@ async function cargarReportes(){
     _chart('chartPagos','doughnut', mpLabelsPct, mpValues, 'Medios de pago');
     _chart('chartCat','bar', c.categorias.map(x=>x.categoria), c.categorias.map(x=>x.total), 'Por categoría');
 
-    // Poblar select de categorías con las que tienen ventas + las del inventario
+    // Poblar el menú multi-select de categorías con las que tienen ventas + inventario
     const setCats = new Set();
     (c.categorias || []).forEach(x => x.categoria && setCats.add(String(x.categoria).trim()));
     (S.categorias || []).forEach(cat => cat && setCats.add(String(cat).trim()));
-    const sel = $('#topProdCategoria');
-    if(sel){
-      const valActual = sel.value;
-      sel.innerHTML = '<option value="">Todas las categorías</option>' +
-        Array.from(setCats).sort().map(cat => `<option value="${esc(cat)}" ${cat===valActual?'selected':''}>${esc(cat)}</option>`).join('');
-    }
+    _renderTopProdCatMenu(Array.from(setCats).sort());
     _renderTopProductos(p);
   }catch(err){ toast(err.message,'err'); }
 }
+
+/* Multi-select de categorías para el Top de productos.
+   - S.topProdCats es un Set con las categorías seleccionadas. Vacío = todas.
+   - El menú se construye con _renderTopProdCatMenu cuando llegan los datos.
+   - Sólo se vuelve a pedir el reporte al hacer clic en "Aplicar" o
+     cuando se usan los atajos "Marcar todas / Quitar todas". */
+function _renderTopProdCatMenu(cats){
+  if(!Array.isArray(S.topProdCats)) S.topProdCats = []; // fallback antes de Set
+  if(!(S.topProdCats instanceof Set)) S.topProdCats = new Set(S.topProdCats);
+  const list = $('#topProdCatList');
+  if(!list) return;
+  list.dataset.cats = JSON.stringify(cats);
+  list.innerHTML = cats.length
+    ? cats.map(c => `
+        <label class="flex items-center gap-2 text-sm py-1 px-2 rounded hover:bg-slate-50 cursor-pointer">
+          <input type="checkbox" value="${esc(c)}" ${S.topProdCats.has(c)?'checked':''}
+            onchange="_topProdCatCheck(this)">
+          <span class="flex-1 truncate">${esc(c)}</span>
+        </label>`).join('')
+    : '<div class="text-xs text-slate-400 p-2">Sin categorías disponibles.</div>';
+  _refreshTopProdCatLabel();
+}
+function _refreshTopProdCatLabel(){
+  const lbl = $('#topProdCatBtnLbl');
+  if(!lbl) return;
+  if(!S.topProdCats || S.topProdCats.size === 0){
+    lbl.textContent = 'Todas las categorías';
+  } else if(S.topProdCats.size === 1){
+    lbl.textContent = Array.from(S.topProdCats)[0];
+  } else {
+    lbl.textContent = `${S.topProdCats.size} categorías seleccionadas`;
+  }
+}
+window._toggleTopProdCatMenu = (evt) => {
+  evt && evt.stopPropagation();
+  const menu = $('#topProdCatMenu');
+  if(!menu) return;
+  const willOpen = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden');
+  if(willOpen){
+    // cerrar al hacer clic fuera
+    setTimeout(() => document.addEventListener('click', _closeTopProdCatMenu, { once: true }), 0);
+  }
+};
+function _closeTopProdCatMenu(e){
+  const menu = $('#topProdCatMenu');
+  const btn = $('#topProdCatBtn');
+  if(!menu || menu.classList.contains('hidden')) return;
+  if(menu.contains(e.target) || (btn && btn.contains(e.target))) {
+    // sigue abierto
+    setTimeout(() => document.addEventListener('click', _closeTopProdCatMenu, { once: true }), 0);
+    return;
+  }
+  menu.classList.add('hidden');
+}
+window._topProdCatCheck = (chk) => {
+  if(!S.topProdCats) S.topProdCats = new Set();
+  if(chk.checked) S.topProdCats.add(chk.value);
+  else S.topProdCats.delete(chk.value);
+  _refreshTopProdCatLabel();
+};
+window._topProdCatToggleAll = (sel) => {
+  const list = $('#topProdCatList');
+  if(!list) return;
+  const cats = JSON.parse(list.dataset.cats || '[]');
+  if(!S.topProdCats) S.topProdCats = new Set();
+  if(sel){
+    cats.forEach(c => S.topProdCats.add(c));
+  } else {
+    S.topProdCats.clear();
+  }
+  list.querySelectorAll('input[type="checkbox"]').forEach(i => i.checked = sel);
+  _refreshTopProdCatLabel();
+};
+window._topProdCatApply = () => {
+  $('#topProdCatMenu')?.classList.add('hidden');
+  recargarTopProductos();
+};
 
 /* Render del "Top 20 productos" — separado para que recargarTopProductos
    pueda reutilizarlo sin volver a pedir el resto del reporte. */
@@ -5754,33 +5944,40 @@ function _renderTopProductos(p){
   const sub = $('#topProdSubtitulo');
   if(!tbody) return;
   if(sub){
-    sub.textContent = p.categoria_filtrada
-      ? `Filtrado: ${p.categoria_filtrada}`
-      : (p.total_categorias != null ? `Mostrando todas las categorías (${p.total_categorias} con ventas en el rango)` : '');
+    const cats = Array.isArray(p.categorias_filtradas) ? p.categorias_filtradas : (p.categoria_filtrada ? [p.categoria_filtrada] : []);
+    if(cats.length === 1){
+      sub.textContent = `Filtrado: ${cats[0]}`;
+    } else if(cats.length > 1){
+      sub.textContent = `Filtrado (${cats.length} categorías): ${cats.join(', ')}`;
+    } else {
+      sub.textContent = p.total_categorias != null ? `Mostrando todas las categorías (${p.total_categorias} con ventas en el rango)` : '';
+    }
   }
+  const hayFiltro = Array.isArray(p.categorias_filtradas) ? p.categorias_filtradas.length > 0 : !!p.categoria_filtrada;
   tbody.innerHTML = (p.productos || []).map((x,i)=>`
     <tr><td>${i+1}</td><td>${esc(x.nombre)}</td><td>${esc(x.categoria)||''}</td>
     <td class="text-right">${x.cantidad}</td><td class="text-right">${fmt(x.total)}</td></tr>`).join('')
-    || '<tr><td colspan="5" class="text-center text-slate-400 py-4">Sin ventas en el rango' + (p.categoria_filtrada ? ' para esta categoría' : '') + '</td></tr>';
+    || '<tr><td colspan="5" class="text-center text-slate-400 py-4">Sin ventas en el rango' + (hayFiltro ? ' para esta categoría' : '') + '</td></tr>';
 }
 
-/* Re-llama a reporteProductosTop con la categoría elegida en el select.
+/* Re-llama a reporteProductosTop con las categorías marcadas en el menú.
    Sólo recarga la tabla del Top, no el resto del reporte. */
 async function recargarTopProductos(){
   const desde = $('#repDesde').value, hasta = $('#repHasta').value;
   const hora_desde = $('#repHoraDesde')?.value || '03:30';
   const hora_hasta = $('#repHoraHasta')?.value || '23:59';
-  const categoria = $('#topProdCategoria')?.value || '';
+  const categorias = (S.topProdCats instanceof Set) ? Array.from(S.topProdCats) : [];
   const tbody = $('#topProductosTbody');
   if(tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-400 py-4">Cargando…</td></tr>';
   try {
-    const p = await api('reporteProductosTop', { desde, hasta, hora_desde, hora_hasta, categoria });
+    const p = await api('reporteProductosTop', { desde, hasta, hora_desde, hora_hasta, categorias });
     _renderTopProductos(p);
   } catch(err){
     if(tbody) tbody.innerHTML = `<tr><td colspan="5" class="text-center text-red-500 py-4">${esc(err.message)}</td></tr>`;
   }
 }
-function _chart(id, type, labels, data, label){
+function _chart(id, type, labels, data, label, opts){
+  opts = opts || {};
   const ctx = document.getElementById(id); if(!ctx) return;
   if(S.charts[id]) S.charts[id].destroy();
 
@@ -5824,9 +6021,20 @@ function _chart(id, type, labels, data, label){
     }]},
     options: { responsive:true, maintainAspectRatio: type!=='doughnut',
       plugins:{ legend:{ display: type==='doughnut', position: 'bottom' } },
-      scales: type==='doughnut' ? {} : { y:{ beginAtZero:true } } },
+      scales: type==='doughnut' ? {} : { y:{ beginAtZero:true } },
+      onClick: typeof opts.onClick === 'function'
+        ? (evt, els) => {
+            if(els && els.length){
+              const idx = els[0].index;
+              opts.onClick(idx, labels[idx], data[idx]);
+            }
+          }
+        : undefined
+    },
     plugins: type==='doughnut' ? [pctInside] : []
   });
+  // Cursor pointer cuando es clickable, para que el usuario sepa que hay interacción.
+  if(typeof opts.onClick === 'function') ctx.style.cursor = 'pointer';
 }
 
 /* REPORTE DETALLADO POR PERFIL (sólo admin) ──────────────────────── */
@@ -6026,6 +6234,127 @@ async function cargarVentasAnuladas(params){
     tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar: ${esc(err.message||err)}</div>`;
   }
 }
+
+/* Reporte de sobres para depósito. Suma el monto_sobre_deposito de todas las
+   cajas CERRADAS del rango y permite conciliar contra lo realmente depositado
+   en el banco. Reusa el endpoint reporteCajas (admin). */
+let _repSobresCache = { total: 0, filas: [] };
+async function cargarReporteSobres(params){
+  const tbl = $('#repSobresTbl');
+  const resumen = $('#repSobresResumen');
+  const conc = $('#repSobresConciliacion');
+  if(!tbl) return;
+  if(!params){
+    params = {
+      desde: $('#repDesde')?.value || '',
+      hasta: $('#repHasta')?.value || '',
+      hora_desde: $('#repHoraDesde')?.value || '00:00',
+      hora_hasta: $('#repHoraHasta')?.value || '23:59'
+    };
+  }
+  tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">Cargando…</div>';
+  if(resumen) resumen.innerHTML = '';
+  if(conc) conc.innerHTML = '<span class="text-slate-400">Ingresa el monto para ver si calza.</span>';
+  try{
+    const d = await api('reporteCajas', params);
+    const cajas = (d.cajas || []).filter(c => String(c.estado).toLowerCase() === 'cerrada');
+    // Sólo consideramos cajas con sobre definido (>0 o explícitamente 0).
+    // Si la caja se cerró antes de tener este campo, lo trataremos como 0.
+    const filas = cajas
+      .map(c => ({
+        id: c.id,
+        vendedor: c.vendedor_nombre || '—',
+        fecha_cierre: c.fecha_cierre,
+        efectivo: Number(c.total_efectivo) || 0,
+        esperado: Number(c.efectivo_esperado) || 0,
+        sobre: (c.monto_sobre_deposito === '' || c.monto_sobre_deposito === null || c.monto_sobre_deposito === undefined)
+                 ? 0 : Number(c.monto_sobre_deposito) || 0,
+        no_coincide: c.no_coincide === true || c.no_coincide === 'TRUE' || c.no_coincide === 'true'
+      }))
+      .sort((a,b) => new Date(b.fecha_cierre) - new Date(a.fecha_cierre));
+    const totalSobre = filas.reduce((s,x) => s + x.sobre, 0);
+    const totalEsperado = filas.reduce((s,x) => s + x.esperado, 0);
+    const cajasConSobre = filas.filter(x => x.sobre > 0).length;
+    _repSobresCache = { total: totalSobre, filas };
+
+    if(resumen){
+      resumen.innerHTML = `
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div class="text-xs text-blue-700 uppercase font-semibold">💼 Total al sobre</div>
+          <div class="text-2xl font-bold text-blue-700">${fmt(totalSobre)}</div>
+          <div class="text-xs text-blue-600">${cajasConSobre} sobre${cajasConSobre===1?'':'s'} en el rango</div>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-3">
+          <div class="text-xs text-slate-500 uppercase">Cajas cerradas</div>
+          <div class="text-2xl font-bold">${filas.length}</div>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-3">
+          <div class="text-xs text-slate-500 uppercase">Efectivo esperado</div>
+          <div class="text-lg font-bold">${fmt(totalEsperado)}</div>
+          <div class="text-xs text-slate-400">Antes de retirar el sobre</div>
+        </div>
+        <div class="bg-slate-50 rounded-lg p-3">
+          <div class="text-xs text-slate-500 uppercase">Rango</div>
+          <div class="text-xs font-semibold">${(params.desde||'—')} → ${(params.hasta||'—')}</div>
+        </div>
+      `;
+    }
+
+    if(!filas.length){
+      tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">No hay cajas cerradas en el rango.</div>';
+    } else {
+      tbl.innerHTML = `<table class="w-full text-sm">
+        <thead><tr class="bg-slate-50 text-left text-slate-500 text-xs">
+          <th class="py-2 px-3">Caja #</th>
+          <th class="py-2 px-3">Vendedor</th>
+          <th class="py-2 px-3">Cierre</th>
+          <th class="py-2 px-3 text-right">Efectivo</th>
+          <th class="py-2 px-3 text-right">Esperado</th>
+          <th class="py-2 px-3 text-right">💼 Al sobre</th>
+        </tr></thead>
+        <tbody>
+          ${filas.map(x => `<tr class="border-t border-slate-100">
+            <td class="py-2 px-3 font-mono text-xs">${x.id}</td>
+            <td class="py-2 px-3 text-sm">${esc(x.vendedor)}</td>
+            <td class="py-2 px-3 text-xs">${fmtDateTime(x.fecha_cierre)}</td>
+            <td class="py-2 px-3 text-right text-xs">${fmt(x.efectivo)}</td>
+            <td class="py-2 px-3 text-right text-xs">${fmt(x.esperado)}</td>
+            <td class="py-2 px-3 text-right font-bold text-blue-700">${fmt(x.sobre)}</td>
+          </tr>`).join('')}
+          <tr class="border-t-2 border-slate-300 bg-blue-50">
+            <td colspan="5" class="py-2 px-3 text-right font-bold">Total sobres del rango</td>
+            <td class="py-2 px-3 text-right text-lg font-bold text-blue-700">${fmt(totalSobre)}</td>
+          </tr>
+        </tbody>
+      </table>`;
+    }
+    // Recalcular conciliación si el usuario ya había escrito algo
+    __recalcConciliacionSobres();
+  }catch(err){
+    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar: ${esc(err.message||err)}</div>`;
+  }
+}
+
+/* Compara el monto efectivamente depositado contra el total al sobre del rango. */
+window.__recalcConciliacionSobres = () => {
+  const inp = $('#repSobresDepositado');
+  const out = $('#repSobresConciliacion');
+  if(!inp || !out) return;
+  const depositado = parseMoney(inp.value);
+  const total = Number(_repSobresCache.total) || 0;
+  if(!inp.value || !Number.isFinite(depositado)){
+    out.innerHTML = '<span class="text-slate-400">Ingresa el monto para ver si calza.</span>';
+    return;
+  }
+  const diff = depositado - total;
+  if(Math.abs(diff) < 1){
+    out.innerHTML = `<span class="px-2 py-1 rounded bg-emerald-100 text-emerald-800 font-semibold">✔️ Calza exacto con los sobres declarados (${fmt(total)})</span>`;
+  } else if(diff < 0){
+    out.innerHTML = `<span class="px-2 py-1 rounded bg-red-100 text-red-700 font-semibold">⬇️ Falta ${fmt(Math.abs(diff))} (sobres: ${fmt(total)})</span>`;
+  } else {
+    out.innerHTML = `<span class="px-2 py-1 rounded bg-blue-100 text-blue-800 font-semibold">⬆️ Sobra ${fmt(diff)} (sobres: ${fmt(total)})</span>`;
+  }
+};
 
 async function cargarReporteCajas(params){
   const tbl = $('#repCajasTbl');
