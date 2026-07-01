@@ -7994,6 +7994,9 @@ window.RRHH = (function(){
           '<div><div class="text-xs text-slate-500 uppercase">Sueldo bruto mensual</div><div class="font-semibold">'+(w.sueldoBase?fmtCLP(w.sueldoBase):'–')+'</div></div>'+
           '<div><div class="text-xs text-slate-500 uppercase">Valor hora</div><div class="font-semibold">'+(w.valorHora?fmtCLP(w.valorHora):'–')+'</div></div>'+
           '<div><div class="text-xs text-slate-500 uppercase">Gratificación 25%</div><div>'+(w.gratificacion==='si'?'Sí':'No')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">AFP %</div><div>'+(w.afpPct!=null?Number(w.afpPct)+'%':'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">Salud %</div><div>'+(w.saludPct!=null?Number(w.saludPct)+'%':'–')+'</div></div>'+
+          '<div><div class="text-xs text-slate-500 uppercase">AFC %</div><div>'+(w.afcPct!=null?Number(w.afcPct)+'%':'–')+'</div></div>'+
         '</div>'+
       '</div>'+
       '<div class="bg-white rounded-xl p-5 border border-slate-200 mb-3">'+
@@ -8022,7 +8025,7 @@ window.RRHH = (function(){
       '</div>'+
       '<div class="bg-white rounded-xl p-5 border border-slate-200">'+
         '<h4 class="font-semibold mb-3">Liquidaciones generadas</h4>'+
-        (liqs.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Período</th><th class="text-left">Emisión</th><th class="text-right">Líquido</th><th></th></tr></thead><tbody>'+liqs.map(l=>'<tr class="border-t border-slate-100"><td class="py-2">'+formatPeriodo(l.periodo)+'</td><td>'+fmtDate(l.fechaEmision)+'</td><td class="text-right font-semibold">'+fmtCLP(l.liquidoPago)+'</td><td class="text-right"><button class="text-xs text-blue-600 hover:underline" onclick="RRHH.reopenLiquidacion(\''+w.id+'\',\''+l.periodo+'\')">Ver</button></td></tr>').join('')+'</tbody></table></div>':'<div class="text-sm text-slate-500 text-center py-4">No hay liquidaciones generadas.</div>')+
+        (liqs.length?'<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 uppercase"><th class="text-left py-2">Período</th><th class="text-left">Emisión</th><th class="text-right">Líquido</th><th></th></tr></thead><tbody>'+liqs.map(l=>'<tr class="border-t border-slate-100"><td class="py-2">'+formatPeriodo(l.periodo)+'</td><td>'+fmtDate(l.fechaEmision)+'</td><td class="text-right font-semibold">'+fmtCLP(l.liquidoPago)+'</td><td class="text-right whitespace-nowrap"><button class="text-xs text-blue-600 hover:underline mr-2" onclick="RRHH.reopenLiquidacion(\''+w.id+'\',\''+l.periodo+'\')">Ver</button>'+(state.isPropietario?'<button class="text-xs text-red-600 hover:underline" onclick="RRHH.deleteLiquidacion(\''+w.id+'\',\''+(l._id||'')+'\',\''+l.periodo+'\')">Eliminar</button>':'')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="text-sm text-slate-500 text-center py-4">No hay liquidaciones generadas.</div>')+
       '</div>';
   }
 
@@ -8059,6 +8062,13 @@ window.RRHH = (function(){
           '<div><label class="label">Previsión de salud</label><input type="text" name="prevision" class="input" placeholder="FONASA / Isapre Banmédica / etc." value="'+escapeHtml(w?.prevision||'')+'"></div>'+
           '<div><label class="label">AFP</label><input type="text" name="afpNombre" class="input" placeholder="AFP Modelo / Capital / etc." value="'+escapeHtml(w?.afpNombre||'')+'"></div>'+
         '</div>'+
+        '<h5 class="text-sm font-semibold mb-2 mt-3 text-slate-600">Descuentos legales (% aplicable a este trabajador)</h5>'+
+        '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">'+
+          '<div><label class="label">AFP %</label><input type="number" step="0.01" min="0" name="afpPct" class="input" placeholder="10.68" value="'+(w?.afpPct!=null?w.afpPct:'')+'"></div>'+
+          '<div><label class="label">Salud %</label><input type="number" step="0.01" min="0" name="saludPct" class="input" placeholder="7" value="'+(w?.saludPct!=null?w.saludPct:'')+'"></div>'+
+          '<div><label class="label">AFC %</label><input type="number" step="0.01" min="0" name="afcPct" class="input" placeholder="0.6 (part-time indefinido)" value="'+(w?.afcPct!=null?w.afcPct:'')+'"></div>'+
+        '</div>'+
+        '<div class="text-xs text-slate-500 mt-1">Estos porcentajes se cargarán automáticamente al generar la liquidación de este trabajador.</div>'+
         '<div class="flex gap-2 justify-end pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar</button></div>'+
       '</form></div>';
     openModal(html);
@@ -8072,6 +8082,9 @@ window.RRHH = (function(){
       data.valorHora = data.valorHora?parseFloat(data.valorHora):null;
       data.fechaNacimiento = data.fechaNacimiento||null;
       data.fechaIngreso = data.fechaIngreso||null;
+      data.afpPct = data.afpPct===''||data.afpPct==null ? null : parseFloat(data.afpPct);
+      data.saludPct = data.saludPct===''||data.saludPct==null ? null : parseFloat(data.saludPct);
+      data.afcPct = data.afcPct===''||data.afcPct==null ? null : parseFloat(data.afcPct);
       if(!validarRut(data.rut)){
         if(!confirm('El RUT no parece válido. ¿Guardar de todas formas?')) throw new Error('cancel');
       }
@@ -9097,6 +9110,14 @@ window.RRHH = (function(){
         // Detección de feriado por fecha (YYYY-MM-DD)
         const dk = j.date.getFullYear()+'-'+String(j.date.getMonth()+1).padStart(2,'0')+'-'+String(j.date.getDate()).padStart(2,'0');
         const feriado = fMap[dk] || null;
+        // Si el turno cruza medianoche (schedEnd > 1440), verificar también el día siguiente:
+        // las horas posteriores a las 24:00 deben contar como feriado si ese día es feriado.
+        let feriadoNextDay = null;
+        if(j.schedEnd != null && j.schedEnd > 1440){
+          const nd = new Date(j.date); nd.setDate(nd.getDate()+1);
+          const dkNext = nd.getFullYear()+'-'+String(nd.getMonth()+1).padStart(2,'0')+'-'+String(nd.getDate()).padStart(2,'0');
+          feriadoNextDay = fMap[dkNext] || null;
+        }
         if(j.estado==='ausente'){
           aus++; falta += j.jNet||0;
           det.push({fecha:j.date, dow:j.dow, programado:j.jNet, trabajado:0, contabilizado:0, falta:j.jNet, atraso:0, estado:'ausente', feriado});
@@ -9111,10 +9132,28 @@ window.RRHH = (function(){
         const dif = (j.extra != null && j.extra < 0) ? -j.extra : 0;
         const contab = pr - dif;  // horas efectivamente cumplidas dentro del pactado
         totalCont += contab;
-        if(feriado){ totalContFeriado += contab; diasFeriado++; }
+        // Split contabilizadas entre día 1 y día 2 si el turno cruza medianoche.
+        // Ratio basado en minutos programados a cada lado del corte.
+        let contabDay1 = contab, contabDay2 = 0;
+        if(j.schedEnd != null && j.schedEnd > 1440 && j.schedStart != null){
+          const totalMin = j.schedEnd - j.schedStart;
+          const day2Min = Math.max(0, j.schedEnd - 1440);
+          if(totalMin > 0){
+            const ratio2 = day2Min / totalMin;
+            contabDay2 = contab * ratio2;
+            contabDay1 = contab - contabDay2;
+          }
+        }
+        let contabFeriadoLocal = 0;
+        if(feriado) contabFeriadoLocal += contabDay1;
+        if(feriadoNextDay) contabFeriadoLocal += contabDay2;
+        if(contabFeriadoLocal > 0){
+          totalContFeriado += contabFeriadoLocal;
+          diasFeriado++;
+        }
         falta += dif;
         atrasos += (j.atraso || 0);
-        det.push({fecha:j.date, dow:j.dow, programado:pr, trabajado:tr, contabilizado:contab, falta:dif, atraso:(j.atraso||0), estado:j.estado, feriado});
+        det.push({fecha:j.date, dow:j.dow, programado:pr, trabajado:tr, contabilizado:contab, falta:dif, atraso:(j.atraso||0), estado:j.estado, feriado:feriado||feriadoNextDay});
       });
     }
     return { worker:w, diasProg, diasTrab, aus, totalProg, totalTrab, totalCont, totalContFeriado, diasFeriado, falta, atrasos, det };
@@ -9227,16 +9266,26 @@ window.RRHH = (function(){
       a.periodoDescuento === state.liq.periodo &&
       !a.descontado
     );
+    const _horasProgramadas = round2(c?c.totalProg/60:0);
+    const _horasAtrasos = round2(c?c.atrasos/60:0);
+    const _horasFeriado = round2(c?c.totalContFeriado/60:0);
+    // Sugerencia por defecto para descontar por atrasos: redondeo hacia ABAJO.
+    // Ej. atrasos = 0.95h → sugiere 0; atrasos = 1.02h → sugiere 1; atrasos = 1.6h → sugiere 1.
+    const _horasDescSug = _horasAtrasos > 0 ? Math.floor(_horasAtrasos) : 0;
     state.liq.data = {
       valorHora, sueldoBase,
-      horasProgramadas: round2(c?c.totalProg/60:0),
+      horasProgramadas: _horasProgramadas,
       horasContabilizadas: round2(c?c.totalCont/60:0),
       horasFaltantes: round2(c?c.falta/60:0),
-      horasAtrasos: round2(c?c.atrasos/60:0),
-      horasFeriado: round2(c?c.totalContFeriado/60:0),
+      horasAtrasos: _horasAtrasos,
+      horasFeriado: _horasFeriado,
+      // Nueva: horas descontadas por atrasos (editable). Default = round(atrasos).
+      horasDescontadas: _horasDescSug,
+      // Nueva: hrs ordinarias a pagar (editable). Default = programadas - descontadas - feriado.
+      horasOrdinariasPagadas: Math.max(0, round2(_horasProgramadas - _horasDescSug - _horasFeriado)),
       recargoFeriadoPct: 50,
       horasExtraAutorizadas: 0,
-      descuentoFaltantes: false,  // por defecto NO descontar — pago por jornada pactada completa
+      descuentoFaltantes: false,  // legacy — reemplazado por horasDescontadas + horasOrdinariasPagadas
       gratificacion: w.gratificacion==='si',
       // % AFP/Salud/AFC: usar valores específicos del trabajador si están definidos,
       // sino caer al default global (DB.payslipParams).
@@ -9280,16 +9329,18 @@ window.RRHH = (function(){
         imp += g;
       }
     } else if(w.tipoContrato==='part'){
-      // Por defecto: pagar horas PROGRAMADAS (jornada pactada completa).
-      // Si descuentoFaltantes=true, pagar sólo las efectivamente trabajadas (contabilizadas).
-      // Las horas en feriado se pagan APARTE con recargo, NO como ordinarias.
-      const basePagables = d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas;
-      const horasOrdinarias = Math.max(0, round2(basePagables - (d.horasFeriado||0)));
+      // Nueva lógica: usar d.horasOrdinariasPagadas (editable) para el pago de horas ordinarias.
+      // Fallback legacy: si el campo no existe (liquidaciones antiguas), calcular como antes
+      // usando descuentoFaltantes.
+      let horasOrdinarias;
+      if(d.horasOrdinariasPagadas != null){
+        horasOrdinarias = Math.max(0, round2(d.horasOrdinariasPagadas));
+      } else {
+        const basePagables = d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas;
+        horasOrdinarias = Math.max(0, round2(basePagables - (d.horasFeriado||0)));
+      }
       const sh = horasOrdinarias * d.valorHora;
-      const lblBase = d.descuentoFaltantes
-        ? 'Hrs ordinarias ('+horasOrdinarias+'h trab × '+fmtCLP(d.valorHora)+')'
-        : 'Hrs ordinarias ('+horasOrdinarias+'h prog × '+fmtCLP(d.valorHora)+')';
-      haberes.push({nombre:lblBase, monto:sh, imp:true});
+      haberes.push({nombre:'Hrs ordinarias ('+horasOrdinarias+'h × '+fmtCLP(d.valorHora)+')', monto:sh, imp:true});
       imp += sh;
       if(d.horasExtraAutorizadas>0){
         const vh = d.valorHora*1.5, tot = d.horasExtraAutorizadas*vh;
@@ -9332,10 +9383,11 @@ function renderLiqEditor(){
     const d = state.liq.data;
     const isFull = w.tipoContrato==='full';
     const t = calcLiqTotals();
-    // Para part-time: hrs ordinarias = programadas - feriado (o contabilizadas - feriado si descontando).
+    // Para part-time: hrs ordinarias a pagar es editable, con default sugerido en computeLiqInitial.
     // Las hrs feriado se pagan aparte con recargo, no como ordinarias.
-    const baseHorasPagables = d.descuentoFaltantes ? d.horasContabilizadas : d.horasProgramadas;
-    const horasOrdinarias = isFull ? null : Math.max(0, round2(baseHorasPagables - (d.horasFeriado||0)));
+    const horasOrdinarias = isFull ? null : (d.horasOrdinariasPagadas != null ? d.horasOrdinariasPagadas : Math.max(0, round2((d.horasProgramadas||0) - (d.horasDescontadas||0) - (d.horasFeriado||0))));
+    const horasOrdSug = Math.max(0, round2((d.horasProgramadas||0) - (d.horasDescontadas||0) - (d.horasFeriado||0)));
+    const descSug = Math.floor(d.horasAtrasos || 0);
     const valorHoraFer = d.valorHora * (1 + (d.recargoFeriadoPct||0)/100);
     let html = '<div class="bg-white rounded-xl border border-slate-200 p-5 mb-3">'+
       '<h4 class="font-semibold mb-3">Cálculo de la liquidación</h4>'+
@@ -9344,7 +9396,7 @@ function renderLiqEditor(){
         '<div><label class="label">Valor hora ordinaria</label><input type="number" step="0.01" class="input" data-liq-field="valorHora" value="'+d.valorHora+'" oninput="RRHH._updLiq(\'valorHora\',this.value,true)"></div>'+
         (isFull
           ? '<div><label class="label">Sueldo bruto</label><input type="number" step="1" class="input" data-liq-field="sueldoBase" value="'+d.sueldoBase+'" oninput="RRHH._updLiq(\'sueldoBase\',this.value,true)"></div>'
-          : '<div><label class="label">Hrs ordinarias a pagar</label><div class="font-semibold">'+horasOrdinarias+'h</div><p class="text-xs text-slate-500 mt-1">'+(d.descuentoFaltantes?'Contabilizadas':'Programadas')+' menos hrs feriado ('+(d.horasFeriado||0)+'h)</p></div>')+
+          : '<div><label class="label">Hrs ordinarias a pagar</label><input type="number" step="0.1" min="0" class="input" data-liq-field="horasOrdinariasPagadas" value="'+horasOrdinarias+'" oninput="RRHH._updLiq(\'horasOrdinariasPagadas\',this.value,true)"><p class="text-xs text-slate-500 mt-1">Sugerido: '+horasOrdSug+'h (Programadas '+(d.horasProgramadas||0)+' − Descontadas '+(d.horasDescontadas||0)+' − Feriado '+(d.horasFeriado||0)+')</p></div>')+
         '<div><label class="label">Gratificación 25%</label><select class="input" onchange="RRHH._updLiq(\'gratificacion\',this.value===\'si\',false)"><option value="si" '+(d.gratificacion?'selected':'')+'>Sí</option><option value="no" '+(!d.gratificacion?'selected':'')+'>No</option></select></div>'+
       '</div>'+
       '<hr class="my-3 border-slate-200"><h5 class="font-semibold mb-2 text-sm">Horas del período</h5>'+
@@ -9353,7 +9405,7 @@ function renderLiqEditor(){
         '<div><label class="label">Hrs contabilizadas</label><div class="font-semibold">'+d.horasContabilizadas+'h</div></div>'+
         '<div><label class="label">Hrs faltantes</label><div class="font-semibold '+(d.horasFaltantes>0?'text-red-600':'')+'">'+d.horasFaltantes+'h</div></div>'+
         '<div><label class="label">Atrasos del período</label><div class="text-amber-600 font-semibold">'+(d.horasAtrasos||0)+'h</div></div>'+
-        '<div><label class="label">¿Descontar faltantes?</label><select class="input" onchange="RRHH._updLiq(\'descuentoFaltantes\',this.value===\'si\',false)"><option value="no" '+(!d.descuentoFaltantes?'selected':'')+'>No</option><option value="si" '+(d.descuentoFaltantes?'selected':'')+'>Sí ('+fmtCLP(d.horasFaltantes*d.valorHora)+')</option></select><p class="text-xs text-slate-500 mt-1">'+(isFull?'Resta del sueldo base':'Cambia el pago de programadas a contabilizadas')+'</p></div>'+
+        '<div><label class="label">Hrs descontadas (por atraso)</label><input type="number" step="0.5" min="0" class="input" data-liq-field="horasDescontadas" value="'+(d.horasDescontadas||0)+'" oninput="RRHH._updLiq(\'horasDescontadas\',this.value,true)"><p class="text-xs text-slate-500 mt-1">Sugerido: '+descSug+'h (atrasos redondeados hacia abajo). Editable. Recalcula el sugerido de "Hrs ordinarias" arriba.</p></div>'+
         '<div><label class="label">Hrs extra autorizadas (1.5×)</label><input type="number" step="0.1" min="0" class="input" data-liq-field="horasExtraAutorizadas" value="'+d.horasExtraAutorizadas+'" oninput="RRHH._updLiq(\'horasExtraAutorizadas\',this.value,true)"></div>'+
         '<div><label class="label">Hrs en feriado (con recargo)</label><input type="number" step="0.1" min="0" class="input" data-liq-field="horasFeriado" value="'+(d.horasFeriado||0)+'" oninput="RRHH._updLiq(\'horasFeriado\',this.value,true)"><p class="text-xs text-slate-500 mt-1">'+(d.horasFeriado>0?'Valor hora con recargo: '+fmtCLP(valorHoraFer):'No se detectaron horas en feriado')+'</p></div>'+
         '<div><label class="label">Recargo feriado %</label><input type="number" step="1" min="0" max="200" class="input" data-liq-field="recargoFeriadoPct" value="'+(d.recargoFeriadoPct||50)+'" oninput="RRHH._updLiq(\'recargoFeriadoPct\',this.value,true)"><p class="text-xs text-slate-500 mt-1">+50% típico → 1.5×. +100% → 2×.</p></div>'+
@@ -9468,7 +9520,9 @@ function renderLiqEditor(){
     // Horas para el resumen
     const horasOrdinariasMostradas = isFull
       ? (d.horasProgramadas||0)
-      : Math.max(0, round2((d.descuentoFaltantes?d.horasContabilizadas:d.horasProgramadas) - (d.horasFeriado||0)));
+      : (d.horasOrdinariasPagadas != null
+          ? Math.max(0, round2(d.horasOrdinariasPagadas))
+          : Math.max(0, round2((d.descuentoFaltantes?d.horasContabilizadas:d.horasProgramadas) - (d.horasFeriado||0))));
     const horasFeriadoMostradas = d.horasFeriado || 0;
     const valorHoraFer = d.valorHora * (1 + (d.recargoFeriadoPct||0)/100);
 
@@ -9705,6 +9759,29 @@ function downloadPayslipHtml(){
     },50);
   }
 
+  async function deleteLiquidacion(workerId, liqId, periodo){
+    if(!state.isPropietario) return;
+    const w = DB.workers.find(x=>x.id===workerId);
+    if(!w) return;
+    const per = periodo ? formatPeriodo(periodo) : '';
+    if(!confirm('¿Eliminar la liquidación de '+per+' para '+w.nombre+'? Esta acción no se puede deshacer.')) return;
+    try {
+      const args = {};
+      if(liqId) args.id = liqId;
+      if(workerId) args.workerId = workerId;
+      if(periodo) args.periodo = periodo;
+      await api('eliminarLiquidacionRRHH', args);
+      // Actualiza caché local: quita la liquidación por _id si existe, o por periodo como fallback
+      w.liquidaciones = (w.liquidaciones||[]).filter(l => {
+        if(liqId && String(l._id||'') === String(liqId)) return false;
+        if(!liqId && String(l.periodo) === String(periodo)) return false;
+        return true;
+      });
+      renderWorkerDetail(workerId);
+      toast('Liquidación eliminada','ok');
+    } catch(err){ toast('Error: '+err.message,'err'); }
+  }
+
   function _showLoading(sub){
     document.querySelectorAll('.rrhh-sub').forEach(el=>el.classList.add('hidden'));
     const t = document.getElementById('rrhhSub-'+sub);
@@ -9769,7 +9846,7 @@ function downloadPayslipHtml(){
     changeWeek, goToCurrentWeek, goToWeek, filterShiftWorker, addShiftFromForm, quickAddShift, editShift, copyPreviousWeek, clearWeek,
     togglePaste, loadMarcajesFromText, clearMarcajes, changeMarcajesPeriod, _setMarcWorker, _marcVerTodo,
     showCruceDetail, goToLiquidacionWith, _setCruceMes,
-    onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab,
+    onLiqWorkerOrPeriodoChange, generarLiquidacionPreview, downloadPayslipHtml, shareWhatsApp, saveLiquidacion, reopenLiquidacion, deleteLiquidacion, addOtroDescuento, addOtroHaber, _updLiq, _updOtroDesc, _delOtroDesc, _updOtroHab, _delOtroHab,
     openFeriadoForm, deleteFeriado, poblarFeriadosChile,
     copyToWholeMonth, adjustColacionWeek, cleanDuplicates, _setLastShiftWorker,
     openAdelantoForm, deleteAdelanto, _toggleAdelanto
