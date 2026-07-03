@@ -1791,19 +1791,63 @@ function go(view){
 
 /* INVENTARIO ────────────────────────────────────────────────────── */
 async function cargarInventario(){
-  try{
-    const d = await api('listarInventario');
-    S.productos = d.productos || [];
-    const cats = Array.from(new Set(S.productos.map(p=>p.categoria).filter(Boolean))).sort();
-    S.categorias = cats;
-    const sel = $('#invCategoria');
-    if(sel){
-      sel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c=>`<option>${c}</option>`).join('');
+  // Endurecimos la carga porque Apps Script a veces demora >20s o falla
+  // intermitentemente. Antes: si fallaba, S.productos quedaba en [] y el
+  // usuario veía "Sin productos" hasta refrescar la página.
+  //
+  // Cambios:
+  //   1) Si ya tenemos productos cargados, NO los borramos mientras
+  //      esperamos la respuesta nueva (evita el flash de "Sin productos").
+  //   2) Muestra "⏳ Cargando…" en la tabla si es la primera carga.
+  //   3) Reintenta 1 vez automáticamente ante error de red.
+  //   4) Si vuelve a fallar, muestra botón de "Reintentar" en vez de dejar
+  //      la lista vacía sin explicación.
+  const tbody = $('#invTbody');
+  const yaHabia = Array.isArray(S.productos) && S.productos.length > 0;
+  if(tbody && !yaHabia){
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-slate-400 py-6">⏳ Cargando inventario…</td></tr>';
+  }
+  let lastErr = null;
+  for(let intento = 0; intento < 2; intento++){
+    try{
+      const d = await api('listarInventario');
+      if(!d || !Array.isArray(d.productos)){
+        throw new Error('Respuesta inválida del servidor (sin lista de productos)');
+      }
+      // Sólo pisamos S.productos con datos válidos. Un array vacío legítimo
+      // (inventario recién creado) igual se acepta.
+      S.productos = d.productos;
+      const cats = Array.from(new Set(S.productos.map(p=>p.categoria).filter(Boolean))).sort();
+      S.categorias = cats;
+      const sel = $('#invCategoria');
+      if(sel){
+        sel.innerHTML = '<option value="">Todas las categorías</option>' + cats.map(c=>`<option>${c}</option>`).join('');
+      }
+      renderInventario();
+      renderCatalogo();
+      cargarStatsDashboard();
+      return;
+    }catch(err){
+      lastErr = err;
+      if(intento === 0){
+        // Reintento silencioso — 1.5s de espera para dar aire a Apps Script.
+        await new Promise(r => setTimeout(r, 1500));
+      }
     }
-    renderInventario();
-    renderCatalogo();
-    cargarStatsDashboard();
-  }catch(err){ toast(err.message,'err'); }
+  }
+  // Los 2 intentos fallaron.
+  if(yaHabia){
+    // Preservamos los datos previos para no interrumpir la operación
+    // (típicamente el cajero está atendiendo). Sólo avisamos con un toast.
+    toast('No se pudo refrescar el inventario ('+ (lastErr?.message||'red') +'). Se mantienen los datos actuales.', 'err');
+  } else if(tbody){
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-red-600 py-6">
+      No se pudo cargar el inventario.<br>
+      <span class="text-xs text-slate-500">${esc(lastErr?.message||'Error de red')}</span><br>
+      <button class="btn btn-primary mt-3" onclick="cargarInventario()">🔄 Reintentar</button>
+    </td></tr>`;
+    toast('Error al cargar inventario: '+(lastErr?.message||'red'), 'err');
+  }
 }
 
 function esBajoStock(p){
