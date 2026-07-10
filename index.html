@@ -675,11 +675,17 @@
         <div id="ventaConCaja" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-4">
           <!-- Buscador + catálogo -->
           <div class="lg:col-span-2 bg-white rounded-xl p-4 border border-slate-200">
-            <div class="flex gap-2 mb-3 flex-wrap">
-              <input id="scanInput" class="input flex-1" placeholder="Escanear código o buscar producto…" autofocus>
-              <input id="scanQty" class="input w-20" type="number" min="1" value="1" title="Cantidad al pistolear">
-              <button class="scan-btn" onclick="scanVentaCamara()" title="Escanear con la cámara del móvil">📷 Cámara</button>
-              <button class="btn btn-primary" onclick="handleScan()">Agregar</button>
+            <!-- En móvil (default): el buscador ocupa el ancho completo en la
+                 primera fila y cantidad + cámara + agregar van en una segunda
+                 fila debajo. En sm+ (≥640px) todo cabe en una sola fila. -->
+            <div class="mb-3 space-y-2 sm:space-y-0 sm:flex sm:gap-2 sm:flex-wrap">
+              <input id="scanInput" class="input w-full sm:flex-1 text-base"
+                placeholder="Escanear código o buscar producto…" autofocus>
+              <div class="flex gap-2">
+                <input id="scanQty" class="input w-20 shrink-0" type="number" min="1" value="1" title="Cantidad al pistolear">
+                <button class="scan-btn shrink-0" onclick="scanVentaCamara()" title="Escanear con la cámara del móvil">📷 Cámara</button>
+                <button class="btn btn-primary flex-1 sm:flex-initial" onclick="handleScan()">Agregar</button>
+              </div>
             </div>
             <div id="scanHint" class="text-xs text-slate-400 mb-3">Ingresa el código y presiona Enter, apunta con la pistola lectora o toca 📷 para usar la cámara del móvil.</div>
 
@@ -703,6 +709,26 @@
               <div class="flex items-center justify-between text-sm gap-2">
                 <label class="text-slate-500 flex-1">Descuento total</label>
                 <button id="btnDescTotal" type="button" class="btn btn-ghost text-xs py-1 px-2" onclick="openDescuentoTotal()">🏷️ <span id="descTotalLabel">Sin descuento</span></button>
+              </div>
+              <!-- Botones sólo para PROPIETARIO — retiros a precio costo o de cortesía.
+                   La visibilidad se toggle desde renderCart() en base a isPropietario(). -->
+              <div id="propietarioActions" class="hidden bg-purple-50 border border-purple-200 rounded p-2 space-y-2">
+                <div class="text-[11px] font-semibold text-purple-800 flex items-center gap-1">
+                  <span>👑</span> Acciones de propietario
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" class="btn btn-ghost text-xs py-1 px-2 border border-purple-300 bg-white hover:bg-purple-100"
+                    onclick="__aplicarPrecioCosto()"
+                    title="Deja cada producto del carrito a su valor de compra">
+                    💰 Precio costo
+                  </button>
+                  <button type="button" class="btn btn-ghost text-xs py-1 px-2 border border-purple-300 bg-white hover:bg-purple-100"
+                    onclick="__aplicarCortesia100()"
+                    title="Aplica 100% de descuento al total. Deja el retiro registrado con precio $0.">
+                    🎁 Cortesía 100%
+                  </button>
+                </div>
+                <div id="propietarioActionsInfo" class="text-[11px] text-purple-700 hidden"></div>
               </div>
               <div id="cargoCigarroRow" class="hidden flex items-center justify-between text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                 <span>🚬 Recargo cigarrillos (tarjeta)</span>
@@ -4900,7 +4926,70 @@ function renderCart(){
   // Ocultar fila de recargo cigarrillos en el resumen del carrito: se aplica al
   // elegir medio de pago (mostraremos el aviso recién en openPago).
   const row = $('#cargoCigarroRow'); if(row) row.classList.add('hidden');
+  // Acciones exclusivas de propietario (retiros a precio costo / cortesía).
+  const pa = $('#propietarioActions');
+  if(pa){
+    if(isPropietario() && S.cart.length){
+      pa.classList.remove('hidden');
+      const info = $('#propietarioActionsInfo');
+      const dv = S.descuentoVenta || { tipo:'pct', valor:0 };
+      const es100 = dv.tipo === 'pct' && Number(dv.valor) >= 100;
+      const algunItemDesc = S.cart.some(c => c.descValor > 0);
+      if(info){
+        if(es100){
+          info.textContent = '🎁 Retiro de cortesía activo — el total quedará en $0. Puedes cobrar con efectivo $0 para dejar la trazabilidad.';
+          info.classList.remove('hidden');
+        } else if(algunItemDesc){
+          info.textContent = '💰 Productos ajustados. Revisa el subtotal antes de cobrar.';
+          info.classList.remove('hidden');
+        } else {
+          info.classList.add('hidden');
+        }
+      }
+    } else {
+      pa.classList.add('hidden');
+    }
+  }
 }
+
+/* Acción de propietario: deja cada ítem del carrito al precio de compra.
+   Calcula el % de descuento por ítem tal que (valor_venta × (1 - pct/100))
+   = valor_compra. Sirve para retirar producto pagando el costo. */
+window.__aplicarPrecioCosto = () => {
+  if(!isPropietario()){ toast('Sólo el propietario puede aplicar esta acción','err'); return; }
+  if(!S.cart.length){ toast('El carrito está vacío','err'); return; }
+  let ajustados = 0;
+  S.cart.forEach(c => {
+    const vv = Number(c.producto.valor_venta) || 0;
+    const vc = Number(c.producto.valor_compra) || 0;
+    if(vv <= 0 || vc < 0){ return; }
+    if(vc >= vv){
+      // Precio de compra igual o mayor al de venta: no descontamos nada
+      c.descTipo = 'pct'; c.descValor = 0;
+    } else {
+      const pct = Math.round((1 - (vc / vv)) * 10000) / 100;
+      c.descTipo = 'pct';
+      c.descValor = Math.min(100, Math.max(0, pct));
+      ajustados++;
+    }
+  });
+  // Quitar cualquier descuento total previo para evitar apilarlo con precio costo
+  S.descuentoVenta = { tipo:'pct', valor:0 };
+  renderCart();
+  toast(`Precio costo aplicado a ${ajustados} producto${ajustados===1?'':'s'}`, 'ok');
+};
+
+/* Acción de propietario: 100% de descuento al total (retiro de cortesía).
+   El total queda en $0 pero la venta se registra igual para trazabilidad. */
+window.__aplicarCortesia100 = () => {
+  if(!isPropietario()){ toast('Sólo el propietario puede aplicar esta acción','err'); return; }
+  if(!S.cart.length){ toast('El carrito está vacío','err'); return; }
+  // Limpiamos descuentos por ítem (redundantes con 100% total)
+  S.cart.forEach(c => { c.descTipo = 'pct'; c.descValor = 0; });
+  S.descuentoVenta = { tipo:'pct', valor: 100 };
+  renderCart();
+  toast('Cortesía 100% aplicada. Al cobrar podrás dejar el total en $0.', 'ok');
+};
 
 function setQty(i,q){
   q = Number(q);
