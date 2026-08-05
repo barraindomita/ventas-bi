@@ -1497,21 +1497,109 @@ function toast(msg, type='info'){
   setTimeout(()=> el.remove(), 2900);
 }
 
-async function api(action, payload={}){
+/* Errores conocidos que indican que la sesión ya no vale y hay que forzar
+   re-login. Apps Script los emite desde _requireSession. */
+const _ERR_SESION = /sesi[oó]n\s+(inv[aá]lida|expirada|requerida)/i;
+/* Flag para evitar disparar múltiples alerts/redirs de sesión expirada si
+   varias llamadas fallan a la vez. */
+let _sesionExpiradaEnCurso = false;
+
+async function api(action, payload={}, opts={}){
   if(APPS_SCRIPT_URL.startsWith('PEGAR')) {
     toast('Primero configura APPS_SCRIPT_URL en index.html', 'err');
     throw new Error('APPS_SCRIPT_URL no configurada');
   }
   const body = JSON.stringify(Object.assign({ action, token: S.token }, payload));
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method:'POST', body,
-    // Apps Script acepta text/plain para evitar preflight CORS
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    redirect:'follow'
-  });
-  const data = await res.json();
-  if(!data.ok) throw new Error(data.error || 'Error');
-  return data;
+  // Timeout largo pero acotado — Apps Script suele responder <15s pero puede
+  // demorar hasta 30s en arranque en frío o al procesar hojas grandes.
+  const TIMEOUT_MS = Number(opts.timeout) || 45000;
+  // Reintentos ante errores de red o 5xx. Ojo: NO reintentamos escrituras
+  // (registrarVenta, actualizarStock, etc.) porque el backend ya tiene
+  // idempotencia sólo para ventas — para el resto un retry podría duplicar.
+  const RETRIES = opts.retry !== undefined ? opts.retry : _accionSegura(action) ? 1 : 0;
+
+  let lastErr;
+  for(let intento = 0; intento <= RETRIES; intento++){
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), TIMEOUT_MS) : null;
+    try{
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method:'POST', body,
+        // Apps Script acepta text/plain para evitar preflight CORS
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        redirect:'follow',
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      if(timer) clearTimeout(timer);
+      // Respuesta HTTP no 2xx: puede reintentarse si es 5xx transitorio.
+      if(!res.ok){
+        const txt = await res.text().catch(() => '');
+        const err = new Error('HTTP ' + res.status + (txt ? ': ' + txt.slice(0,120) : ''));
+        err._retryable = res.status >= 500;
+        throw err;
+      }
+      let data;
+      try { data = await res.json(); }
+      catch(_){
+        const err = new Error('Respuesta no válida del servidor');
+        err._retryable = true;
+        throw err;
+      }
+      if(!data.ok){
+        const msg = data.error || 'Error';
+        // Sesión expirada / inválida — no tiene sentido reintentar, hay que
+        // relogear al usuario.
+        if(_ERR_SESION.test(msg)){
+          _manejarSesionExpirada();
+        }
+        throw new Error(msg);
+      }
+      return data;
+    }catch(err){
+      if(timer) clearTimeout(timer);
+      lastErr = err;
+      // Errores irrecuperables — no reintentar
+      const esAbort = err.name === 'AbortError';
+      const esRed = esAbort || err.message === 'Failed to fetch' || err.message === 'Network request failed' || err._retryable;
+      const esSesion = _ERR_SESION.test(err.message || '');
+      if(esSesion || (!esRed) || intento >= RETRIES){
+        throw err;
+      }
+      // Espera con backoff antes del reintento (1.5s / 3s)
+      await new Promise(r => setTimeout(r, 1500 * (intento + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+/* Acciones READ-ONLY que se pueden reintentar sin riesgo.
+   Las escrituras (registrarVenta, actualizarStock, anularVenta, etc.) NO se
+   reintentan automáticamente para evitar duplicados — el propio front tiene
+   idempotency_key en registrarVenta como capa extra. */
+function _accionSegura(action){
+  if(!action) return false;
+  return /^(listar|reporte|caja|cajas|historial|top|ultima|productos|me|listarUsuariosLogin|listarPromociones|tuuListarTerminales|listarMovimientos|listarCategorias|previewImport|diagnostic|cargar)/i.test(action)
+      || action === 'me';
+}
+
+function _manejarSesionExpirada(){
+  if(_sesionExpiradaEnCurso) return;
+  _sesionExpiradaEnCurso = true;
+  try{
+    localStorage.removeItem('bi_token');
+    localStorage.removeItem('bi_user');
+  }catch(_){}
+  S.token = null; S.usuario = null;
+  toast('Tu sesión expiró. Vuelve a iniciar sesión.', 'err');
+  // Pequeño delay para que el toast alcance a mostrarse
+  setTimeout(() => {
+    try{
+      $('#viewApp')?.classList.add('hidden');
+      $('#viewLogin')?.classList.remove('hidden');
+      if(typeof backToLoginStart === 'function') backToLoginStart();
+    }catch(_){}
+    _sesionExpiradaEnCurso = false;
+  }, 300);
 }
 
 /* Modal genérico.
@@ -3882,12 +3970,24 @@ async function openBajoSinStock(){
 
 /* CAJA ──────────────────────────────────────────────────────────── */
 async function cargarCajaAbierta(){
+  // Guardamos el estado previo por si la respuesta falla — evita quedarse
+  // con "No tienes caja abierta" cuando en realidad sí hay caja y Apps
+  // Script sólo respondió mal transitoriamente.
+  const cajaPrevia = S.caja;
   try{
     const d = await api('cajaAbierta');
+    // Sólo pisamos con el resultado nuevo si la respuesta llegó bien.
     S.caja = d.caja;
     renderVentas(); renderCajaStatus();
     if(isAdmin()) cargarCajasAbiertas();
-  }catch(err){ toast(err.message,'err'); }
+  }catch(err){
+    // No tocar S.caja — mantiene el estado previo. Sólo avisamos.
+    if(cajaPrevia){
+      toast('No se pudo refrescar la caja ('+ err.message +'). Se mantiene la caja anterior.', 'err');
+    } else {
+      toast(err.message, 'err');
+    }
+  }
 }
 
 /* CAJAS ABIERTAS (admin) ─────────────────────────────────────────── */
