@@ -1504,11 +1504,53 @@ const _ERR_SESION = /sesi[oó]n\s+(inv[aá]lida|expirada|requerida)/i;
    varias llamadas fallan a la vez. */
 let _sesionExpiradaEnCurso = false;
 
+/* ─── POOL DE CONCURRENCIA CONTRA APPS SCRIPT ────────────────────────────
+   Google Apps Script tiene un límite de peticiones concurrentes por proyecto
+   (aprox. 30 simultáneas — puede ser menos en cuenta gratis). Cuando el
+   módulo Reportes o el arranque de la app disparan 10+ llamadas paralelas,
+   algunas rebotan con 404 antes de llegar al backend.
+
+   Con este pool nunca hay más de MAX_CONCURRENT_API fetches en vuelo. El
+   resto espera su turno en cola. Esto agrega ~ms de latencia en el peor
+   caso pero elimina los 404 espontáneos por concurrencia. */
+const MAX_CONCURRENT_API = 3;
+let _apiEnCurso = 0;
+const _apiCola = [];
+function _apiAcquireSlot(){
+  return new Promise(resolve => {
+    if(_apiEnCurso < MAX_CONCURRENT_API){
+      _apiEnCurso++;
+      resolve();
+    } else {
+      _apiCola.push(resolve);
+    }
+  });
+}
+function _apiReleaseSlot(){
+  if(_apiCola.length){
+    const next = _apiCola.shift();
+    // Sigue en curso: pasa el slot al siguiente
+    next();
+  } else {
+    _apiEnCurso = Math.max(0, _apiEnCurso - 1);
+  }
+}
+
 async function api(action, payload={}, opts={}){
   if(APPS_SCRIPT_URL.startsWith('PEGAR')) {
     toast('Primero configura APPS_SCRIPT_URL en index.html', 'err');
     throw new Error('APPS_SCRIPT_URL no configurada');
   }
+  // Espera slot en el pool de concurrencia (max 3 en vuelo simultáneos).
+  await _apiAcquireSlot();
+  try {
+    return await _apiCore(action, payload, opts);
+  } finally {
+    _apiReleaseSlot();
+  }
+}
+
+async function _apiCore(action, payload, opts){
   const body = JSON.stringify(Object.assign({ action, token: S.token }, payload));
   // Timeout largo pero acotado — Apps Script suele responder <15s pero puede
   // demorar hasta 30s en arranque en frío o al procesar hojas grandes.
@@ -1535,7 +1577,10 @@ async function api(action, payload={}, opts={}){
       if(!res.ok){
         const txt = await res.text().catch(() => '');
         const err = new Error('HTTP ' + res.status + (txt ? ': ' + txt.slice(0,120) : ''));
-        err._retryable = res.status >= 500;
+        // 5xx = error del servidor. 404 en Apps Script suele ser rechazo por
+        // concurrencia (Google devuelve 404 en la URL de content cuando la
+        // petición no pasó el filtro de rate/concurrent). Ambos son retryable.
+        err._retryable = res.status >= 500 || res.status === 404;
         throw err;
       }
       let data;
