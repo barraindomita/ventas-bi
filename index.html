@@ -1742,6 +1742,12 @@ $('#loginPwForm').addEventListener('submit', e => _lockSubmit(e, async () => {
       usuario_id: _loginUserPicked.id,
       password: $('#loginPassword').value
     });
+    // Validación defensiva: el backend debe devolver token + usuario válidos.
+    // Sin esto un glitch de red o cache podía dejar S.usuario indefinido y
+    // hacer explotar enterApp (fue causa de un incidente en producción).
+    if(!d || !d.token || !d.usuario || !d.usuario.nombre){
+      throw new Error('Respuesta de login incompleta. Intenta de nuevo.');
+    }
     S.token = d.token; S.usuario = d.usuario;
     localStorage.setItem('bi_token', d.token);
     localStorage.setItem('bi_user', JSON.stringify(d.usuario));
@@ -1793,6 +1799,21 @@ async function doLogout(){
 }
 
 function enterApp(){
+  // Guarda de seguridad: si por cualquier motivo llegamos acá sin usuario
+  // válido, volver a login en vez de reventar. Antes: NPE en línea 1798
+  // dejaba la app completamente colgada sin poder disparar ninguna carga.
+  if(!S.usuario || !S.usuario.nombre){
+    try{
+      localStorage.removeItem('bi_token');
+      localStorage.removeItem('bi_user');
+    }catch(_){}
+    S.token = null; S.usuario = null;
+    $('#viewApp').classList.add('hidden');
+    $('#viewLogin').classList.remove('hidden');
+    if(typeof backToLoginStart === 'function') backToLoginStart();
+    toast('Sesión inválida. Vuelve a ingresar.', 'err');
+    return;
+  }
   $('#viewLogin').classList.add('hidden');
   $('#viewApp').classList.remove('hidden');
   $('#userName').textContent = S.usuario.nombre;
