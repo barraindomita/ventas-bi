@@ -6287,63 +6287,161 @@ async function cargarReportes(){
   if(catPerfilCaja) catPerfilCaja.classList.toggle('hidden', !isAdmin());
   const catVencimientos = $('#repCatVencimientos');
   if(catVencimientos) catVencimientos.classList.toggle('hidden', !isAdmin());
-  if(isAdmin()){
-    cargarVentasDetalladas(params);
-    cargarReporteCajas(params);
-    cargarReporteSobres(params);
-    cargarVentasAnuladas(params);
-    cargarReporteVencimientos();
-  }
+
+  // Vencimientos NO se puede consolidar en reporteMaestro (usa hoja de
+  // Inventario, no de Ventas). Sigue como llamada aparte para admin.
+  if(isAdmin()) cargarReporteVencimientos();
+
+  // ADMIN: 1 sola llamada a reporteMaestro trae TODO el módulo (ventas, top,
+  // margen, categoría, detallado, cajas, anuladas). Antes eran 8-10 llamadas
+  // paralelas, cada una leyendo Ventas completo. Ahora 1 sola lee todo una
+  // vez y agrega en memoria.
+  //
+  // No-admin: cae al mismo path pero con endpoints livianos (los pesados
+  // igual están gate-eados por _requireAdmin en el backend).
   try{
-    const [v, p, m, c] = await Promise.all([
-      api('reporteVentas', params),
-      api('reporteProductosTop', params),
-      api('reporteMargen', params),
-      api('reporteVentasPorCategoria', params)
-    ]);
-    $('#repIngresos').textContent = fmt(m.ingresos);
-    $('#repCosto').textContent = fmt(m.costo);
-    $('#repMargen').textContent = fmt(m.margen) + ` (${m.margenPct}%)`;
-    $('#repCantVentas').textContent = v.resumen.cantVentas;
-
-    _chart('chartDia','line', Object.keys(v.porDia).sort(), Object.entries(v.porDia).sort().map(([k,v])=>v), 'Ventas por día');
-    _chart('chartMes','bar', Object.keys(v.porMes).sort(), Object.entries(v.porMes).sort().map(([k,v])=>v), 'Ventas por mes');
-    const horas = Array.from({length:24},(_,i)=>i);
-    const semanaOrden = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-
-    // Guardamos los datasets en un cache para poder redibujar chartHora al
-    // alternar el filtro por día de la semana sin volver a pedir al backend.
-    _repHorasCache = {
-      porHora: v.porHora || {},
-      porHoraDia: v.porHoraDia || {}
-    };
-    _renderChartHora();
-
-    // chartSemana clickeable: alterna el filtro del día y vuelve a dibujar chartHora.
-    _chart('chartSemana','bar', semanaOrden, semanaOrden.map(d=>v.porDiaSemana[d]||0),
-      'Ventas por día', {
-        onClick: (idx, lbl) => {
-          S.repFiltroDow = (S.repFiltroDow === lbl) ? '' : lbl;
-          _renderChartHora();
-          _renderFiltroDowChip();
-        }
-      });
-    _renderFiltroDowChip();
-    const mp = v.resumen.mediosPago || {};
-    const mpLabels = MEDIOS_PAGO.filter(k => (Number(mp[k])||0) > 0).map(medioLabel);
-    const mpValues = MEDIOS_PAGO.filter(k => (Number(mp[k])||0) > 0).map(k => Number(mp[k])||0);
-    const mpTotal  = mpValues.reduce((s,v)=>s+v,0) || 1;
-    const mpLabelsPct = mpLabels.map((l,i) => `${l} — ${((mpValues[i]/mpTotal)*100).toFixed(1)}%`);
-    _chart('chartPagos','doughnut', mpLabelsPct, mpValues, 'Medios de pago');
-    _chart('chartCat','bar', c.categorias.map(x=>x.categoria), c.categorias.map(x=>x.total), 'Por categoría');
-
-    // Poblar el menú multi-select de categorías con las que tienen ventas + inventario
-    const setCats = new Set();
-    (c.categorias || []).forEach(x => x.categoria && setCats.add(String(x.categoria).trim()));
-    (S.categorias || []).forEach(cat => cat && setCats.add(String(cat).trim()));
-    _renderTopProdCatMenu(Array.from(setCats).sort());
-    _renderTopProductos(p);
+    if(isAdmin()){
+      // Incluir categorías del multi-select en el pedido — así el top viene
+      // ya filtrado si el usuario tiene selección persistente.
+      const cats = (S.topProdCats instanceof Set) ? Array.from(S.topProdCats) : [];
+      const paramsRep = Object.assign({}, params);
+      if(cats.length) paramsRep.categorias = cats;
+      const d = await api('reporteMaestro', paramsRep);
+      _distribuirReporteMaestro(d, params);
+    } else {
+      // Fallback (no-admin): sólo los 4 endpoints que no requieren admin.
+      const [v, p, m, c] = await Promise.all([
+        api('reporteVentas', params),
+        api('reporteProductosTop', params),
+        api('reporteMargen', params),
+        api('reporteVentasPorCategoria', params)
+      ]);
+      _renderResumenVentasReporte(v, m);
+      _renderChartsVentasReporte(v);
+      _renderChartCategoriasReporte(c);
+      _renderTopProdCatMenuDesde(c);
+      _renderTopProductos(p);
+    }
   }catch(err){ toast(err.message,'err'); }
+}
+
+/* Distribuye el bloque devuelto por reporteMaestro a los renders individuales
+   ya existentes. Mantiene el comportamiento visual idéntico al de antes.
+   Cada bloque del resp corresponde a lo que devolvía un endpoint individual:
+     resp.ventas     ← reporteVentas
+     resp.productos  ← reporteProductosTop
+     resp.margen     ← reporteMargen
+     resp.categorias ← reporteVentasPorCategoria
+     resp.detallado  ← reporteVentasDetallado
+     resp.cajas      ← reporteCajas
+     resp.anuladas   ← listarVentasAnuladas
+*/
+function _distribuirReporteMaestro(resp, params){
+  if(!resp) return;
+  // Bloques ventas + margen + charts
+  _renderResumenVentasReporte(resp.ventas, resp.margen);
+  _renderChartsVentasReporte(resp.ventas);
+  // Chart de categorías
+  _renderChartCategoriasReporte(resp.categorias);
+  // Menú multi-select
+  _renderTopProdCatMenuDesde(resp.categorias);
+  // Top productos
+  _renderTopProductos(resp.productos);
+  // Detallado por perfil/vendedor
+  _renderVentasDetalladasDesdeMaestro(resp.detallado);
+  // Cajas
+  _renderReporteCajasDesdeMaestro(resp.cajas);
+  // Sobres (reusa datos de cajas cerradas)
+  _renderReporteSobresDesdeMaestro(resp.cajas, params);
+  // Ventas anuladas
+  _renderVentasAnuladasDesdeMaestro(resp.anuladas, params);
+}
+
+/* Sub-renders extraídos para poder llamarlos también con datos del maestro. */
+function _renderResumenVentasReporte(v, m){
+  if(!v || !m) return;
+  $('#repIngresos').textContent = fmt(m.ingresos);
+  $('#repCosto').textContent    = fmt(m.costo);
+  $('#repMargen').textContent   = fmt(m.margen) + ` (${m.margenPct}%)`;
+  $('#repCantVentas').textContent = v.resumen.cantVentas;
+}
+
+function _renderChartsVentasReporte(v){
+  if(!v) return;
+  _chart('chartDia','line', Object.keys(v.porDia).sort(), Object.entries(v.porDia).sort().map(([k,x])=>x), 'Ventas por día');
+  _chart('chartMes','bar',  Object.keys(v.porMes).sort(), Object.entries(v.porMes).sort().map(([k,x])=>x), 'Ventas por mes');
+  const semanaOrden = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  _repHorasCache = {
+    porHora: v.porHora || {},
+    porHoraDia: v.porHoraDia || {}
+  };
+  _renderChartHora();
+  _chart('chartSemana','bar', semanaOrden, semanaOrden.map(d=>v.porDiaSemana[d]||0),
+    'Ventas por día', {
+      onClick: (idx, lbl) => {
+        S.repFiltroDow = (S.repFiltroDow === lbl) ? '' : lbl;
+        _renderChartHora();
+        _renderFiltroDowChip();
+      }
+    });
+  _renderFiltroDowChip();
+  const mp = v.resumen.mediosPago || {};
+  const mpLabels = MEDIOS_PAGO.filter(k => (Number(mp[k])||0) > 0).map(medioLabel);
+  const mpValues = MEDIOS_PAGO.filter(k => (Number(mp[k])||0) > 0).map(k => Number(mp[k])||0);
+  const mpTotal  = mpValues.reduce((s,x)=>s+x,0) || 1;
+  const mpLabelsPct = mpLabels.map((l,i) => `${l} — ${((mpValues[i]/mpTotal)*100).toFixed(1)}%`);
+  _chart('chartPagos','doughnut', mpLabelsPct, mpValues, 'Medios de pago');
+}
+
+function _renderChartCategoriasReporte(c){
+  if(!c || !c.categorias) return;
+  _chart('chartCat','bar', c.categorias.map(x=>x.categoria), c.categorias.map(x=>x.total), 'Por categoría');
+}
+
+function _renderTopProdCatMenuDesde(c){
+  const setCats = new Set();
+  (c && c.categorias || []).forEach(x => x.categoria && setCats.add(String(x.categoria).trim()));
+  (S.categorias || []).forEach(cat => cat && setCats.add(String(cat).trim()));
+  _renderTopProdCatMenu(Array.from(setCats).sort());
+}
+
+/* Renders para bloques que antes venían de endpoints individuales — ahora
+   reciben el bloque del reporteMaestro directamente. */
+function _renderVentasDetalladasDesdeMaestro(det){
+  const wrap = $('#repVentasDetalle');
+  const resumen = $('#repVendedoresResumen');
+  if(!wrap || !resumen) return;
+  _repDetalle = {
+    params: null,
+    ventas: (det && det.ventas) || [],
+    vendedores: (det && det.vendedores) || []
+  };
+  const sel = $('#repVendedorFilter');
+  const currentVal = sel ? sel.value : '';
+  if(sel){
+    sel.innerHTML = '<option value="">Todos los vendedores</option>' +
+      _repDetalle.vendedores.map(x=>`<option value="${x.id}">${x.nombre}</option>`).join('');
+    if([...sel.options].some(o=>o.value===currentVal)) sel.value = currentVal;
+  }
+  resumen.innerHTML = _repDetalle.vendedores.map(x=>`
+    <div class="bg-slate-50 rounded-lg p-3">
+      <div class="text-xs text-slate-500 uppercase font-semibold truncate">${x.nombre}</div>
+      <div class="text-lg font-bold" style="color:var(--brand-dark)">${fmt(x.total)}</div>
+      <div class="text-xs text-slate-400">${x.cant_ventas} ventas</div>
+    </div>`).join('') || '<div class="text-slate-400 text-sm">Sin ventas en el rango.</div>';
+  renderVentasPorVendedor();
+}
+
+/* Renders puros usados por el reporteMaestro — CERO llamadas extra al backend.
+   Reciben los bloques directamente del reporteMaestro y pintan. */
+function _renderReporteCajasDesdeMaestro(bloqueCajas){
+  _renderReporteCajasContent(bloqueCajas);
+}
+function _renderReporteSobresDesdeMaestro(bloqueCajas, params){
+  _renderReporteSobresContent(bloqueCajas, params);
+}
+function _renderVentasAnuladasDesdeMaestro(bloqueAnul, params){
+  _renderVentasAnuladasContent(bloqueAnul, params);
 }
 
 /* Multi-select de categorías para el Top de productos.
@@ -6673,7 +6771,26 @@ async function cargarVentasAnuladas(params){
   if(resumen) resumen.innerHTML = '';
   try{
     const d = await api('listarVentasAnuladas', params);
-    const anuladas = d.anuladas || [];
+    _renderVentasAnuladasContent(d, params);
+  }catch(err){
+    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar: ${esc(err.message||err)}</div>`;
+  }
+}
+
+/* Render puro del reporte de ventas anuladas. Recibe { anuladas } y params
+   para el rango textual. Usado desde el fetch individual y desde reporteMaestro. */
+function _renderVentasAnuladasContent(d, params){
+  const tbl = $('#repAnuladasTbl');
+  const resumen = $('#repAnuladasResumen');
+  if(!tbl) return;
+  if(!params){
+    params = {
+      desde: $('#repDesde')?.value || '',
+      hasta: $('#repHasta')?.value || ''
+    };
+  }
+  try{
+    const anuladas = (d && d.anuladas) || [];
     if(!anuladas.length){
       tbl.innerHTML = '<div class="text-emerald-700 py-6 text-center text-sm">✓ No hay ventas anuladas en este rango.</div>';
       if(resumen){
@@ -6718,7 +6835,7 @@ async function cargarVentasAnuladas(params){
       </tbody>
     </table>`;
   }catch(err){
-    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar: ${esc(err.message||err)}</div>`;
+    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">Error al renderizar: ${esc(err.message||err)}</div>`;
   }
 }
 
@@ -6744,7 +6861,27 @@ async function cargarReporteSobres(params){
   if(conc) conc.innerHTML = '<span class="text-slate-400">Ingresa el monto para ver si calza.</span>';
   try{
     const d = await api('reporteCajas', params);
-    const cajas = (d.cajas || []).filter(c => String(c.estado).toLowerCase() === 'cerrada');
+    _renderReporteSobresContent(d, params);
+  }catch(err){
+    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar: ${esc(err.message||err)}</div>`;
+  }
+}
+
+/* Render puro del reporte de sobres. Recibe { cajas } y params (para el
+   rango textual). Usado tanto desde el fetch individual como desde
+   reporteMaestro (que ya trae los datos de cajas). */
+function _renderReporteSobresContent(d, params){
+  const tbl = $('#repSobresTbl');
+  const resumen = $('#repSobresResumen');
+  if(!tbl) return;
+  if(!params){
+    params = {
+      desde: $('#repDesde')?.value || '',
+      hasta: $('#repHasta')?.value || ''
+    };
+  }
+  try{
+    const cajas = ((d && d.cajas) || []).filter(c => String(c.estado).toLowerCase() === 'cerrada');
     // Sólo consideramos cajas con sobre definido (>0 o explícitamente 0).
     // Si la caja se cerró antes de tener este campo, lo trataremos como 0.
     const filas = cajas
@@ -6818,7 +6955,7 @@ async function cargarReporteSobres(params){
     // Recalcular conciliación si el usuario ya había escrito algo
     __recalcConciliacionSobres();
   }catch(err){
-    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar: ${esc(err.message||err)}</div>`;
+    tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">Error al renderizar: ${esc(err.message||err)}</div>`;
   }
 }
 
@@ -6851,11 +6988,26 @@ async function cargarReporteCajas(params){
   if(resumen) resumen.innerHTML = '';
   try{
     const d = await api('reporteCajas', params);
-    const cajas = d.cajas || [];
-    if(!cajas.length){
-      tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">No hay cajas en el rango seleccionado.</div>';
-      return;
-    }
+    _renderReporteCajasContent(d);
+  }catch(err){
+    tbl.innerHTML = `<div class="text-red-500 p-4 text-sm">No se pudo cargar: ${err.message}<br><span class="text-xs text-slate-500">Si actualizaste el código, recuerda volver a desplegar el Apps Script.</span></div>`;
+  }
+}
+
+/* Render puro del reporte de cajas — recibe { cajas, desde, hasta } y pinta.
+   Extraído para poder usarse tanto desde el fetch individual como desde el
+   reporteMaestro consolidado (que ya trae los datos, sin necesidad de re-fetch). */
+function _renderReporteCajasContent(d){
+  const tbl = $('#repCajasTbl');
+  const resumen = $('#repCajasResumen');
+  if(!tbl) return;
+  const cajas = (d && d.cajas) || [];
+  if(!cajas.length){
+    tbl.innerHTML = '<div class="text-slate-400 py-6 text-center text-sm">No hay cajas en el rango seleccionado.</div>';
+    if(resumen) resumen.innerHTML = '';
+    return;
+  }
+  try{
     // Resumen
     const _truthy = v => v===true||v==='TRUE'||v==='true'||v===1||v==='1';
     const abiertas = cajas.filter(c => String(c.estado).toLowerCase()==='abierta').length;
@@ -6947,7 +7099,7 @@ async function cargarReporteCajas(params){
       <tbody>${rows}</tbody>
     </table>`;
   }catch(err){
-    tbl.innerHTML = `<div class="text-red-500 p-4 text-sm">No se pudo cargar: ${err.message}<br><span class="text-xs text-slate-500">Si actualizaste el código, recuerda volver a desplegar el Apps Script.</span></div>`;
+    tbl.innerHTML = `<div class="text-red-500 p-4 text-sm">Error al renderizar: ${err.message}</div>`;
   }
 }
 
