@@ -3461,7 +3461,19 @@ function openActualizarStock(id){
     // tocó nada — backend igualmente protege rol admin).
     if(Number(data.valor_compra) === vcAct) delete data.valor_compra;
     if(Number(data.valor_venta) === vvAct) delete data.valor_venta;
-    try{ await api('actualizarStock', data); toast('Stock actualizado','ok'); closeModal(); cargarInventario(); }
+    const stkAnterior = Number(p.stock_actual) || 0;
+    try{
+      const resp = await api('actualizarStock', data);
+      // Update optimista: si el backend confirmó y retornó el nuevo stock,
+      // lo aplicamos LOCAL al inventario sin depender del refresh (que a
+      // veces falla por 404 de concurrencia). Así la UI muestra el cambio
+      // real inmediatamente aunque cargarInventario() abajo rebote.
+      _aplicarUpdateProducto(id, resp);
+      const nuevoStk = (resp && resp.stock_actual !== undefined) ? Number(resp.stock_actual) : (stkAnterior + Number(data.cantidad)||0);
+      toast(`✓ Stock de ${p.nombre}: ${stkAnterior} → ${nuevoStk}`, 'ok');
+      closeModal();
+      cargarInventario();  // refresh en segundo plano; si falla, ya tenemos el dato correcto
+    }
     catch(err){ toast(err.message,'err'); throw err; }
   }, 'Actualizando stock…'));
 }
@@ -3472,9 +3484,87 @@ function openMermarProducto(id){
   $('#formMerma').addEventListener('submit', e => _lockSubmit(e, async () => {
     const data = Object.fromEntries(new FormData(e.target).entries());
     data.producto_id = id;
-    try{ await api('registrarMerma', data); toast('Merma registrada','ok'); closeModal(); cargarInventario(); }
+    const stkAnterior = Number(p.stock_actual) || 0;
+    try{
+      const resp = await api('registrarMerma', data);
+      _aplicarUpdateProducto(id, resp);
+      const nuevoStk = (resp && resp.stock_actual !== undefined) ? Number(resp.stock_actual) : (stkAnterior - Number(data.cantidad)||0);
+      toast(`✓ Merma de ${p.nombre}: ${stkAnterior} → ${nuevoStk}`, 'ok');
+      closeModal();
+      cargarInventario();
+    }
     catch(err){ toast(err.message,'err'); throw err; }
   }, 'Registrando merma…'));
+}
+
+/* Aplica campos que el backend retornó a S.productos[id] localmente. Usado
+   por los updates optimistas post-escritura. Ignora campos undefined. */
+function _aplicarUpdateProducto(id, resp){
+  if(!resp || typeof resp !== 'object') return;
+  const p = S.productos.find(x => Number(x.id) === Number(id));
+  if(!p) return;
+  const keys = ['stock_actual','valor_compra','valor_venta','margen_pct','fecha_vencimiento','ultimo_ingreso_stock'];
+  keys.forEach(k => {
+    if(resp[k] !== undefined && resp[k] !== null) p[k] = resp[k];
+  });
+  // Re-render de cualquier vista que use S.productos ahora mismo
+  try { if(typeof renderInventario === 'function') renderInventario(); } catch(_){}
+  try { if(typeof renderCatalogo === 'function') renderCatalogo(); } catch(_){}
+}
+
+/* Update optimista del stock local tras una venta exitosa. Recibe los items
+   vendidos (con producto_id y cantidad) y descuenta del stock local. Para
+   packs: descuenta también los componentes. */
+function _aplicarStockPostVentaLocal(items){
+  if(!Array.isArray(items) || !items.length) return;
+  items.forEach(it => {
+    const p = S.productos.find(x => Number(x.id) === Number(it.producto_id));
+    if(!p) return;
+    const cant = Number(it.cantidad) || 0;
+    if(!cant) return;
+    if(typeof esPack === 'function' && esPack(p)){
+      // Pack: descontar de cada componente proporcionalmente
+      const comps = _parseComponentesPack(p);
+      comps.forEach(c => {
+        const child = S.productos.find(x => Number(x.id) === Number(c.producto_id));
+        if(child) child.stock_actual = (Number(child.stock_actual)||0) - (Number(c.cantidad)||0) * cant;
+      });
+    } else {
+      p.stock_actual = (Number(p.stock_actual)||0) - cant;
+    }
+  });
+  try { if(typeof renderInventario === 'function') renderInventario(); } catch(_){}
+  try { if(typeof renderCatalogo === 'function') renderCatalogo(); } catch(_){}
+}
+
+/* Helper defensivo para parsear componentes de un pack (viene como string JSON
+   o array). Devuelve array de {producto_id, cantidad}. */
+function _parseComponentesPack(p){
+  const c = p && p.componentes;
+  if(!c) return [];
+  if(Array.isArray(c)) return c;
+  try {
+    const parsed = JSON.parse(String(c));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch(_) { return []; }
+}
+
+/* Update optimista de S.caja tras una venta exitosa. Suma total, cant_ventas,
+   monto por medio de pago. Si no hay caja abierta, no hace nada. */
+function _aplicarUpdateCajaPostVenta(pagos, resumen){
+  if(!S.caja) return;
+  const total = Number(resumen && resumen.total) || 0;
+  S.caja.total_ventas = (Number(S.caja.total_ventas)||0) + total;
+  S.caja.cant_ventas  = (Number(S.caja.cant_ventas)||0) + 1;
+  if(resumen && resumen.descuento_monto){
+    S.caja.total_descuentos = (Number(S.caja.total_descuentos)||0) + Number(resumen.descuento_monto);
+  }
+  (pagos || []).forEach(p => {
+    if(!p || !p.medio) return;
+    const k = 'total_' + p.medio;
+    S.caja[k] = (Number(S.caja[k])||0) + (Number(p.monto)||0);
+  });
+  try { if(typeof renderCajaStatus === 'function') renderCajaStatus(); } catch(_){}
 }
 function _mermaForm(p){
   return `
@@ -5800,16 +5890,38 @@ function openPago(){
       await _lockBtn(btn, async () => {
         const payload = _buildPayloadVenta(recargo);
         payload.pagos = pagos;
+        // Snapshot del carrito antes de vaciarlo (necesitamos los items para
+        // aplicar el update optimista al inventario).
+        const itemsSnapshot = S.cart.map(c => ({
+          producto_id: c.producto.id,
+          cantidad: Number(c.cantidad) || 0
+        }));
         const resp = await api('registrarVenta', payload);
         if(resp && resp.duplicada){
           toast('Esa venta ya estaba registrada (id #' + resp.id + ')', 'info');
         } else {
-          toast('Venta registrada','ok');
+          const totalMostrar = (resp && resp.total !== undefined) ? Number(resp.total) : totalFinal;
+          const idMostrar = (resp && resp.venta_id !== undefined) ? resp.venta_id : (resp && resp.id) || '';
+          toast('✓ Venta #' + idMostrar + ' registrada por ' + fmt(totalMostrar), 'ok');
         }
+        // Update optimista: descuento el stock local de cada ítem vendido
+        // (para packs: descuento los componentes proporcionalmente). Así aunque
+        // el cargarInventario() de abajo falle por 404, la UI ya refleja el
+        // stock correcto y el vendedor no piensa que "la venta no pasó".
+        _aplicarStockPostVentaLocal(itemsSnapshot);
+        // Update optimista de la caja: sumo total + descuentos + cant_ventas
+        // + total por medio de pago. Así el resumen del turno se actualiza al
+        // toque aunque cargarCajaAbierta() falle.
+        _aplicarUpdateCajaPostVenta(pagos, {
+          total: (resp && resp.total !== undefined) ? Number(resp.total) : totalFinal,
+          descuento_monto: 0  // ya está incluido en el subtotal enviado
+        });
         S.cart = []; S.descuentoVenta = { tipo:'pct', valor:0 };
         closeModal();
-        await cargarInventario();
-        await cargarCajaAbierta();
+        // Refresh en segundo plano; si falla, los updates optimistas de arriba
+        // mantienen la UI consistente.
+        cargarInventario();
+        cargarCajaAbierta();
       }, 'Registrando venta…');
     } catch(err){
       if(err && err.message !== 'busy') toast(err.message, 'err');
@@ -7025,11 +7137,23 @@ window.__abrirAnularVenta = (ventaId) => {
     if(motivo.length < 4){ toast('Indica el motivo (mín. 4 caracteres)','err'); return; }
     try{
       await api('anularVenta', { venta_id: v.id, motivo });
-      toast('Venta anulada','ok');
+      // Update optimista: marco la venta como anulada en el cache local del
+      // reporte y revierto el stock local de cada ítem. Así la UI refleja el
+      // cambio aunque el cargarReportes() abajo falle por 404.
+      if(Array.isArray(_repDetalle && _repDetalle.ventas)){
+        const target = _repDetalle.ventas.find(x => Number(x.id) === Number(v.id));
+        if(target) target.anulada = true;
+      }
+      // Revertir stock local sumando de vuelta las cantidades vendidas.
+      const items = (v.items || []).map(it => ({
+        producto_id: it.producto_id,
+        cantidad: -1 * (Number(it.cantidad) || 0)  // negativo = revertir
+      }));
+      _aplicarStockPostVentaLocal(items);  // suma en vez de restar porque cantidad es negativa
+      toast('✓ Venta #' + v.id + ' anulada — stock revertido', 'ok');
       closeModal();
-      // Recargar reportes para reflejar el cambio
+      // Refresh en segundo plano
       cargarReportes();
-      // Si hay sección de anuladas visible, refrescar
       if(typeof cargarVentasAnuladas === 'function') cargarVentasAnuladas();
     }catch(err){ toast('No se pudo anular: '+err.message,'err'); }
   }, 'Anulando venta…'));
