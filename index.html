@@ -1563,10 +1563,18 @@ async function _apiCore(action, payload, opts){
   // Timeout largo pero acotado — Apps Script suele responder <15s pero puede
   // demorar hasta 30s en arranque en frío o al procesar hojas grandes.
   const TIMEOUT_MS = Number(opts.timeout) || 45000;
-  // Reintentos ante errores de red o 5xx. Ojo: NO reintentamos escrituras
-  // (registrarVenta, actualizarStock, etc.) porque el backend ya tiene
-  // idempotencia sólo para ventas — para el resto un retry podría duplicar.
-  const RETRIES = opts.retry !== undefined ? opts.retry : _accionSegura(action) ? 1 : 0;
+  // Reintentos agresivos para lecturas críticas. Google Apps Script sigue
+  // rechazando peticiones esporádicamente (404 en `script.googleusercontent`)
+  // por saturación de su capa de content-serving. Con 6 reintentos y backoff
+  // exponencial (1s, 2s, 4s, 8s, 15s, 30s = ~60s en el peor caso), el % de
+  // veces que un usuario ve un error real cae drásticamente.
+  //
+  // Escrituras (registrarVenta, actualizarStock, anularVenta, etc.) NO se
+  // reintentan automáticamente para evitar duplicados. Las ventas ya tienen
+  // idempotency_key como capa extra.
+  const RETRIES = opts.retry !== undefined ? opts.retry : (_accionSegura(action) ? 6 : 0);
+  // Backoff exponencial en ms — capado a 30s. En el peor caso ~60s totales.
+  const BACKOFFS = [1000, 2000, 4000, 8000, 15000, 30000];
 
   let lastErr;
   for(let intento = 0; intento <= RETRIES; intento++){
@@ -1618,8 +1626,11 @@ async function _apiCore(action, payload, opts){
       if(esSesion || (!esRed) || intento >= RETRIES){
         throw err;
       }
-      // Espera con backoff antes del reintento (1.5s / 3s)
-      await new Promise(r => setTimeout(r, 1500 * (intento + 1)));
+      // Backoff exponencial. Log a consola para que en dev-tools se vea que
+      // está reintentando (útil para el diagnóstico de la trabajadora).
+      const espera = BACKOFFS[Math.min(intento, BACKOFFS.length - 1)];
+      try { console.warn('[api] intento ' + (intento+1) + '/' + (RETRIES+1) + ' falló (' + err.message + '), reintento en ' + Math.round(espera/1000) + 's'); } catch(_){}
+      await new Promise(r => setTimeout(r, espera));
     }
   }
   throw lastErr;
@@ -1746,10 +1757,15 @@ function pickLoginUser(u){
 $('#loginPwForm').addEventListener('submit', e => _lockSubmit(e, async () => {
   if(!_loginUserPicked){ toast('Selecciona un usuario', 'err'); throw new Error('user'); }
   try{
+    // login normalmente NO se reintenta (no es idempotente — crea sesión nueva
+    // cada vez), pero permitimos 3 intentos porque el peor caso es sólo tener
+    // varios tokens activos en Sesiones (no rompe nada). Con los 404 espontáneos
+    // de Google, sin retry el usuario ve "Credenciales inválidas" cuando en
+    // realidad la petición ni llegó a validar credenciales.
     const d = await api('login', {
       usuario_id: _loginUserPicked.id,
       password: $('#loginPassword').value
-    });
+    }, { retry: 3 });
     // Validación defensiva: el backend debe devolver token + usuario válidos.
     // Sin esto un glitch de red o cache podía dejar S.usuario indefinido y
     // hacer explotar enterApp (fue causa de un incidente en producción).
