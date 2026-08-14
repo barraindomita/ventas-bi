@@ -4492,52 +4492,86 @@ async function cargarMisVentas(){
     if(soloCaja && S.caja?.id) params.caja_id = S.caja.id;
     else params.solo_hoy = true;
     const d = await api('historialVentasVendedor', params);
-    const ventas = d.ventas || [];
-    _misVentasCache = ventas;
-    if(!ventas.length){
-      tbl.innerHTML = '<div class="text-slate-400 py-8 text-center text-sm">Aún no hay ventas registradas en este filtro.</div>';
-      return;
-    }
-    // Resumen rápido
-    const totalActivas = ventas.filter(v => !v.anulada).reduce((s,v) => s + (Number(v.total)||0), 0);
-    const cantActivas = ventas.filter(v => !v.anulada).length;
-    const cantAnuladas = ventas.filter(v => v.anulada).length;
-    if(resumen){
-      resumen.innerHTML = `
-        <div class="bg-emerald-50 border border-emerald-200 rounded p-2"><div class="text-emerald-700">Ventas válidas</div><div class="text-lg font-bold text-emerald-700">${cantActivas}</div></div>
-        <div class="bg-emerald-50 border border-emerald-200 rounded p-2"><div class="text-emerald-700">Total ingresos</div><div class="text-lg font-bold text-emerald-700">${fmt(totalActivas)}</div></div>
-        <div class="bg-rose-50 border border-rose-200 rounded p-2"><div class="text-rose-700">Anuladas</div><div class="text-lg font-bold text-rose-700">${cantAnuladas}</div></div>
-        <div class="bg-slate-50 border border-slate-200 rounded p-2"><div class="text-slate-500">Mostrando</div><div class="text-lg font-bold">${ventas.length}</div></div>
-      `;
-    }
-    tbl.innerHTML = `<table class="w-full text-sm">
-      <thead><tr class="bg-slate-50 text-left text-slate-500 text-xs">
-        <th class="py-2 px-3">#</th><th class="py-2 px-3">Hora</th>
-        <th class="py-2 px-3">Artículos</th><th class="py-2 px-3">Pago</th>
-        <th class="py-2 px-3 text-right">Total</th><th class="py-2 px-3"></th>
-      </tr></thead>
-      <tbody>
-        ${ventas.map((v,i) => {
-          const items = (v.items||[]).map(it => `${esc(it.nombre)} ×${it.cantidad}`).join(' · ');
-          const cantItems = (v.items||[]).length;
-          const medio = v.medio_pago_1 ? `${medioIcon(v.medio_pago_1)} ${medioLabel(v.medio_pago_1)}` : '—';
-          const anulado = v.anulada
-            ? '<span class="ml-1 inline-block text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">ANULADA</span>'
-            : '';
-          return `<tr class="border-t border-slate-100 hover:bg-blue-50 cursor-pointer transition ${v.anulada?'opacity-60':''}" onclick="__verDetalleMiVenta(${i})">
-            <td class="py-1 px-3 font-mono text-xs">#${v.id}${anulado}</td>
-            <td class="py-1 px-3 text-xs">${fmtHora(v.fecha_hora)} <span class="text-slate-400">${fmtFechaCorta(v.fecha_hora)}</span></td>
-            <td class="py-1 px-3 text-xs max-w-[20rem] truncate">${items}${cantItems>3?` <span class="text-blue-600 font-semibold">(${cantItems})</span>`:''}</td>
-            <td class="py-1 px-3 text-xs">${medio}</td>
-            <td class="py-1 px-3 text-right font-semibold ${v.anulada?'line-through text-slate-400':''}">${fmt(v.total)}</td>
-            <td class="py-1 px-3 text-blue-500">🔍</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`;
+    // Merge con las ventas locales (optimistas) del turno actual: puede que
+    // la trabajadora acabe de vender algo y ese id aún no esté en Sheets
+    // (cache backend/latencia). Preservamos esas entradas.
+    const backend = d.ventas || [];
+    const localSoloExtras = _misVentasCache.filter(local =>
+      local._optimistic && !backend.some(bk => Number(bk.id) === Number(local.id))
+    );
+    _misVentasCache = [...localSoloExtras, ...backend];
+    _renderMisVentas();
   }catch(err){
     tbl.innerHTML = `<div class="text-rose-600 py-6 text-center text-sm">No se pudo cargar el historial: ${esc(err.message||err)}</div>`;
   }
+}
+
+/* Render puro de _misVentasCache. Separado de la carga para que updates
+   optimistas (agregar venta recién hecha) puedan re-renderizar sin re-pedir. */
+function _renderMisVentas(){
+  const tbl = $('#cajaMisVentasTbl');
+  const resumen = $('#cajaMisVentasResumen');
+  if(!tbl) return;
+  const ventas = _misVentasCache || [];
+  if(!ventas.length){
+    tbl.innerHTML = '<div class="text-slate-400 py-8 text-center text-sm">Aún no hay ventas registradas en este filtro.</div>';
+    if(resumen) resumen.innerHTML = '';
+    return;
+  }
+  const totalActivas = ventas.filter(v => !v.anulada).reduce((s,v) => s + (Number(v.total)||0), 0);
+  const cantActivas = ventas.filter(v => !v.anulada).length;
+  const cantAnuladas = ventas.filter(v => v.anulada).length;
+  if(resumen){
+    resumen.innerHTML = `
+      <div class="bg-emerald-50 border border-emerald-200 rounded p-2"><div class="text-emerald-700">Ventas válidas</div><div class="text-lg font-bold text-emerald-700">${cantActivas}</div></div>
+      <div class="bg-emerald-50 border border-emerald-200 rounded p-2"><div class="text-emerald-700">Total ingresos</div><div class="text-lg font-bold text-emerald-700">${fmt(totalActivas)}</div></div>
+      <div class="bg-rose-50 border border-rose-200 rounded p-2"><div class="text-rose-700">Anuladas</div><div class="text-lg font-bold text-rose-700">${cantAnuladas}</div></div>
+      <div class="bg-slate-50 border border-slate-200 rounded p-2"><div class="text-slate-500">Mostrando</div><div class="text-lg font-bold">${ventas.length}</div></div>
+    `;
+  }
+  tbl.innerHTML = `<table class="w-full text-sm">
+    <thead><tr class="bg-slate-50 text-left text-slate-500 text-xs">
+      <th class="py-2 px-3">#</th><th class="py-2 px-3">Hora</th>
+      <th class="py-2 px-3">Artículos</th><th class="py-2 px-3">Pago</th>
+      <th class="py-2 px-3 text-right">Total</th><th class="py-2 px-3"></th>
+    </tr></thead>
+    <tbody>
+      ${ventas.map((v,i) => {
+        const items = (v.items||[]).map(it => `${esc(it.nombre)} ×${it.cantidad}`).join(' · ');
+        const cantItems = (v.items||[]).length;
+        const medio = v.medio_pago_1 ? `${medioIcon(v.medio_pago_1)} ${medioLabel(v.medio_pago_1)}` : '—';
+        const anulado = v.anulada
+          ? '<span class="ml-1 inline-block text-[10px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">ANULADA</span>'
+          : '';
+        // Chip "recién" para las que agregamos optimistamente y aún no llegaron
+        // desde Sheets — le da confianza al vendedor de que sí quedó.
+        const recien = v._optimistic
+          ? '<span class="ml-1 inline-block text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">RECIÉN</span>'
+          : '';
+        return `<tr class="border-t border-slate-100 hover:bg-blue-50 cursor-pointer transition ${v.anulada?'opacity-60':''}" onclick="__verDetalleMiVenta(${i})">
+          <td class="py-1 px-3 font-mono text-xs">#${v.id}${anulado}${recien}</td>
+          <td class="py-1 px-3 text-xs">${fmtHora(v.fecha_hora)} <span class="text-slate-400">${fmtFechaCorta(v.fecha_hora)}</span></td>
+          <td class="py-1 px-3 text-xs max-w-[20rem] truncate">${items}${cantItems>3?` <span class="text-blue-600 font-semibold">(${cantItems})</span>`:''}</td>
+          <td class="py-1 px-3 text-xs">${medio}</td>
+          <td class="py-1 px-3 text-right font-semibold ${v.anulada?'line-through text-slate-400':''}">${fmt(v.total)}</td>
+          <td class="py-1 px-3 text-blue-500">🔍</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+/* Agrega una venta recién hecha al cache local de "Mis ventas" (update
+   optimista) para que aparezca inmediatamente aunque el próximo cargarMisVentas
+   falle o esté en camino. Marca con _optimistic=true para el chip visual. */
+function _agregarMiVentaOptimista(venta){
+  if(!venta || !venta.id) return;
+  // Evitar duplicado si por race condition el backend ya la trajo
+  const idx = _misVentasCache.findIndex(v => Number(v.id) === Number(venta.id));
+  const entry = Object.assign({ _optimistic: true }, venta);
+  if(idx >= 0) _misVentasCache[idx] = entry;
+  else _misVentasCache.unshift(entry);
+  _renderMisVentas();
 }
 
 /* Modal con el detalle completo de una venta propia (vendedor). Reutiliza
@@ -5916,6 +5950,40 @@ function openPago(){
           total: (resp && resp.total !== undefined) ? Number(resp.total) : totalFinal,
           descuento_monto: 0  // ya está incluido en el subtotal enviado
         });
+        // Update optimista de "Mis ventas": inyecto la venta recién hecha
+        // en el cache del historial del vendedor. Si la trabajadora entra a
+        // Caja después, ve su venta aunque el fetch aún esté en camino o
+        // falle. Se marca con chip "RECIÉN".
+        if(typeof _agregarMiVentaOptimista === 'function' && !(resp && resp.duplicada)){
+          const itemsParaHistorial = itemsSnapshot.map(it => {
+            const prod = S.productos.find(p => Number(p.id) === Number(it.producto_id));
+            return {
+              producto_id: it.producto_id,
+              nombre: prod ? prod.nombre : '',
+              cantidad: it.cantidad,
+              precio_unitario: prod ? Number(prod.valor_venta)||0 : 0,
+              subtotal: prod ? Number(prod.valor_venta)*it.cantidad : 0,
+              codigo_barra: prod ? prod.codigo_barra : ''
+            };
+          });
+          _agregarMiVentaOptimista({
+            id: (resp && resp.venta_id) || (resp && resp.id) || Date.now(),
+            fecha_hora: new Date().toISOString(),
+            vendedor_id: S.usuario?.id,
+            vendedor_nombre: S.usuario?.nombre,
+            caja_id: S.caja ? S.caja.id : '',
+            total: (resp && resp.total !== undefined) ? Number(resp.total) : totalFinal,
+            subtotal: (resp && resp.subtotal !== undefined) ? Number(resp.subtotal) : totalFinal,
+            descuento_monto: 0,
+            medio_pago_1: pagos[0] ? pagos[0].medio : '',
+            monto_pago_1: pagos[0] ? Number(pagos[0].monto)||0 : 0,
+            medio_pago_2: pagos[1] ? pagos[1].medio : '',
+            monto_pago_2: pagos[1] ? Number(pagos[1].monto)||0 : 0,
+            cliente_fiado: cliente_fiado || '',
+            anulada: false,
+            items: itemsParaHistorial
+          });
+        }
         S.cart = []; S.descuentoVenta = { tipo:'pct', valor:0 };
         closeModal();
         // Refresh en segundo plano; si falla, los updates optimistas de arriba
