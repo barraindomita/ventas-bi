@@ -1630,10 +1630,48 @@ async function _apiCore(action, payload, opts){
       // está reintentando (útil para el diagnóstico de la trabajadora).
       const espera = BACKOFFS[Math.min(intento, BACKOFFS.length - 1)];
       try { console.warn('[api] intento ' + (intento+1) + '/' + (RETRIES+1) + ' falló (' + err.message + '), reintento en ' + Math.round(espera/1000) + 's'); } catch(_){}
+      // A partir del 2º reintento, feedback visible al usuario (toast). Le da
+      // señal de que la app NO está colgada, está insistiendo. Se dispara sólo
+      // en reintentos "largos" (>=4s) para no saturar la UI en reintentos triviales.
+      if(intento >= 1 && espera >= 4000){
+        try {
+          _toastReintento(action, intento + 1, RETRIES + 1);
+        } catch(_){}
+      }
       await new Promise(r => setTimeout(r, espera));
     }
   }
   throw lastErr;
+}
+
+/* Toast persistente durante reintentos largos, para que el usuario final vea
+   que la app NO está colgada — está insistiendo contra Google Apps Script.
+   Se reusa el mismo elemento entre reintentos (un solo toast que se actualiza)
+   para no saturar. */
+let _reintentoToastEl = null;
+let _reintentoToastTimer = null;
+function _toastReintento(action, intento, total){
+  const msg = `⏳ Google respondió lento (intento ${intento}/${total})… reintentando`;
+  try {
+    if(_reintentoToastEl && document.body.contains(_reintentoToastEl)){
+      _reintentoToastEl.textContent = msg;
+    } else {
+      _reintentoToastEl = document.createElement('div');
+      _reintentoToastEl.className = 'toast toast-info';
+      _reintentoToastEl.style.opacity = '0.95';
+      _reintentoToastEl.textContent = msg;
+      $('#toastRoot')?.appendChild(_reintentoToastEl);
+    }
+    // Auto-limpia si no llega otro reintento en 30s
+    if(_reintentoToastTimer) clearTimeout(_reintentoToastTimer);
+    _reintentoToastTimer = setTimeout(() => {
+      if(_reintentoToastEl){
+        _reintentoToastEl.style.opacity = '0';
+        _reintentoToastEl.style.transform = 'translateY(-8px)';
+        setTimeout(() => { _reintentoToastEl?.remove(); _reintentoToastEl = null; }, 400);
+      }
+    }, 30000);
+  } catch(_){}
 }
 
 /* Acciones READ-ONLY que se pueden reintentar sin riesgo.
