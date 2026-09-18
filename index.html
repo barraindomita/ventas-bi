@@ -324,6 +324,9 @@
     #pageInventario > .inv-toolbar{position:sticky;z-index:15;
       top:74px;background:var(--bg);padding:10px 0;margin:-6px 0 8px;
       border-bottom:1px solid #e2e8f0;}
+    /* La barra de carro y su fondo son exclusivos de móvil: en escritorio el
+       carro ya está siempre visible en su columna. */
+    .barra-carro,.carro-backdrop,.solo-movil{display:none !important;}
   }
 
   /* ─── MOBILE (≤ 760px) ─── */
@@ -377,10 +380,34 @@
     #pageInventario > .flex.items-center.gap-3.mb-4{gap:8px;}
     #pageInventario .max-w-xs{max-width:100%;flex:1 1 160px;}
 
-    /* Venta: catálogo + carro apilados */
-    #ventaConCaja{grid-template-columns:1fr !important;}
-    #catalogo{grid-template-columns:repeat(2,1fr) !important;gap:8px;}
+    /* ── VENTA EN MÓVIL: lista compacta + carro como hoja inferior ──
+       Antes el catálogo eran tarjetas con foto grande a 2 columnas (entraban
+       4 productos por pantalla) y el carro quedaba debajo de todo, así que
+       había que bajar hasta el final para ver qué se agregó.
+       Ahora: 1 columna en formato lista (8-10 por pantalla) y el carro se
+       abre desde la barra fija, superpuesto, sin perder el lugar. */
+    #ventaConCaja{grid-template-columns:1fr !important;padding-bottom:64px;}
+    #catalogo{grid-template-columns:1fr !important;gap:0;}
     #cartItems{max-height:40vh;}
+
+    /* El carro deja de ocupar la página: vive en la barra fija. */
+    #carroPanel{display:none;}
+    #carroPanel.carro-abierto{
+      display:flex;position:fixed;left:0;right:0;bottom:0;top:auto;
+      max-height:82vh;overflow:auto;z-index:60;
+      border-radius:16px 16px 0 0;box-shadow:0 -8px 28px rgba(0,0,0,.22);
+    }
+    .carro-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:55;}
+    .carro-backdrop.hidden{display:none;}
+
+    .barra-carro{position:fixed;left:0;right:0;bottom:0;z-index:58;}
+    .barra-carro.hidden{display:none;}
+    .barra-carro-btn{
+      width:100%;display:flex;align-items:center;justify-content:space-between;
+      gap:10px;padding:12px 16px;background:var(--ok,#16a34a);color:#fff;
+      border:0;box-shadow:0 -4px 14px rgba(0,0,0,.18);
+    }
+    .barra-carro-btn:active{filter:brightness(.94);}
 
     /* Medios de pago: 3 columnas para que quepan las 7 */
     [class*="grid-cols-3"][class*="lg:grid-cols-7"]{grid-template-columns:repeat(3,1fr) !important;}
@@ -701,13 +728,18 @@
               <h4 id="catalogoTitulo" class="text-sm font-bold" style="color:var(--brand-dark)">🔥 Top 12 más vendidos (último mes)</h4>
               <button class="text-xs text-blue-600 hover:underline" onclick="cargarTopVendidos(true)">Actualizar</button>
             </div>
-            <div id="catalogo" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+            <!-- En móvil: 1 columna sin separación (lista compacta). En sm+: grilla de tarjetas. -->
+            <div id="catalogo" class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-0 sm:gap-4"></div>
           </div>
           <!-- Carro -->
-          <div class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col">
+          <div id="carroPanel" class="bg-white rounded-xl p-4 border border-slate-200 flex flex-col">
             <div class="flex items-center justify-between mb-3">
               <h3 class="font-bold text-lg" style="color:var(--brand-dark)">Carrito</h3>
-              <button class="text-xs text-red-500 hover:underline" onclick="vaciarCarro()">Vaciar</button>
+              <div class="flex items-center gap-3">
+                <button class="text-xs text-red-500 hover:underline" onclick="vaciarCarro()">Vaciar</button>
+                <!-- Cerrar la hoja del carro: sólo tiene sentido en móvil -->
+                <button class="solo-movil text-slate-400 text-xl leading-none px-1" onclick="cerrarCarroMovil()" aria-label="Cerrar carro">✕</button>
+              </div>
             </div>
             <div id="cartItems" class="flex-1 overflow-auto max-h-[50vh]"></div>
             <div class="border-t border-slate-200 pt-3 mt-3 space-y-2">
@@ -760,8 +792,24 @@
               </button>
             </div>
           </div>
+
+          <!-- Fondo oscuro detrás del carro desplegado en móvil -->
+          <div id="carroBackdrop" class="carro-backdrop hidden" onclick="cerrarCarroMovil()"></div>
         </div>
       </section>
+
+      <!-- Barra de carro fija (sólo móvil). Siempre visible mientras se vende:
+           muestra cuántos ítems y el total, y despliega el carro sin scrollear. -->
+      <div id="barraCarroMovil" class="barra-carro hidden">
+        <button type="button" class="barra-carro-btn" onclick="toggleCarroMovil()">
+          <span class="flex items-center gap-2">
+            <span class="text-lg">🛒</span>
+            <span id="bcmItems" class="font-semibold text-sm">0 ítems</span>
+          </span>
+          <span id="bcmTotal" class="font-bold text-base">$0</span>
+          <span id="bcmAccion" class="text-xs border border-white/70 rounded px-2 py-1">Ver carro</span>
+        </button>
+      </div>
 
       <!-- ═══════ CAJA (estado) ═══════ -->
       <section id="pageCaja" class="page hidden">
@@ -1924,6 +1972,61 @@ function enterApp(){
    automáticamente. Se activa SOLO en pageVentas y SOLO si el target del
    keypress NO es un input/select/textarea/contentEditable (para no romper
    modales, formularios, etc.). */
+/* ─── PISTOLA: REEMPLAZAR EL TEXTO, NO CONCATENARLO ──────────────────────
+   Problema: si quedaba algo escrito en el buscador (una búsqueda a medias,
+   una letra suelta), el código de la pistola se pegaba a continuación
+   —"cerveza7802..."— y no encontraba nada.
+
+   Cómo distinguimos pistola de persona: la pistola emite los caracteres a
+   5-20 ms uno de otro; una persona tecleando tarda 80-300 ms. Cuando
+   confirmamos que la ráfaga es de máquina, borramos lo que había antes y
+   dejamos sólo lo escaneado. El tipeo manual queda intacto. */
+const _SCAN_GAP_RAPIDO = 35;   // ms entre teclas: por debajo, es máquina
+const _SCAN_PAUSA      = 300;  // ms de silencio: por encima, entrada nueva
+let _scanUltT = 0, _scanPrefijo = '', _scanRapidos = 0, _scanCortado = false, _scanValPrev = '';
+
+function _scanReset(){
+  _scanUltT = 0; _scanPrefijo = ''; _scanRapidos = 0; _scanCortado = false; _scanValPrev = '';
+}
+
+function _scanProcesar(inp){
+  const ahora = (window.performance && performance.now) ? performance.now() : Date.now();
+  const gap = ahora - _scanUltT;
+  _scanUltT = ahora;
+  const val  = inp.value;
+  const prev = _scanValPrev;
+  _scanValPrev = val;
+
+  // Texto agregado de una sola vez (pistolas que "pegan" el código completo,
+  // o el escáner de cámara). Si llegó un bloque largo, ESO es el código.
+  const agregado = val.startsWith(prev) ? val.slice(prev.length) : null;
+  if(agregado && agregado.length >= 6 && prev){
+    inp.value = agregado;
+    _scanReset();
+    _scanValPrev = agregado;
+    return;
+  }
+
+  // Silencio largo → empieza una entrada nueva. Guardamos lo que ya había
+  // escrito como "prefijo candidato a borrar" si resulta ser una ráfaga.
+  if(gap > _SCAN_PAUSA){
+    _scanPrefijo = val.slice(0, Math.max(0, val.length - 1));
+    _scanRapidos = 0;
+    _scanCortado = false;
+    return;
+  }
+
+  if(gap < _SCAN_GAP_RAPIDO) _scanRapidos++;
+
+  // 3 caracteres seguidos a velocidad de máquina: es la pistola. Cortamos.
+  if(!_scanCortado && _scanRapidos >= 2 && _scanPrefijo){
+    inp.value = val.slice(_scanPrefijo.length);
+    _scanValPrev = inp.value;
+    _scanCortado = true;
+    _scanPrefijo = '';
+  }
+}
+
 let _scannerGlobalInstalado = false;
 function _instalarScannerGlobal(){
   if(_scannerGlobalInstalado) return;
@@ -1953,7 +2056,17 @@ function _instalarScannerGlobal(){
     // al input. Para Enter dejamos que el form lo maneje.
     if(ev.key && ev.key.length === 1){
       ev.preventDefault();
+      // El foco NO estaba en el buscador, así que lo que haya escrito es
+      // residuo de una búsqueda anterior. Si arranca una ráfaga nueva
+      // (silencio previo), limpiamos antes de pegar el código escaneado.
+      const ahora = (window.performance && performance.now) ? performance.now() : Date.now();
+      if(ahora - _scanUltT > _SCAN_PAUSA && inp.value){
+        inp.value = '';
+        _scanValPrev = '';
+      }
+      _scanUltT = ahora;
       inp.value = inp.value + ev.key;
+      _scanValPrev = inp.value;
       // Disparar el evento input para que el resto del código reaccione
       inp.dispatchEvent(new Event('input', { bubbles: true }));
     }
@@ -2028,6 +2141,9 @@ function go(view){
   if(view==='configurar') { cargarUsuarios(); cargarCategoriasAdmin(); }
   if(view==='promociones') cargarPromocionesAdmin();
   if(view==='dashboard') cargarStatsDashboard();
+  // La barra de carro sólo existe dentro de Venta: al salir se cierra y oculta.
+  if(view !== 'ventas' && typeof cerrarCarroMovil === 'function') cerrarCarroMovil();
+  if(typeof sincronizarBarraCarro === 'function') sincronizarBarraCarro();
   if(view==='rrhh' && window.RRHH) RRHH.init();
 }
 
@@ -4712,6 +4828,64 @@ async function cargarTopVendidos(force){
   }
 }
 
+/* ─── VENTA EN MÓVIL: lista compacta + carro desplegable ─────────────────
+   Mismo breakpoint que el CSS (760px) para que marcado y estilos no se
+   contradigan. */
+function _esMovilVenta(){
+  return window.matchMedia && window.matchMedia('(max-width:760px)').matches;
+}
+
+/* Abre/cierra el carro como hoja inferior, sin sacar al cajero del catálogo. */
+function toggleCarroMovil(){
+  const panel = $('#carroPanel');
+  if(!panel) return;
+  if(panel.classList.contains('carro-abierto')) cerrarCarroMovil();
+  else {
+    panel.classList.add('carro-abierto');
+    $('#carroBackdrop')?.classList.remove('hidden');
+    sincronizarBarraCarro();
+  }
+}
+function cerrarCarroMovil(){
+  $('#carroPanel')?.classList.remove('carro-abierto');
+  $('#carroBackdrop')?.classList.add('hidden');
+  sincronizarBarraCarro();
+}
+
+/* Mantiene la barra fija al día: cantidad de ítems y total. Se llama desde
+   renderCart(), así que cualquier cambio del carro la actualiza sola. */
+function sincronizarBarraCarro(){
+  const barra = $('#barraCarroMovil');
+  if(!barra) return;
+  const enVenta = S.view === 'ventas';
+  const items = Array.isArray(S.cart) ? S.cart : [];
+  const cant = items.reduce((s,it)=> s + (Number(it.cantidad)||0), 0);
+  const abierto = $('#carroPanel')?.classList.contains('carro-abierto');
+  // Con el carro desplegado la barra queda tapada por la hoja (comparten el
+  // borde inferior), así que se oculta: se cierra tocando fuera o con la X.
+  if(!enVenta || !_esMovilVenta() || abierto){
+    barra.classList.add('hidden');
+    return;
+  }
+  barra.classList.remove('hidden');
+  const elItems = $('#bcmItems'), elTotal = $('#bcmTotal'), elAcc = $('#bcmAccion');
+  if(elItems) elItems.textContent = cant === 1 ? '1 ítem' : cant + ' ítems';
+  if(elTotal) elTotal.textContent = $('#cartTotal')?.textContent || '$0';
+  if(elAcc)   elAcc.textContent = cant ? 'Ver carro' : 'Vacío';
+}
+
+/* Al rotar el teléfono o cambiar de tamaño, el catálogo se redibuja en el
+   formato que corresponda (lista o tarjetas). */
+window.addEventListener('resize', () => {
+  if(S.view !== 'ventas') return;
+  clearTimeout(window.__resizeVentaT);
+  window.__resizeVentaT = setTimeout(() => {
+    if(!_esMovilVenta()) cerrarCarroMovil();
+    renderCatalogo();
+    sincronizarBarraCarro();
+  }, 180);
+});
+
 function renderCatalogo(){
   const el = $('#catalogo'); if(!el) return;
   const titEl = $('#catalogoTitulo');
@@ -4743,6 +4917,35 @@ function renderCatalogo(){
     if(titEl) titEl.textContent = '🔥 Top 12 más vendidos (último mes)';
   }
 
+  // ── MÓVIL: lista compacta ──────────────────────────────────────────
+  // Las tarjetas con foto cuadrada entran de a 4 por pantalla; en una barra
+  // llena eso obliga a scrollear todo el rato. Acá va miniatura chica,
+  // nombre, precio/stock y un botón +, ~8-10 productos por pantalla.
+  if(_esMovilVenta()){
+    el.innerHTML = rows.map((p, i)=>{
+      const sinStock = Number(p.stock_actual)<=0;
+      const pos = (!q && p._topQty != null) ? `<span class="text-amber-600 font-bold mr-1">#${i+1}</span>` : '';
+      const mini = p.foto_url
+        ? `<img src="${esc(_normalizarFotoUrl(p.foto_url, 120))}" class="w-full h-full object-contain" onerror="this.onerror=null;this.style.display='none';this.parentNode.innerHTML='<div class=&quot;text-lg text-slate-300&quot;>${esPack(p)?'📦':'🍾'}</div>';">`
+        : `<div class="text-lg text-slate-300">${esPack(p)?'📦':'🍾'}</div>`;
+      const stockCls = sinStock ? 'text-red-600 font-semibold'
+                     : (Number(p.stock_actual)<=5 ? 'text-amber-700' : 'text-slate-400');
+      return `
+      <button onclick='addToCart(${p.id})' class="w-full text-left flex items-center gap-3 px-2 py-2 border-b border-slate-100 ${sinStock?'bg-amber-50':'bg-white active:bg-blue-100'}">
+        <div class="w-11 h-11 shrink-0 rounded-lg bg-slate-50 overflow-hidden flex items-center justify-center">${mini}</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-semibold truncate" style="color:var(--brand-dark)">${pos}${p.nombre}${esPack(p)?' <span class="chip chip-info" style="font-size:9px">PACK</span>':''}</div>
+          <div class="text-xs mt-0.5">
+            <span class="font-bold" style="color:var(--brand)">${fmt(p.valor_venta)}</span>
+            <span class="${stockCls}"> · stock ${p.stock_actual}</span>
+          </div>
+        </div>
+        <span class="shrink-0 w-9 h-9 rounded-full bg-emerald-500 text-white text-xl font-bold flex items-center justify-center">+</span>
+      </button>`;
+    }).join('') || '<div class="text-center text-slate-400 py-6">Sin productos</div>';
+    return;
+  }
+
   el.innerHTML = rows.map((p, i)=>{
     const sinStock = Number(p.stock_actual)<=0;
     const topBadge = (!q && p._topQty != null)
@@ -4767,7 +4970,13 @@ function renderCatalogo(){
   }).join('') || '<div class="col-span-4 text-center text-slate-400 py-6">Sin productos</div>';
 }
 
-document.addEventListener('input', e=>{ if(e.target?.id==='scanInput') renderCatalogo(); });
+document.addEventListener('input', e=>{
+  if(e.target?.id!=='scanInput') return;
+  // _scanProcesar puede reescribir el valor (quita el texto viejo cuando
+  // detecta la ráfaga de la pistola), así que corre ANTES de renderizar.
+  _scanProcesar(e.target);
+  renderCatalogo();
+});
 document.addEventListener('keydown', e=>{
   if(e.target?.id==='scanInput' && e.key==='Enter'){ e.preventDefault(); handleScan(); }
 });
@@ -4871,6 +5080,9 @@ function scanVentaCamara(){
 }
 
 function handleScan(){
+  // Cada escaneo cierra el ciclo: el próximo empieza de cero, sin arrastrar
+  // el estado de la ráfaga anterior.
+  _scanReset();
   const v = $('#scanInput').value.trim(); if(!v) return;
   const qty = Math.max(1, Number($('#scanQty').value)||1);
   // Busca por código exacto primero, después por nombre
@@ -5302,6 +5514,8 @@ function renderCart(){
       pa.classList.add('hidden');
     }
   }
+  // La barra fija de móvil refleja el carro: cualquier cambio pasa por acá.
+  if(typeof sincronizarBarraCarro === 'function') sincronizarBarraCarro();
 }
 
 /* Acción de propietario: deja cada ítem del carrito al precio de compra.
@@ -7256,14 +7470,20 @@ function renderVentasPorVendedor(){
       if(v.medio_pago_2) medios.push(`${medioIcon(v.medio_pago_2)} ${medioLabel(v.medio_pago_2)} ${fmt(v.monto_pago_2)}`);
       const items = (v.items||[]).map(it=>`${esc(it.nombre)} ×${it.cantidad}`).join(' · ');
       const cantItems = (v.items||[]).length;
-      return `<tr class="cursor-pointer hover:bg-blue-50 transition" onclick="__verDetalleVenta(${v.id})" title="Clic para ver el detalle completo de la venta">
-        <td class="font-mono text-xs">#${v.id}</td>
+      // Una venta anulada puede seguir en este cache local: el backend ya no la
+      // devuelve, pero tras anular marcamos la copia local (update optimista) y
+      // el refresco de fondo puede fallar. Antes esto la dejaba dibujada como
+      // venta normal — parecía estar anulada y realizada a la vez. Ahora se ve
+      // tachada y no ofrece anularla de nuevo.
+      const anulada = (typeof _truthyJs === 'function') ? _truthyJs(v.anulada) : !!v.anulada;
+      return `<tr class="cursor-pointer transition ${anulada ? 'bg-red-50 opacity-70' : 'hover:bg-blue-50'}" onclick="__verDetalleVenta(${v.id})" title="${anulada ? 'Venta anulada' : 'Clic para ver el detalle completo de la venta'}">
+        <td class="font-mono text-xs">#${v.id}${anulada ? ' <span class="text-red-600 font-bold text-[10px]">ANULADA</span>' : ''}</td>
         <td class="text-xs">${fmtFechaCorta(v.fecha_hora)}</td>
         <td class="text-xs">${fmtHora(v.fecha_hora)}</td>
         <td class="text-sm font-semibold">${esc(v.vendedor_nombre)||'—'}</td>
-        <td class="text-xs max-w-[22rem] truncate">${items} ${cantItems > 3 ? `<span class="text-blue-600 font-semibold">(${cantItems} ítems)</span>` : ''}</td>
+        <td class="text-xs max-w-[22rem] truncate ${anulada ? 'line-through text-slate-400' : ''}">${items} ${cantItems > 3 ? `<span class="text-blue-600 font-semibold">(${cantItems} ítems)</span>` : ''}</td>
         <td class="text-xs">${medios.join('<br>')||'—'}</td>
-        <td class="text-right font-semibold">${fmt(v.total)}</td>
+        <td class="text-right font-semibold ${anulada ? 'line-through text-slate-400' : ''}">${fmt(v.total)}</td>
         <td class="text-center text-blue-500"><span title="Ver detalle">🔍</span></td>
       </tr>`;
     }).join('')}</tbody></table>`;
@@ -7284,12 +7504,16 @@ window.__verDetalleVenta = (ventaId) => {
   if(v.medio_pago_1) medios.push({m: v.medio_pago_1, monto: v.monto_pago_1});
   if(v.medio_pago_2) medios.push({m: v.medio_pago_2, monto: v.monto_pago_2});
   const subtotalItems = items.reduce((s,it) => s + (Number(it.subtotal)||0), 0);
-  const puedeAnular = isAdmin() && !v.anulada;
+  // OJO: Sheets puede devolver el texto "FALSE" en esta columna, y en JS
+  // "FALSE" es truthy. Con `!v.anulada` a secas, una venta perfectamente
+  // válida quedaba sin botón de anular. _truthyJs interpreta ambos formatos.
+  const _estaAnulada = (typeof _truthyJs === 'function') ? _truthyJs(v.anulada) : !!v.anulada;
+  const puedeAnular = isAdmin() && !_estaAnulada;
   openModal(`<div class="p-6 max-w-3xl mx-auto">
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
       <div>
         <h3 class="text-lg font-bold" style="color:var(--brand-dark)">🧾 Venta #${v.id}
-          ${v.anulada ? '<span class="ml-2 text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">ANULADA</span>' : ''}
+          ${_estaAnulada ? '<span class="ml-2 text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700 font-bold">ANULADA</span>' : ''}
         </h3>
         <div class="text-xs text-slate-500">${fmtFechaCorta(v.fecha_hora)} · ${fmtHora(v.fecha_hora)} · Vendedor: <b>${esc(v.vendedor_nombre)||'—'}</b></div>
       </div>
@@ -7429,7 +7653,27 @@ window.__abrirAnularVenta = (ventaId) => {
       // Refresh en segundo plano
       cargarReportes();
       if(typeof cargarVentasAnuladas === 'function') cargarVentasAnuladas();
-    }catch(err){ toast('No se pudo anular: '+err.message,'err'); }
+    }catch(err){
+      const msg = String(err && err.message || '');
+      // "Ya estaba anulada" NO es un error del usuario: significa que nuestra
+      // copia local quedó vieja (la anuló otra sesión, otro cajero, o se anuló
+      // antes de este refresco). Antes esto dejaba la venta dibujada como
+      // activa y el cajero golpeaba un botón que nunca iba a funcionar.
+      // Ahora sincronizamos la vista con la realidad del servidor.
+      if(/ya estaba anulada/i.test(msg)){
+        if(Array.isArray(_repDetalle && _repDetalle.ventas)){
+          const target = _repDetalle.ventas.find(x => Number(x.id) === Number(v.id));
+          if(target) target.anulada = true;
+        }
+        toast('La venta #' + v.id + ' ya estaba anulada — actualizo la vista','info');
+        closeModal();
+        if(typeof renderVentasPorVendedor === 'function') renderVentasPorVendedor();
+        if(typeof cargarVentasAnuladas === 'function') cargarVentasAnuladas();
+        cargarReportes();
+      } else {
+        toast('No se pudo anular: '+msg,'err');
+      }
+    }
   }, 'Anulando venta…'));
 };
 
